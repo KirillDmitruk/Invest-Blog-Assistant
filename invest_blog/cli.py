@@ -14,17 +14,33 @@ from .model import money, fmt_money
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Invest Blog Assistant")
-    parser.add_argument("action", choices=("bot", "accounts", "preview", "diagnose"))
+    parser.add_argument("action", choices=("bot", "accounts", "preview", "diagnose", "sync", "web", "audit"))
     parser.add_argument("kind", nargs="?", choices=("weekly", "monthly", "plan", "paper", "glossary", "purchase"))
     parser.add_argument("--date", dest="date_string", help="Локальная дата YYYY-MM-DD для preview (брокерские данные — актуальные)")
     parser.add_argument("--start", help="Начало периода YYYY-MM-DD (для diagnose)")
     parser.add_argument("--end", help="Конец периода YYYY-MM-DD (для diagnose)")
+    parser.add_argument("--days", type=int, default=365, help="Для sync: глубина импорта исполненных операций")
+    parser.add_argument("--port", type=int, default=8000, help="Для web: порт localhost")
     args = parser.parse_args()
     settings = Settings.load()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     if args.action == "bot":
         from .bot import InvestBot
         InvestBot(settings).run()
+        return
+    if args.action == "web":
+        import uvicorn
+        from .dashboard import create_app
+        print(f"Открой http://127.0.0.1:{args.port} (только локальный доступ)")
+        uvicorn.run(create_app(settings.db_path, settings.bond_target,
+                               settings.max_position_weight), host="127.0.0.1", port=args.port)
+        return
+    if args.action == "audit":
+        from .integrity import check_integrity
+        from .portfolio_store import PortfolioStore
+        import json
+        result = check_integrity(PortfolioStore(settings.db_path))
+        print(json.dumps(result, ensure_ascii=False, indent=2))
         return
     if args.action == "accounts":
         settings.validate_api()
@@ -36,6 +52,15 @@ def main() -> None:
     if not settings.account_ids:
         parser.error("Укажи TINVEST_ACCOUNT_IDS в .env")
     api = TInvest(settings.invest_token, settings.timezone)
+    if args.action == "sync":
+        from .portfolio_store import PortfolioStore
+        from .sync import PortfolioSync
+        report = PortfolioSync(api, settings.account_ids, PortfolioStore(settings.db_path)).run(
+            datetime.now(settings.timezone).date(), days=args.days)
+        print(f"Снимок {report['day']}: счетов {report['accounts']}, позиций {report['positions']}, операций прочитано {report['operations']}")
+        for note in report['warnings']:
+            print(f"⚠️ {note}")
+        return
     generator = PostGenerator(api, settings.account_ids, settings.cbr_path)
     day = date.fromisoformat(args.date_string) if args.date_string else datetime.now(settings.timezone).date()
     if args.action == "diagnose":

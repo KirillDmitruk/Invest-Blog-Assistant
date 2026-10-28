@@ -29,6 +29,13 @@ class DraftStore:
                 draft_id INTEGER NOT NULL REFERENCES drafts(id)
             );
             """)
+            columns = {r[1] for r in db.execute("PRAGMA table_info(drafts)")}
+            for column, declaration in {
+                "scheduled_at": "TEXT", "published_at": "TEXT", "channel_message_id": "INTEGER",
+                "last_error": "TEXT"
+            }.items():
+                if column not in columns:
+                    db.execute(f"ALTER TABLE drafts ADD COLUMN {column} {declaration}")
 
     def _connect(self):
         db = sqlite3.connect(self.path, timeout=20)
@@ -40,8 +47,8 @@ class DraftStore:
         key = f"{draft.kind}:{draft.period}" if scheduled else f"manual:{uuid.uuid4().hex}"
         with self._connect() as db:
             cursor = db.execute(
-                "INSERT OR IGNORE INTO drafts(dedup_key,kind,period,body,created_at) VALUES (?,?,?,?,?)",
-                (key, draft.kind, draft.period, draft.body, datetime.now(timezone.utc).isoformat()),
+                "INSERT OR IGNORE INTO drafts(dedup_key,kind,period,body,state,created_at) VALUES (?,?,?,?,?,?)",
+                (key, draft.kind, draft.period, draft.body, 'new', datetime.now(timezone.utc).isoformat()),
             )
             row = db.execute("SELECT id FROM drafts WHERE dedup_key=?", (key,)).fetchone()
             return row["id"], cursor.rowcount == 1
@@ -63,8 +70,13 @@ class DraftStore:
             db.execute("UPDATE drafts SET sent_at=? WHERE id=?", (datetime.now(timezone.utc).isoformat(), draft_id))
 
     def set_body(self, draft_id: int, body: str) -> None:
+        if not body.strip():
+            raise ValueError('Пустой текст поста')
         with self._connect() as db:
-            db.execute("UPDATE drafts SET body=? WHERE id=?", (body, draft_id))
+            result = db.execute("UPDATE drafts SET body=?,state='review',scheduled_at=NULL "
+                          "WHERE id=? AND state NOT IN ('published','publishing')", (body, draft_id))
+            if result.rowcount != 1:
+                raise ValueError('Черновик отсутствует либо уже опубликован')
 
     def mark_done(self, draft_id: int) -> None:
         with self._connect() as db:
@@ -78,3 +90,46 @@ class DraftStore:
         with self._connect() as db:
             row = db.execute("SELECT draft_id FROM telegram_messages WHERE message_id=?", (msg_id,)).fetchone()
             return row["draft_id"] if row else None
+
+    def change_state(self, draft_id: int, state: str) -> bool:
+        """Only permitted workflow transitions; never resurrect a published draft."""
+        allowed = {
+            'review': ('new', 'draft', 'rejected'),
+            'approved': ('review', 'new', 'draft', 'scheduled'),
+            'rejected': ('review', 'new', 'draft', 'approved', 'scheduled'),
+        }
+        if state not in allowed:
+            raise ValueError('Недопустимое состояние')
+        with self._connect() as db:
+            marks = ','.join('?' for _ in allowed[state])
+            result = db.execute(f'''UPDATE drafts SET state=?, scheduled_at=NULL
+                WHERE id=? AND state IN ({marks})''', (state, draft_id, *allowed[state]))
+            return result.rowcount == 1
+
+    def schedule(self, draft_id: int, when_utc: str) -> bool:
+        with self._connect() as db:
+            return db.execute("UPDATE drafts SET state='scheduled', scheduled_at=? WHERE id=? AND state='approved'",
+                              (when_utc, draft_id)).rowcount == 1
+
+    def due_scheduled(self, now_utc: str):
+        with self._connect() as db:
+            return db.execute('''SELECT * FROM drafts WHERE state='scheduled' AND scheduled_at <= ?
+                                   ORDER BY scheduled_at LIMIT 10''', (now_utc,)).fetchall()
+
+    def claim_publish(self, draft_id: int, scheduled: bool = False) -> bool:
+        """Single winner across concurrent clicks. Ambiguous failure requires manual review."""
+        expected = 'scheduled' if scheduled else 'approved'
+        with self._connect() as db:
+            return db.execute("UPDATE drafts SET state='publishing',last_error=NULL WHERE id=? AND state=?",
+                              (draft_id, expected)).rowcount == 1
+
+    def publish_success(self, draft_id: int, message_id: int) -> None:
+        with self._connect() as db:
+            db.execute('''UPDATE drafts SET state='published',published_at=?,channel_message_id=?,last_error=NULL
+                WHERE id=? AND state='publishing' ''',
+                (datetime.now(timezone.utc).isoformat(), message_id, draft_id))
+
+    def publish_failure(self, draft_id: int, message: str) -> None:
+        with self._connect() as db:
+            db.execute("UPDATE drafts SET last_error=? WHERE id=? AND state='publishing'",
+                       (message[:500], draft_id))

@@ -69,12 +69,15 @@ def is_event_in_window(day: date | None, first: date, last: date) -> bool:
 
 
 class PostGenerator:
-    def __init__(self, api: TInvest, accounts: tuple[str, ...], events_path: Path):
+    def __init__(self, api: TInvest, accounts: tuple[str, ...], events_path: Path,
+                 recent_papers: tuple[str, ...] = ()):
         if not accounts:
             raise ValueError("Не заданы ID счетов")
         self.api = api
         self.accounts = accounts
         self.events_path = events_path
+        self.recent_papers = recent_papers
+        self.selected_paper_uid: str | None = None
 
     def generate(self, kind: str, today: date) -> Draft:
         handlers = {"weekly": self.weekly, "monthly": self.monthly, "plan": self.plan,
@@ -232,8 +235,26 @@ class PostGenerator:
         ordered = sorted(positions, key=lambda x: (x.get("instrumentUid") or x.get("figi") or ""))
         if not ordered:
             raise ValueError("Нет акций/облигаций в портфеле для «Бумаги недели»")
-        idx = (today.isocalendar().year * 53 + today.isocalendar().week - 1) % len(ordered)
-        pos = ordered[idx]
+        # Prefer recently purchased, relatively large positions not covered recently.
+        # New purchase alone is NOT a recommendation to buy again.
+        recent_buys: set[str] = set()
+        try:
+            for op in self.get_operations(today - timedelta(days=45), today):
+                if operation_type(op) in BUY:
+                    recent_buys.add(op.get("instrumentUid") or op.get("figi") or "")
+        except TInvestError:
+            pass  # no selection from unverified purchases; holdings still available
+        def score(pos):
+            uid = pos.get("instrumentUid") or pos.get("figi") or ""
+            recent_index = self.recent_papers.index(uid) if uid in self.recent_papers else None
+            quantity = quotation(pos.get("quantity"))
+            price, currency = money(pos.get("currentPrice"))
+            native_value = quantity * price if currency == "RUB" else Decimal(0)
+            return (1 if recent_index is None else 0,
+                    1 if uid in recent_buys else 0,
+                    native_value, recent_index if recent_index is not None else 0, uid)
+        pos = max(ordered, key=score)
+        self.selected_paper_uid = pos.get("instrumentUid") or pos.get("figi")
         info = self.api.instrument(uid=pos.get("instrumentUid", ""), figi=pos.get("figi", ""))
         quantity = quotation(pos.get("quantity"))
         price, currency = money(pos.get("currentPrice"))

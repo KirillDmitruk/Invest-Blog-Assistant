@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Invest Blog — портфель</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" defer></script>
+<style>
+:root{font-family:Inter,system-ui,-apple-system,'Segoe UI',sans-serif;color:#d9e5f4;background:#0a1321;font-synthesis:none}
+*{box-sizing:border-box} body{margin:0;padding:0} a{color:#78bbff}
+.wrap{max-width:1320px;margin:auto;padding:28px 24px 60px}
+.header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:28px}
+.brand{font-weight:800;font-size:23px;letter-spacing:-.6px}.brand b{color:#70b6ff}.pill{border:1px solid #284361;border-radius:100px;color:#94b1ca;padding:8px 12px;font-size:12px}
+h1{font-size:30px;letter-spacing:-.8px;margin:0 0 8px}h2{font-size:16px;margin:0 0 20px;color:#e4eefb}.sub{color:#8199b1;margin:0 0 26px;font-size:14px}
+.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px}
+.card{border:1px solid #213650;background:#111f31;border-radius:16px;padding:20px;min-width:0;box-shadow:0 5px 22px #050f201f}
+.metric{grid-column:span 3}.metric .name{color:#92a8c0;font-size:13px}.metric .value{font-weight:700;font-size:25px;margin-top:10px;letter-spacing:-.6px}
+.wide{grid-column:span 8}.side{grid-column:span 4}.half{grid-column:span 6}.full{grid-column:span 12}
+.chart{height:275px;position:relative}.chart.tall{height:320px}
+.tone{font-size:13px;color:#91a7be;line-height:1.6}table{width:100%;border-collapse:collapse;font-size:13px}td,th{text-align:left;padding:11px 8px;border-bottom:1px solid #22384f}th{color:#86a3c0;font-weight:500}td:last-child,th:last-child{text-align:right} .scroll{overflow:auto}
+.alert{border-left:3px solid #63a9e5;padding:9px 12px;margin:10px 0;background:#132840;border-radius:4px;font-size:13px;line-height:1.5}.alert.attention{border-color:#f3b46c}
+.badge{display:inline-flex;border:1px solid #38506b;border-radius:7px;padding:3px 7px;font-size:11px;color:#a9c6df}
+.empty{font-size:14px;color:#9ab2cb;line-height:1.6}
+footer{color:#7792aa;font-size:12px;line-height:1.6;margin-top:24px}
+@media(max-width:950px){.metric{grid-column:span 6}.wide,.side,.half{grid-column:span 12}}
+@media(max-width:530px){.wrap{padding:20px 12px 40px}.metric{grid-column:span 12}.brand{font-size:20px}h1{font-size:25px}}
+</style>
+</head>
+<body><div class="wrap">
+<header class="header"><div class="brand">◈ Invest <b>Blog</b> <span style="font-size:12px;color:#7e97b0">/ analytics</span></div><span id="sync" class="pill">Локальный дашборд</span></header>
+<h1>Обзор портфеля</h1><p id="date" class="sub">Исторические снимки и аналитика T-Invest API</p>
+<section class="grid" id="grid">
+<div class="card metric"><div class="name">Стоимость портфеля</div><div id="total" class="value">—</div></div>
+<div class="card metric"><div class="name">Облигации</div><div id="bond" class="value">—</div></div>
+<div class="card metric"><div class="name">Акции</div><div id="stock" class="value">—</div></div>
+<div class="card metric"><div class="name">Купоны за 12 мес. (₽)</div><div id="couponTotal" class="value">—</div></div>
+<div class="card metric"><div class="name">Дивиденды за 12 мес. (₽)</div><div id="dividendTotal" class="value">—</div></div>
+<div class="card metric"><div class="name">Позиций</div><div id="count" class="value">—</div></div>
+<div class="card wide"><h2>Динамика стоимости</h2><div class="chart"><canvas id="history"></canvas></div><p class="tone">Это стоимость портфеля, а не инвестиционная доходность. Пополнения и выводы влияют на график.</p></div>
+<div class="card side"><h2>Структура портфеля</h2><div class="chart"><canvas id="composition"></canvas></div></div>
+<div class="card half"><h2>Полученные выплаты</h2><div class="chart"><canvas id="income"></canvas></div><p class="tone">Рублёвые купоны и дивиденды. Выплаты в иных валютах учитываются отдельно.</p></div>
+<div class="card half"><h2>Погашения облигаций по годам</h2><div class="chart"><canvas id="maturities"></canvas></div><p class="tone">Оценка текущей стоимости рублёвых облигаций по году погашения; не номинал и не гарантированный доход.</p></div>
+<div class="card wide"><h2>Позиции</h2><div id="positions" class="scroll"><p class="empty">Загрузка...</p></div></div>
+<div class="card side"><h2>Проверки долгосрочного портфеля</h2><div id="alerts" class="tone"></div></div>
+<div class="card full"><h2>Редакторская очередь</h2><div id="drafts" class="scroll"></div></div>
+<div class="card full"><h2>История «Бумаги недели»</h2><div id="topics" class="scroll"></div></div>
+</section>
+<footer>Работает локально и только на чтение. Оценки и правила риска носят справочный характер, не являются торговыми рекомендациями. Отчёты сверяйте с брокерским отчётом.</footer>
+</div>
+<script>
+const rub = n => new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB',maximumFractionDigits:2}).format(n||0);
+const num = n => new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(n||0);
+const el=id=>document.getElementById(id);
+const text=(tag,content)=>{const node=document.createElement(tag);node.textContent=String(content??'—');return node};
+const COLORS=['#6eaef8','#36c5b5','#d3a565','#9877f5','#ef8192','#79b9cf'];
+// Offline Canvas fallback: chart rendering does not depend on CDN accessibility.
+function fallbackChart(id,type,labels,datasets){
+ const canvas=el(id),parent=canvas.parentElement;
+ let width=Math.max(240,parent.clientWidth),height=Math.max(200,parent.clientHeight);
+ const dpr=Math.min(window.devicePixelRatio||1,2);
+ canvas.width=width*dpr;canvas.height=height*dpr;
+ canvas.style.width=width+'px';canvas.style.height=height+'px';
+ const g=canvas.getContext('2d');g.scale(dpr,dpr);
+ g.font='12px system-ui';g.textBaseline='middle';g.fillStyle='#8ca6be';
+ const series=datasets||[];
+ const totalValues=series.flatMap(x=>x.data||[]).map(Number);
+ if(!labels.length||!totalValues.length||!totalValues.some(x=>x!==0)){
+   g.fillText('Недостаточно данных для графика',24,height/2);return;
+ }
+ if(type==='doughnut'){
+   const values=series[0].data.map(x=>Math.max(0,Number(x)));const sum=values.reduce((a,b)=>a+b,0);
+   const radius=Math.min(width*.26,height*.35),cx=Math.min(width*.35,160),cy=height*.45;
+   let start=-Math.PI/2;
+   values.forEach((value,i)=>{const end=start+value/sum*Math.PI*2;
+     g.beginPath();g.arc(cx,cy,radius,start,end);g.arc(cx,cy,radius*.60,end,start,true);
+     g.closePath();g.fillStyle=COLORS[i%COLORS.length];g.fill();start=end;});
+   labels.forEach((label,i)=>{const row=25+i*23;
+     g.fillStyle=COLORS[i%COLORS.length];g.fillRect(width*.62,row,10,10);
+     g.fillStyle='#adc1d6';g.fillText(String(label).slice(0,17),width*.62+15,row+6);});
+   return;
+ }
+ const left=62,right=width-18,top=25,bottom=height-52,plotH=bottom-top,plotW=right-left;
+ const max=Math.max(...totalValues,1)*1.08,min=type==='line'?Math.min(0,Math.min(...totalValues)) : 0;
+ for(let i=0;i<=4;i++){
+   const y=top+i*plotH/4;g.strokeStyle='#284056';g.beginPath();g.moveTo(left,y);g.lineTo(right,y);g.stroke();
+   g.fillStyle='#8ea5bd';g.textAlign='right';g.fillText(num(max-(max-min)*i/4),left-7,y);
+ }
+ const xOf=i=>left+(labels.length<=1?plotW/2:i*plotW/(labels.length-1));
+ const yOf=v=>bottom-((Number(v)-min)/(max-min||1))*plotH;
+ if(type==='line'){
+   series.forEach((dataset,j)=>{
+     g.strokeStyle=dataset.borderColor||COLORS[j];g.lineWidth=2.4;g.beginPath();
+     dataset.data.forEach((value,i)=>i===0?g.moveTo(xOf(i),yOf(value)):g.lineTo(xOf(i),yOf(value)));
+     g.stroke();
+     dataset.data.forEach((value,i)=>{g.fillStyle=dataset.borderColor||COLORS[j];g.beginPath();g.arc(xOf(i),yOf(value),2.5,0,Math.PI*2);g.fill();});
+   });
+ }else{
+   const count=Math.max(labels.length,1),slot=plotW/count;
+   series.forEach((dataset,j)=>dataset.data.forEach((value,i)=>{
+     const bw=Math.max(3,Math.min(32,slot*.70/series.length));
+     const x=left+i*slot+(slot-series.length*bw)/2+j*bw,y=yOf(value);
+     g.fillStyle=dataset.backgroundColor||COLORS[j];g.fillRect(x,y,bw,Math.max(0,bottom-y));
+   }));
+ }
+ g.fillStyle='#93abc2';g.textAlign='center';
+ const step=Math.max(1,Math.ceil(labels.length/5));
+ labels.forEach((label,i)=>{if(i%step===0||i===labels.length-1){
+   const x=type==='line'?xOf(i):left+(i+.5)*plotW/labels.length;
+   g.fillText(String(label),x,height-31);
+ }});
+ series.forEach((dataset,j)=>{g.textAlign='left';g.fillStyle=dataset.borderColor||dataset.backgroundColor||COLORS[j];
+   g.fillText(String(dataset.label||''),left+j*145,height-10);});
+}
+function chart(id,type,labels,datasets,opts={}){
+ const canvas=el(id); if(typeof Chart==='undefined'){fallbackChart(id,type,labels,datasets);return;}
+ new Chart(canvas,{type,data:{labels,datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#b4c8df'}}},scales:type==='doughnut'?{}:{x:{ticks:{color:'#849db5'},grid:{color:'#1d354b'}},y:{ticks:{color:'#849db5'},grid:{color:'#1d354b'}}},...opts}});
+}
+function table(where,headers,rows){const parent=el(where),tbl=document.createElement('table'),head=document.createElement('tr');
+ for(const h of headers)head.append(text('th',h));tbl.append(head);
+ for(const values of rows){const tr=document.createElement('tr');for(const value of values)tr.append(text('td',value));tbl.append(tr)} parent.replaceChildren(tbl)}
+async function load(){
+ try{
+  const [a,b,c]=await Promise.all([fetch('/api/overview').then(r=>r.json()),fetch('/api/drafts').then(r=>r.json()),fetch('/api/topics').then(r=>r.json())]);
+  if(!a.has_data){el('grid').replaceChildren(text('p',a.message));return}
+  el('date').textContent='Данные на '+a.as_of+' · '+a.history.length+' исторических дат';
+  el('total').textContent=rub(a.total_rub);
+  const lookup=Object.fromEntries(a.composition.map(x=>[x.label,x.value]));
+  el('bond').textContent=rub(lookup['Облигации']||0);el('stock').textContent=rub(lookup['Акции']||0);
+  el('count').textContent=String(a.positions.length);
+  el('couponTotal').textContent=rub(a.rub_income_12m.coupons);
+  el('dividendTotal').textContent=rub(a.rub_income_12m.dividends);
+  el('sync').textContent='Синхронизация: '+(a.sync?.status||'нет') ;
+  chart('history','line',a.history.map(x=>x.day),[{label:'Портфель, ₽',data:a.history.map(x=>x.total),borderColor:'#6eaef8',backgroundColor:'#6eaef826',fill:true,tension:.22,pointRadius:2}]);
+  chart('composition','doughnut',a.composition.map(x=>x.label),[{data:a.composition.map(x=>x.value),backgroundColor:COLORS,borderColor:'#111f31',borderWidth:3}],{cutout:'67%'});
+  const income=a.income;chart('income','bar',income.map(x=>x.month),[
+   {label:'Купоны, ₽',data:income.map(x=>x.coupons.RUB||0),backgroundColor:'#6eaef8'},
+   {label:'Дивиденды, ₽',data:income.map(x=>x.dividends.RUB||0),backgroundColor:'#36c5b5'}]);
+  chart('maturities','bar',a.maturity.map(x=>x.year),[{label:'Текущая оценка, ₽',data:a.maturity.map(x=>x.estimated_value_rub),backgroundColor:'#9e87ef'}]);
+  table('positions',['Инструмент','Тип','Количество','Цена','Доля'],a.positions.map(p=>[p.name,p.kind,num(p.quantity),p.valued?num(p.native_value)+' '+p.currency:'нет цены',p.weight_pct===null?'н/д':num(p.weight_pct)+'%']));
+  if(!a.alerts.length)el('alerts').textContent='Срабатываний по заданным правилам нет. Это не означает отсутствие инвестиционных рисков.';
+  else for(const x of a.alerts){let v=text('div',x.text);v.className='alert'+(x.level==='attention'?' attention':'');el('alerts').append(v)}
+  table('drafts',['№','Рубрика','Период','Статус'],b.map(x=>['#'+x.id,x.kind,x.period,x.state]));
+  table('topics',['Рубрика','ID бумаги','Дата'],c.map(x=>[x.kind,x.topic_key,x.created_at.slice(0,10)]));
+ } catch(e){el('date').textContent='Ошибка загрузки: '+e.message;}
+}
+window.addEventListener('load',load);
+</script></body></html>

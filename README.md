@@ -1,3 +1,9 @@
+# **Новое в v1.1**
+
+Сначала прочитай [V1_1_README.md](V1_1_README.md) — безопасное обновление, веб-дашборд, Telegram-кнопки, аналитика и новые команды.
+
+---
+
 # Invest Blog Assistant 📈 → Telegram
 
 Генератор черновиков для инвестиционного блога. **Только чтение** T-Invest API: программа не размещает заявки, не меняет портфель и не публикует посты в канал.
@@ -135,4 +141,3 @@ sudo journalctl -u invest-blog -f
 - [GetInstrumentBy](https://developer.tbank.ru/invest/api/instruments-service-get-instrument-by)
 - [GetDividends](https://developer.tbank.ru/invest/api/instruments-service-get-dividends)
 - [Календарь ЦБ](https://www.cbr.ru/eng/dkp/cal_mp/)
-# Invest-Blog-Assistant

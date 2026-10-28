@@ -31,6 +31,10 @@ class Settings:
     cbr_path: Path
     startup_catchup: bool
     times: dict[str, tuple[int, int]]
+    telegram_channel_id: str = ""
+    auto_snapshot: bool = False
+    bond_target: float = .60
+    max_position_weight: float = .15
 
     @classmethod
     def load(cls) -> Settings:
@@ -45,6 +49,10 @@ class Settings:
             db_path=Path(getenv("DB_PATH", "./data/drafts.sqlite3")),
             cbr_path=Path(getenv("CBR_EVENTS_PATH", "./data/cbr_events.json")),
             startup_catchup=getenv("STARTUP_CATCHUP", "true").lower() in ("1", "true", "yes"),
+            telegram_channel_id=getenv("TELEGRAM_CHANNEL_ID", "").strip(),
+            auto_snapshot=getenv("AUTO_SNAPSHOT", "false").lower() in ("1", "true", "yes"),
+            bond_target=float(getenv("BOND_TARGET", ".60")),
+            max_position_weight=float(getenv("MAX_POSITION_WEIGHT", ".15")),
             times={
                 "weekly": _time("WEEKLY_TIME", "10:00"),
                 "monthly": _time("MONTHLY_TIME", "11:00"),
