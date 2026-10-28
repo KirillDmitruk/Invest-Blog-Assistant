@@ -14,7 +14,7 @@ from .model import money, fmt_money
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Invest Blog Assistant")
-    parser.add_argument("action", choices=("bot", "accounts", "preview", "diagnose", "sync", "web", "audit", "bonds", "backfill"))
+    parser.add_argument("action", choices=("bot", "accounts", "preview", "diagnose", "sync", "web", "audit", "bonds", "backfill", "risk"))
     parser.add_argument("kind", nargs="?", choices=("weekly", "monthly", "plan", "paper", "glossary", "purchase"))
     parser.add_argument("--date", dest="date_string", help="Локальная дата YYYY-MM-DD для preview (брокерские данные — актуальные)")
     parser.add_argument("--start", help="Начало периода YYYY-MM-DD (для diagnose)")
@@ -35,6 +35,16 @@ def main() -> None:
         print(f"Открой http://127.0.0.1:{args.port} (только локальный доступ)")
         uvicorn.run(create_app(settings.db_path, settings.bond_target,
                                settings.max_position_weight, settings.timezone), host="127.0.0.1", port=args.port)
+        return
+    if args.action == "risk":
+        from .portfolio_store import PortfolioStore
+        from .risk import analyze_portfolio
+        import json
+        result = analyze_portfolio(PortfolioStore(settings.db_path),
+                                   bond_target=settings.bond_target,
+                                   max_position=settings.max_position_weight,
+                                   today=datetime.now(settings.timezone).date())
+        print(json.dumps(result, ensure_ascii=False, indent=2))
         return
     if args.action == "bonds":
         from .portfolio_store import PortfolioStore
