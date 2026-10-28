@@ -25,22 +25,8 @@ def operation_type(operation: dict) -> str:
     return operation.get("type") or operation.get("operationType") or ""
 
 
-# Curated, deterministic educational posts; no hallucinated ratings/yields.
-TERMS = [
-    ("Доходность к погашению (YTM)",
-     "Это расчетная годовая доходность облигации, если купить её по текущей цене и держать до погашения с учетом будущих платежей. Она зависит и от купонов, и от разницы между ценой покупки и возвратом номинала.\n\nПример: облигация дешевле номинала может иметь доходность к погашению выше купонной ставки.\n\nВажно: расчет предполагает получение обещанных платежей, а метод расчёта может учитывать реинвестирование. YTM не гарантирует прибыль и не учитывает все индивидуальные налоги/комиссии."),
-    ("Дюрация", "Дюрация показывает, насколько во времени распределены денежные потоки облигации. Модифицированная дюрация приблизительно измеряет чувствительность цены к изменению доходности.\n\nПример: при модифицированной дюрации 4 рост рыночной доходности на 1 процентный пункт может вызвать снижение цены примерно на 4% — при прочих равных.\n\nВажно: это приближение, а не гарантия. Дюрация может изменяться со временем."),
-    ("Флоатер", "Флоатер — облигация с плавающим купоном. Его ставка привязана к ориентиру, например ключевой ставке или RUONIA, плюс/минус спред.\n\nПлюс: купон может повышаться при росте базовой ставки. Минус: при снижении ставки купон тоже может уменьшиться.\n\nВажно: плавающий купон не отменяет кредитный риск и риск ликвидности."),
-    ("ИИС", "Индивидуальный инвестиционный счёт — специальный брокерский счёт с предусмотренными законом налоговыми льготами при соблюдении условий.\n\nСуществуют разные поколения ИИС, поэтому сроки владения и правила льгот зависят от даты открытия и вида счёта.\n\nВывод: перед открытием уточни актуальные условия именно своего ИИС и применимость льгот."),
-    ("Налоговый вычет", "Налоговый вычет может уменьшать налогооблагаемую базу или давать право на возврат части уже уплаченного НДФЛ при выполнении законных условий.\n\nВ инвестициях вычеты могут зависеть от типа счёта, даты его открытия, суммы взносов и других обстоятельств.\n\nВажно: лимиты и требования меняются. Проверять их лучше по актуальным правилам ФНС."),
-    ("НКД", "НКД — накопленный купонный доход. Между выплатами купон постепенно накапливается и обычно учитывается в цене сделки с облигацией отдельно от «чистой» котировки.\n\nЕсли покупаешь бумагу перед купоном, как правило, оплачиваешь продавцу НКД. Поэтому ближайшая купонная выплата сама по себе не означает мгновенную прибыль."),
-    ("Амортизация облигации", "При амортизации эмитент возвращает номинал не один раз в конце срока, а частями по графику.\n\nПлюс: часть денег возвращается раньше. Минус: оставшаяся база для будущих купонов может уменьшаться, а возвращенные деньги нужно размещать заново.\n\nВажно смотреть полный график выплат, а не только дату финального погашения."),
-    ("Кредитный рейтинг", "Кредитный рейтинг — оценка способности эмитента исполнять долговые обязательства. Его присваивают рейтинговые агентства.\n\nБолее высокий рейтинг обычно означает меньший оцениваемый кредитный риск, но не гарантирует выплаты. Рейтинг может быть пересмотрен.\n\nВажно: оценка «уровня риска» у брокера — не то же самое, что кредитный рейтинг агентства."),
-    ("Дивидендная отсечка", "Дата закрытия реестра определяет круг акционеров с правом на дивиденд. Из-за режима расчётов последний день покупки для попадания в реестр может быть раньше.\n\nПосле отсечки цена акции часто корректируется, а деньги приходят позже. Покупка исключительно ради дивидендов не гарантирует положительную доходность."),
-    ("Диверсификация", "Диверсификация — распределение вложений между разными эмитентами, секторами, видами активов и валютами.\n\nЗачем: неприятности одной компании могут меньше повлиять на весь портфель.\n\nВажно: диверсификация не устраняет рыночный риск; активы иногда падают одновременно."),
-    ("Оферта по облигации", "Оферта — предусмотренный условиями выпуска механизм, по которому у инвестора или эмитента может возникать право/обязанность досрочного выкупа бумаги.\n\nЦена и порядок зависят от выпуска. Не путай оферту с безусловным погашением. Перед покупкой стоит прочитать эмиссионные документы."),
-    ("Купон и доходность", "Купон — выплаты по облигации, а доходность — показатель результата инвестиции с учётом цены и иных денежных потоков.\n\nПример: облигация с купоном 12% годовых, купленная дороже номинала, может иметь доходность к погашению ниже 12%.\n\nПоэтому одного размера купона недостаточно, чтобы сравнивать облигации."),
-]
+# Curated glossary lessons are maintained separately from portfolio calculations.
+from .lessons import TERMS
 
 
 def previous_workweek(today: date) -> tuple[date, date]:
@@ -70,13 +56,15 @@ def is_event_in_window(day: date | None, first: date, last: date) -> bool:
 
 class PostGenerator:
     def __init__(self, api: TInvest, accounts: tuple[str, ...], events_path: Path,
-                 recent_papers: tuple[str, ...] = ()):
+                 recent_papers: tuple[str, ...] = (), recent_glossary: tuple[str, ...] = ()):
         if not accounts:
             raise ValueError("Не заданы ID счетов")
         self.api = api
         self.accounts = accounts
         self.events_path = events_path
         self.recent_papers = recent_papers
+        self.recent_glossary = recent_glossary
+        self.selected_glossary_topic: str | None = None
         self.selected_paper_uid: str | None = None
 
     def generate(self, kind: str, today: date) -> Draft:
@@ -230,64 +218,130 @@ class PostGenerator:
         return Draft("plan", start.isoformat(), "\n".join(parts))
 
     def paper(self, today: date) -> Draft:
+        """Editorial template: factual T-Invest fields plus visible manual research prompts.
+
+        T-Invest does not supply an issuer's narrative, audited financial analysis,
+        credit-agency rating or a trustworthy outlook. Never fabricate those fields.
+        Bond ``currentPrice`` may be quoted as a percentage of face value, so it
+        must not be multiplied by quantity to claim the position's value.
+        """
         positions, total = self.get_positions()
         monday, _ = current_week(today)
         ordered = sorted(positions, key=lambda x: (x.get("instrumentUid") or x.get("figi") or ""))
         if not ordered:
             raise ValueError("Нет акций/облигаций в портфеле для «Бумаги недели»")
-        # Prefer recently purchased, relatively large positions not covered recently.
-        # New purchase alone is NOT a recommendation to buy again.
+
         recent_buys: set[str] = set()
         try:
             for op in self.get_operations(today - timedelta(days=45), today):
                 if operation_type(op) in BUY:
                     recent_buys.add(op.get("instrumentUid") or op.get("figi") or "")
         except TInvestError:
-            pass  # no selection from unverified purchases; holdings still available
+            pass
+
         def score(pos):
             uid = pos.get("instrumentUid") or pos.get("figi") or ""
             recent_index = self.recent_papers.index(uid) if uid in self.recent_papers else None
+            # Selection signal only. The live bond quotation may be in points,
+            # and must NOT be presented as a valid ruble valuation.
             quantity = quotation(pos.get("quantity"))
             price, currency = money(pos.get("currentPrice"))
-            native_value = quantity * price if currency == "RUB" else Decimal(0)
+            native_value = quantity * price if (pos.get("instrumentType") == "share" and currency == "RUB") else Decimal(0)
             return (1 if recent_index is None else 0,
                     1 if uid in recent_buys else 0,
                     native_value, recent_index if recent_index is not None else 0, uid)
+
         pos = max(ordered, key=score)
         self.selected_paper_uid = pos.get("instrumentUid") or pos.get("figi")
         info = self.api.instrument(uid=pos.get("instrumentUid", ""), figi=pos.get("figi", ""))
         quantity = quotation(pos.get("quantity"))
-        price, currency = money(pos.get("currentPrice"))
-        amount = price * quantity
-        share = (amount / total * 100) if total > 0 and currency == "RUB" else None
-        parts = ["📊 Бумага недели", "", f"{info.name}{info.tag}",
-                 f"Тип: {'облигация' if info.kind == 'bond' else 'акция' if info.kind == 'share' else info.kind}",
-                 f"В моём портфеле: {fmt_num(quantity, 0)} шт.",
-                 f"Текущая оценка позиции: {fmt_money(amount, currency)}"]
-        if share is not None:
-            parts.append(f"Примерная доля от стоимости портфеля: {fmt_num(share)}%")
-        if info.kind == "bond":
+        is_bond = info.kind == "bond"
+        position_type = "облигация" if is_bond else "акция" if info.kind == "share" else info.kind
+        hooks = (
+            "Интересная бумага — это не только цифры на экране. Давайте посмотрим, что за ними стоит.",
+            "В этом выпуске разбираем не только условия бумаги, но и сам бизнес, его сильные стороны и ограничения.",
+            "Попробуем понять, из чего складываются привлекательность бумаги и её главные риски.",
+        )
+        parts = [
+            f"📊 Бумага недели — {info.name}{info.tag}", "",
+            hooks[today.isocalendar().week % len(hooks)], "",
+            "🏢 Что за компания?",
+            "[Чем занимается эмитент, какие товары или услуги предлагает, на чём зарабатывает? "
+            "Укажи 2–4 предложения и место компании на рынке — только по проверенным источникам.]", "",
+            "📈 Что происходит с компанией сейчас?",
+            "[Последняя доступная отчётность: выручка, прибыль, долговая нагрузка и период сравнения. "
+            "Добавь 2–3 актуальных события из бизнеса/отрасли и источники с датами. "
+            "Если свежих данных нет — напиши об этом прямо.]", "",
+            "💰 Что по самой бумаге?",
+            f"Тип: {position_type}",
+            f"В моём портфеле: {fmt_num(quantity, 0)} шт.",
+        ]
+        if is_bond:
             bond = self.api.bond(info.uid)
-            m = iso_day(bond.get("maturityDate"), self.api.tz)
-            parts.extend([f"Погашение: {d(m) if m else 'не указано / бессрочная'}",
-                          f"Купон: {'плавающий' if bond.get('floatingCouponFlag') else 'не помечен как плавающий'}",
-                          f"Амортизация: {'да' if bond.get('amortizationFlag') else 'нет по данным API'}",
-                          "Кредитный рейтинг: [проверить в агентстве]",
-                          "Доходность к погашению: [указать после проверки котировки и расчёта]"])
+            maturity = iso_day(bond.get("maturityDate"), self.api.tz)
+            floating = bond.get("floatingCouponFlag")
+            amortization = bond.get("amortizationFlag")
+            parts.extend([
+                f"Дата погашения: {d(maturity) if maturity else '[уточнить условия выпуска]'}",
+                "Плавающий купон: " + ("да" if floating is True else "нет" if floating is False else "[уточнить]"),
+                "Амортизация: " + ("да" if amortization is True else "нет" if amortization is False else "[уточнить]"),
+            ])
+            nominal, nominal_currency = money(bond.get("nominal"))
+            if nominal > 0 and nominal_currency == "RUB":
+                parts.append(f"Текущий номинал: {fmt_money(nominal, nominal_currency)}")
+            else:
+                parts.append("Текущий номинал: [сверить условия выпуска, особенно амортизацию]")
+            parts.extend([
+                "Купонная ставка / формула: [указать актуальную ставку, частоту и дату проверки]",
+                "Доходность к погашению: [проверить на дату публикации; учесть НКД/оферту]",
+                "Кредитный рейтинг: [агентство, рейтинг, дата последнего действия]",
+            ])
         elif info.kind == "share":
-            parts += ["Дивиденды: [посмотреть последнее объявление и дату отсечки]"]
-        parts += ["", "✅ Что мне нравится: [добавить 1–2 тезиса]",
-                  "⚠️ Основные риски: [добавить 1–2 тезиса]",
-                  "🤔 Почему держу / почему нет: [твоё мнение]",
-                  "📍 План по бумаге: [держать / докупать / наблюдать — твоё решение]",
-                  "", "Это мой личный разбор, не инвестиционная рекомендация."]
+            price, currency = money(pos.get("currentPrice"))
+            if price > 0:
+                parts.append(f"Текущая цена (снимок API): {fmt_money(price, currency)}")
+                value = price * quantity
+                if currency == "RUB" and total > 0:
+                    parts.append(f"Примерная доля портфеля: {fmt_num(value / total * 100)}%")
+            parts.extend([
+                "Дивиденды: [последние объявленные выплаты, период и доходность при актуальной цене]",
+                "Дивидендная политика / отсечка: [дата и источник; если не объявлено — так и написать]",
+                "Финансовые показатели: [выручка, прибыль, долг, отчётный период]",
+            ])
+        parts += [
+            "", "🚀 Какие перспективы?",
+            "[На горизонте 1–3 лет: что может поддержать результаты компании или привлекательность выпуска? "
+            "Опиши базовый и благоприятный сценарии, указав предпосылки, а не обещания роста.]",
+            "", "✅ Что мне нравится",
+            "— [Преимущество №1: чем подтверждается и почему важно]",
+            "— [Преимущество №2: чем подтверждается и почему важно]",
+            "", "⚠️ Основные риски",
+            "— [Риск №1: что может пойти не так и как это отразится на бумаге]",
+            "— [Риск №2: что может пойти не так и как это отразится на бумаге]",
+            "", "🤔 Моё мнение",
+            "[Почему эта бумага в портфеле? Подходит ли она моей долгосрочной стратегии? "
+            "Что заставит пересмотреть решение? Заполни лично — генератор не знает твоих мотивов.]",
+            "", "📍 Итог",
+            "[2–3 предложения: для какого инвестора бумага может быть интересна, при каких условиях "
+            "и какой главный риск нельзя игнорировать.]",
+            "", "А у вас есть такая бумага? Что думаете о компании? 👇",
+            "", "Данные и котировки требуют проверки на дату публикации. Это личный разбор, не индивидуальная инвестиционная рекомендация.",
+        ]
         return Draft("paper", monday.isoformat(), "\n".join(parts))
 
     def glossary(self, today: date) -> Draft:
         monday, _ = current_week(today)
-        idx = (today.isocalendar().year * 53 + today.isocalendar().week - 1) % len(TERMS)
-        title, body = TERMS[idx]
-        return Draft("glossary", monday.isoformat(), f"📚 Ликбез за 2 минуты\n\nСегодня разбираем: {title}\n\n{body}\n\nА какой термин разобрать следующим? 👇")
+        # Prefer a term that has not appeared in the recent editorial history.
+        offset = (today.isocalendar().year * 53 + today.isocalendar().week - 1) % len(TERMS)
+        rotated = TERMS[offset:] + TERMS[:offset]
+        title, body = next(((t, b) for t, b in rotated if t not in self.recent_glossary[:6]), rotated[0])
+        self.selected_glossary_topic = title
+        return Draft(
+            "glossary", monday.isoformat(),
+            f"📚 Ликбез за 2 минуты: {title}\n\n{body}\n\n"
+            "Вот и всё — ещё одним сложным инвестиционным термином меньше 😁\n"
+            "О каком понятии рассказать в следующий раз? 👇"
+        )
 
     def purchase(self, today: date) -> Draft:
         start = today - timedelta(days=60)

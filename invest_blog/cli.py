@@ -34,7 +34,7 @@ def main() -> None:
         from .dashboard import create_app
         print(f"Открой http://127.0.0.1:{args.port} (только локальный доступ)")
         uvicorn.run(create_app(settings.db_path, settings.bond_target,
-                               settings.max_position_weight, settings.timezone), host="127.0.0.1", port=args.port)
+                               settings.max_position_weight, settings.timezone, settings.times), host="127.0.0.1", port=args.port)
         return
     if args.action == "risk":
         from .portfolio_store import PortfolioStore

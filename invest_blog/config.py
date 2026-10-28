@@ -7,6 +7,8 @@ from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 
+from .publication_schedule import DEFAULT_TIMES
+
 
 def _time(name: str, fallback: str) -> tuple[int, int]:
     raw = getenv(name, fallback)
@@ -53,13 +55,8 @@ class Settings:
             auto_snapshot=getenv("AUTO_SNAPSHOT", "false").lower() in ("1", "true", "yes"),
             bond_target=float(getenv("BOND_TARGET", ".60")),
             max_position_weight=float(getenv("MAX_POSITION_WEIGHT", ".15")),
-            times={
-                "weekly": _time("WEEKLY_TIME", "10:00"),
-                "monthly": _time("MONTHLY_TIME", "11:00"),
-                "plan": _time("PLAN_TIME", "10:00"),
-                "paper": _time("PAPER_TIME", "10:00"),
-                "glossary": _time("GLOSSARY_TIME", "10:00"),
-            },
+            times={kind: _time(f'{kind.upper()}_TIME', f'{h:02d}:{m:02d}')
+                   for kind, (h, m) in DEFAULT_TIMES.items()},
         )
 
     def validate_api(self) -> None:

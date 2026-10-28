@@ -5,7 +5,7 @@ from pathlib import Path
 import secrets
 
 from fastapi import HTTPException, Request
-from datetime import datetime
+from datetime import date, datetime, timezone as dt_timezone
 from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI
@@ -18,17 +18,21 @@ from .storage import DraftStore
 from .bond_analytics import get_bond_analytics
 from .risk import analyze_portfolio
 from .goals import GoalStore, evaluate_goals
+from .editorial import ContentPlanner, RUBRICS
+from .publication_schedule import recurring_schedule
 
 HTML_PATH = Path(__file__).parent / 'web_static' / 'index.html'
 
 
 def create_app(db_path: Path, bond_target: float = 0.60, max_position: float = 0.15,
-               timezone: ZoneInfo | None = None) -> FastAPI:
+               timezone: ZoneInfo | None = None,
+               times: dict[str, tuple[int, int]] | None = None) -> FastAPI:
     app = FastAPI(title='Invest Blog Assistant Dashboard', docs_url=None, redoc_url=None, openapi_url=None)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=['127.0.0.1', 'localhost', 'testserver'])
     portfolio=PortfolioStore(db_path)
     drafts=DraftStore(db_path)
     goals=GoalStore(portfolio)
+    planner=ContentPlanner(portfolio,drafts)
     csrf_nonce=secrets.token_urlsafe(32)
 
     def require_editor(request: Request):
@@ -101,8 +105,102 @@ def create_app(db_path: Path, bond_target: float = 0.60, max_position: float = 0
 
     @app.get('/api/drafts')
     def recent_drafts():
+        queued = {r['id'] for r in drafts.pending_publications(limit=200)}
         return [{'id':r['id'],'kind':r['kind'],'period':r['period'], 'state':r['state'],
-                 'created_at':r['created_at']} for r in drafts.list_recent(15)]
+                 'revision':r['revision'], 'queued':r['id'] in queued,
+                 'scheduled_at':r['scheduled_at'],
+                 'created_at':r['created_at']} for r in drafts.list_recent(100)]
+
+    @app.get('/api/publication-routine')
+    def publication_routine():
+        return recurring_schedule(times, str(timezone or ZoneInfo('Europe/Moscow')))
+
+    @app.get('/api/content-plan')
+    def content_plan():
+        now = datetime.now(timezone).date() if timezone else date.today()
+        return planner.overview(now)
+
+    @app.get('/api/editor/drafts/{draft_id}')
+    def editor_get(draft_id: int):
+        row = drafts.get(draft_id)
+        if row is None or row['state'] == 'deleted':
+            raise HTTPException(status_code=404, detail='Черновик не найден')
+        return dict(row)
+
+    @app.post('/api/editor/drafts', status_code=201)
+    async def editor_create(request: Request):
+        require_editor(request)
+        payload = await request.json()
+        if not isinstance(payload, dict):
+            raise HTTPException(status_code=422, detail='Ожидается объект')
+        try:
+            did = drafts.create_manual(payload.get('kind'),payload.get('period'),payload.get('body'))
+        except (ValueError,TypeError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return dict(drafts.get(did))
+
+    @app.put('/api/editor/drafts/{draft_id}')
+    async def editor_update(draft_id: int, request: Request):
+        require_editor(request)
+        payload = await request.json()
+        if not isinstance(payload, dict) or type(payload.get('revision')) is not int:
+            raise HTTPException(status_code=422, detail='Требуется revision')
+        try:
+            drafts.update_body(draft_id,payload.get('body'),payload['revision'])
+        except RuntimeError as exc:
+            raise HTTPException(status_code=409,detail=str(exc)) from exc
+        except (ValueError,TypeError) as exc:
+            raise HTTPException(status_code=422,detail=str(exc)) from exc
+        return dict(drafts.get(draft_id))
+
+    @app.delete('/api/editor/drafts/{draft_id}', status_code=204)
+    async def editor_delete(draft_id: int, request: Request):
+        require_editor(request)
+        payload = await request.json()
+        if not isinstance(payload, dict) or type(payload.get('revision')) is not int:
+            raise HTTPException(status_code=422, detail='Требуется revision')
+        row = drafts.get(draft_id)
+        if not row or row['state'] == 'deleted':
+            raise HTTPException(status_code=404, detail='Черновик не найден')
+        if not drafts.delete_from_queue(draft_id, payload['revision']):
+            raise HTTPException(status_code=409, detail='Черновик изменён или уже публикуется/опубликован')
+
+    @app.post('/api/editor/drafts/{draft_id}/action')
+    async def editor_action(draft_id: int, request: Request):
+        require_editor(request)
+        payload = await request.json()
+        if not isinstance(payload,dict) or type(payload.get('revision')) is not int:
+            raise HTTPException(status_code=422,detail='Требуется revision')
+        row = drafts.get(draft_id)
+        if not row:
+            raise HTTPException(status_code=404,detail='Черновик не найден')
+        if row['revision'] != payload['revision']:
+            raise HTTPException(status_code=409,detail='Черновик изменился. Обнови страницу.')
+        action = payload.get('action')
+        if action in ('review','approved','rejected'):
+            if not drafts.change_state(draft_id, action, expected_revision=payload['revision']):
+                raise HTTPException(status_code=409,detail='Недоступный переход или устаревшая версия')
+        elif action == 'unschedule':
+            if row['state'] != 'scheduled' or not drafts.change_state(draft_id,'approved',expected_revision=payload['revision']):
+                raise HTTPException(status_code=409,detail='Пост не запланирован')
+        elif action == 'schedule':
+            value = payload.get('when')
+            if not isinstance(value,str):
+                raise HTTPException(status_code=422,detail='Укажи дату YYYY-MM-DDTHH:MM')
+            try:
+                when = datetime.strptime(value,'%Y-%m-%dT%H:%M').replace(tzinfo=timezone or ZoneInfo('Europe/Moscow'))
+                if when<=datetime.now(when.tzinfo):
+                    raise ValueError('Дата должна быть в будущем')
+            except ValueError as exc:
+                raise HTTPException(status_code=422,detail=str(exc)) from exc
+            if not drafts.schedule(draft_id,when.astimezone(dt_timezone.utc).isoformat(),expected_revision=payload['revision']):
+                raise HTTPException(status_code=409,detail='Сначала одобри актуальную версию поста')
+        elif action == 'queue_publish':
+            if not drafts.queue_publish(draft_id):
+                raise HTTPException(status_code=409,detail='Для публикации нужен одобренный текст длиной до 4096 символов')
+        else:
+            raise HTTPException(status_code=422,detail='Неизвестное действие')
+        return dict(drafts.get(draft_id))
 
     @app.get('/api/topics')
     def topics():

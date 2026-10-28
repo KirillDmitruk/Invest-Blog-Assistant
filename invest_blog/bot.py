@@ -15,6 +15,8 @@ from telegram.ext import (Application, ApplicationBuilder, CallbackQueryHandler,
 from .config import Settings
 from .portfolio_store import PortfolioStore
 from .posts import PostGenerator
+from .editorial import ContentPlanner
+from .publication_schedule import WEEKLY_RULES
 from .storage import DraftStore
 from .sync import PortfolioSync
 from .tinvest import TInvest
@@ -27,6 +29,7 @@ HELP = ("🤖 Invest Blog Assistant\n\n"
         "/weekly, /monthly, /plan, /paper, /glossary, /purchase — черновики\n"
         "/drafts — последние черновики; /show ID — показать\n"
         "/edit ID ТЕКСТ — заменить; /done ID — отметка ручной публикации\n"
+        "/contentplan — темы и график; /queue — редакторская очередь; /cancel — отмена ввода\n"
         "/whoami — ID чата\n\n"
         "Кнопки: На проверку → Одобрить → Опубликовать / Запланировать.\n"
         "Для редактирования нажми кнопку или ответь на черновик новым текстом.\n"
@@ -39,14 +42,16 @@ class InvestBot:
         self.settings = settings
         self.store = DraftStore(settings.db_path)
         self.portfolio_store = PortfolioStore(settings.db_path)
+        self.planner = ContentPlanner(self.portfolio_store,self.store)
         self.scheduler = AsyncIOScheduler(timezone=settings.timezone)
 
     def _generate_sync(self, kind: str):
         api=TInvest(self.settings.invest_token, self.settings.timezone)
         gen=PostGenerator(api, self.settings.account_ids, self.settings.cbr_path,
-                          recent_papers=tuple(self.portfolio_store.recent_topics('paper')))
+                          recent_papers=tuple(self.portfolio_store.recent_topics('paper')),
+                          recent_glossary=tuple(self.portfolio_store.recent_topics('glossary')))
         draft=gen.generate(kind, datetime.now(self.settings.timezone).date())
-        return draft, gen.selected_paper_uid
+        return draft, (gen.selected_paper_uid if kind=='paper' else gen.selected_glossary_topic if kind=='glossary' else None)
 
     def _sync(self):
         api=TInvest(self.settings.invest_token, self.settings.timezone)
@@ -77,16 +82,16 @@ class InvestBot:
             buttons.append([mk('✅ Одобрить','approve'),mk('✏️ Изменить','edit')])
         if state=='approved':
             buttons.append([mk('📢 Опубликовать','publish'),mk('🕒 Запланировать','schedule')])
-            buttons.append([mk('✏️ Изменить','edit')])
+            buttons.append([mk('✏️ Изменить','edit'),mk('↩️ На проверку','review')])
         if state=='scheduled':
-            buttons.append([mk('↩️ Отменить расписание','unschedule')])
+            buttons.append([mk('↩️ Отменить расписание','unschedule'),mk('✏️ Изменить','edit')])
         if state in ('new','draft','review','approved','scheduled'):
             buttons.append([mk('🗑 Отклонить','reject')])
         return InlineKeyboardMarkup(buttons) if buttons else None
 
     async def send_draft(self, application: Application, did: int) -> None:
         row=self.store.get(did)
-        if row is None:return
+        if row is None or row['state']=='deleted':return
         label=f"📝 Черновик #{did} — {row['kind']} ({row['period']}) [{row['state']}]\n\n"
         body=row['body']
         if len(label+body)<=3900:
@@ -120,6 +125,17 @@ class InvestBot:
         return f'✅ Пост #{did} опубликован. ID сообщения: {msg.message_id}'
 
     async def tick_scheduled(self, app: Application) -> None:
+        # Drafts created in the local web editor are delivered to the private chat.
+        for row in self.store.unsent():
+            try:
+                await self.send_draft(app,row['id'])
+            except Exception:
+                log.exception('Не удалось отправить веб-черновик #%s',row['id'])
+        # Web requests never send directly; a single bot process claims them.
+        if self.settings.telegram_channel_id:
+            for row in self.store.pending_publications():
+                msg=await self.publish(app,row['id'])
+                await app.bot.send_message(self.settings.telegram_chat_id,msg)
         for row in self.store.due_scheduled(datetime.now(timezone.utc).isoformat()):
             text=await self.publish(app,row['id'],scheduled=True)
             await app.bot.send_message(self.settings.telegram_chat_id,text)
@@ -140,7 +156,7 @@ class InvestBot:
             draft,topic=await asyncio.to_thread(self._generate_sync,kind)
             did,fresh=self.store.insert(draft,scheduled=True)
             if fresh:
-                if kind=='paper': self.portfolio_store.record_topic('paper',topic,did)
+                if kind in ('paper','glossary'): self.portfolio_store.record_topic(kind,topic,did)
                 await self.send_draft(app,did)
         except Exception as exc:
             log.exception('Не удалось сформировать %s',kind)
@@ -155,15 +171,14 @@ class InvestBot:
             except Exception: log.exception('Не удалось дослать черновик #%s',row['id'])
         if not self.settings.startup_catchup:return
         now=datetime.now(self.settings.timezone)
-        weekdays={0:'plan',2:'paper',4:'glossary',5:'weekly'}
-        due=[weekdays[now.weekday()]] if now.weekday() in weekdays else []
+        due=[kind for kind, weekday, _ in WEEKLY_RULES if weekday == now.weekday()]
         if now.day==1:due.append('monthly')
         for kind in due:
             if (now.hour,now.minute)>=self.settings.times[kind]:
                 await self.run_scheduled(kind,app)
 
     async def post_init(self, app: Application) -> None:
-        for kind,weekday in {'plan':'mon','paper':'wed','glossary':'fri','weekly':'sat'}.items():
+        for kind, _, weekday in WEEKLY_RULES:
             h,m=self.settings.times[kind]
             self.scheduler.add_job(self.run_scheduled,CronTrigger(day_of_week=weekday,hour=h,minute=m,timezone=self.settings.timezone),
                                    args=[kind,app],id=kind,max_instances=1,misfire_grace_time=3600,coalesce=True)
@@ -193,12 +208,36 @@ class InvestBot:
         if kind not in RUBRICS:return
         try:
             draft,topic=await asyncio.to_thread(self._generate_sync,kind)
-            did,_=self.store.insert(draft,scheduled=False)
-            if kind=='paper':self.portfolio_store.record_topic('paper',topic,did)
+            did,created=self.store.insert(draft,scheduled=False)
+            if kind in ('paper','glossary') and created:self.portfolio_store.record_topic(kind,topic,did)
             await self.send_draft(context.application,did)
         except Exception as exc:
             log.exception('Ошибка при генерации %s',kind)
             await update.effective_message.reply_text(f'⚠️ Ошибка создания: {type(exc).__name__}. Проверь логи.')
+
+    async def contentplan(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if not await self.guard(update):return
+        plan=self.planner.overview(datetime.now(self.settings.timezone).date())
+        items=plan['schedule'][:12]
+        lines=['📅 Контент-план (ближайшие публикации):']
+        lines += [f"{x['day']} · {x['label']} — {x['state']}" for x in items]
+        paper=plan['suggested_paper']
+        if paper:lines+=['',f"📊 Следующая бумага: {paper['name']} ({paper['ticker']}) — {paper['reason']}"]
+        term=plan['suggested_term']
+        if term:lines+=[f"📚 Термин: {term['title']}"]
+        await update.effective_message.reply_text('\n'.join(lines)[:3900])
+
+    async def queue(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if not await self.guard(update):return
+        rows=[r for r in self.store.list_recent(25) if r['state'] not in ('published','rejected')]
+        lines=['📋 Редакторская очередь:']+[f"#{r['id']} · {r['kind']} [{r['state']}]" for r in rows[:20]]
+        await update.effective_message.reply_text('\n'.join(lines) if rows else 'Очередь пуста.')
+
+    async def cancel(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if not await self.guard(update):return
+        context.user_data.pop('editing',None)
+        context.user_data.pop('scheduling',None)
+        await update.effective_message.reply_text('Редактирование/планирование отменено.')
 
     async def drafts(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not await self.guard(update):return
@@ -209,7 +248,7 @@ class InvestBot:
     async def show(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not await self.guard(update):return
         try:
-            did=int(context.args[0]);assert self.store.get(did)
+            did=int(context.args[0]);row=self.store.get(did);assert row and row['state']!='deleted'
             await self.send_draft(context.application,did)
         except (IndexError,ValueError,AssertionError):
             await update.effective_message.reply_text('Используй /show 12')
@@ -217,7 +256,7 @@ class InvestBot:
     async def done(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not await self.guard(update):return
         try:
-            did=int(context.args[0]);row=self.store.get(did);assert row
+            did=int(context.args[0]);row=self.store.get(did);assert row and row['state']!='deleted'
             if row['state']=='publishing':
                 await update.effective_message.reply_text('Проверь канал: исход отправки неизвестен. /done подтвердит ручную публикацию.')
             self.store.mark_done(did)
@@ -227,7 +266,7 @@ class InvestBot:
 
     def editable(self,did):
         row=self.store.get(did)
-        return bool(row and row['state'] not in ('published','publishing'))
+        return bool(row and row['state'] not in ('published','publishing','deleted'))
 
     async def edit(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not await self.guard(update):return
@@ -312,7 +351,7 @@ class InvestBot:
         app.add_handler(CommandHandler(('start','help'),self.help))
         app.add_handler(CommandHandler('whoami',self.whoami))
         for kind in RUBRICS:app.add_handler(CommandHandler(kind,self.generate_command))
-        for name,handler in [('drafts',self.drafts),('show',self.show),('edit',self.edit),('done',self.done)]:
+        for name,handler in [('drafts',self.drafts),('show',self.show),('edit',self.edit),('done',self.done),('contentplan',self.contentplan),('queue',self.queue),('cancel',self.cancel)]:
             app.add_handler(CommandHandler(name,handler))
         app.add_handler(CallbackQueryHandler(self.callback,pattern=r'^d:(review|approve|reject|edit|schedule|publish|unschedule):\d+$'))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND,self.reply_edit))

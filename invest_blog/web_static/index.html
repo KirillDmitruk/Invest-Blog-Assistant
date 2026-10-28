@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><title>Invest Blog · Analytics v1.3</title>
+<meta name="robots" content="noindex,nofollow"><title>Invest Blog · Analytics v1.4.1</title>
 <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <style>
 :root{color-scheme:dark;--bg:#090f1c;--panel:#111d2e;--sub:#17273a;--line:#263950;--txt:#e7f1ff;--muted:#8fa4b9;--cyan:#64b9f6;--green:#57ceb2;--orange:#e6b16b;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
@@ -15,12 +15,36 @@
 @media(max-width:1200px){.month-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.metric{grid-column:span 6}.wide,.side{grid-column:span 12}}
 @media(max-width:850px){.shell{display:block}.sidebar{height:auto;width:100%;position:relative;border-right:0;border-bottom:1px solid var(--line);padding:14px 15px;gap:11px}.brand small,.sidebar-foot{display:none}.nav{display:flex;overflow-x:auto}.nav button{white-space:nowrap;flex:0 0 auto}.main{width:100%;padding:22px 16px 50px}.top h1{font-size:27px}.month-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:550px){.top{display:block}.status{margin-top:14px;width:max-content}.metric{grid-column:span 12}.half{grid-column:span 12}.month-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.card{padding:14px}}
+
+.editor-input {display:block;width:100%;padding:11px;border-radius:9px;border:1px solid #3b546d;background:#0c1b2d;color:#dfefff;font:inherit;font-size:13px}
+.editor-input:focus{outline:2px solid #397eb2}textarea.editor-input{min-height:285px;resize:vertical;line-height:1.6}
+.editor-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}.editor-fields label,.editor-label{font-size:12px;color:#9cb5cd;display:grid;gap:6px}
+.editor-buttons{display:flex;gap:8px;flex-wrap:wrap;margin:13px 0}.editor-buttons button,.editor-btn{border:1px solid #416789;border-radius:9px;padding:9px 13px;color:#dceeff;background:#18374e;font:inherit;font-size:12px;cursor:pointer}
+.editor-buttons button:hover,.editor-btn:hover{background:#255276}.editor-buttons button:disabled{opacity:.4;cursor:not-allowed}
+.editor-list{display:grid;gap:8px;max-height:570px;overflow-y:auto}.editor-row{background:#13283b;border:1px solid #2d4660;border-radius:10px;padding:10px;text-align:left;color:#dcefff;font-size:12px}.editor-row.active{border-color:#6dbef7}.editor-row small{display:block;color:#93b2ca;margin-top:5px}
+.editor-suggestion{padding:11px;border:1px solid #31485d;border-radius:10px;background:#12273a;margin:7px 0;display:flex;justify-content:space-between;gap:12px;align-items:center}.editor-suggestion strong{font-size:12px}.editor-suggestion small{display:block;color:#96afc6;margin-top:4px;line-height:1.4;font-size:11px}
+.editor-toolbar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px}.editor-toolbar select{border:1px solid #44647b;border-radius:8px;padding:7px;background:#142a3c;color:#dceeff}
+@media(max-width:650px){.editor-fields{grid-template-columns:1fr}}
+.routine-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:9px}
+.routine-day{border:1px solid #304d64;border-radius:11px;background:#122739;padding:11px;min-height:112px;min-width:0}
+.routine-day.has-post{border-color:#367199;background:linear-gradient(145deg,#19394e,#142a3e)}
+.routine-weekday{font-size:12px;font-weight:750;color:#bcd2e6;margin-bottom:10px}
+.routine-topic{font-size:11px;line-height:1.4;color:#e5f3ff;font-weight:650;min-height:30px}
+.routine-time{font-weight:780;color:#71c7ff;font-size:15px;margin-top:8px;font-variant-numeric:tabular-nums}
+.routine-off{font-size:11px;color:#7b9bb1;line-height:1.5}
+.routine-monthly{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:12px;border:1px solid #39516b;border-radius:10px;padding:10px 12px;background:#192c40;color:#c9e4f8;font-size:12px}
+.editor-row-wrap{display:flex;gap:6px;align-items:stretch}.editor-row-wrap .editor-row{flex:1;min-width:0}
+.editor-delete{border:1px solid #7c4b50;background:#40272c;color:#ffd3d3;border-radius:10px;padding:8px 11px;font-size:14px;cursor:pointer}
+.editor-delete:hover{background:#653238}.editor-delete:focus-visible{outline:2px solid #ffa5a5}
+@media(max-width:1050px){.routine-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:550px){.routine-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
 </style>
 </head>
 <body>
 <div class="shell">
 <aside class="sidebar">
- <div class="brand"><span class="emblem">◈</span>Invest <b>Blog</b><small>ANALYTICS / v1.3</small></div>
+ <div class="brand"><span class="emblem">◈</span>Invest <b>Blog</b><small>ANALYTICS / v1.4.1</small></div>
  <nav class="nav" aria-label="Разделы">
  <button data-page="overview" class="active"><span>◫</span>Обзор</button>
  <button data-page="bonds"><span>▤</span>Облигации</button>
@@ -107,11 +131,29 @@
 <div class="card full"><div class="note">Прогресс — отношение текущего значения к цели, а не прогноз достижения к дате. Денежный поток рассчитывается только по завершённым загруженным месяцам (минимум три). Налоги и комиссии не вычитаются.</div></div>
 </div></section>
 
-<section class="section" id="page-content">
-<div class="grid"><div class="card full"><h2>Редакторская очередь</h2><div class="scroll" id="drafts"></div></div>
-<div class="card full"><h2>История опубликованных тем</h2><div class="scroll" id="topics"></div></div></div>
-</section>
-<footer>Invest Blog Assistant v1.3 · Данные T-Invest API · Только локальный доступ. Даты и прогнозные купоны могут изменяться; оценки не являются гарантией выплат или инвестиционной рекомендацией. Все финансовые показатели следует сверять с отчётом брокера.</footer>
+<section class="section" id="page-content"><div class="grid">
+ <div class="card full">
+   <div class="panel-head"><h2>🗓 Недельный план публикаций</h2><span class="badge" id="routineTimezone">Часовой пояс: —</span></div>
+   <div id="weeklyRoutine" class="routine-grid"></div>
+   <div id="monthlyRoutine" class="routine-monthly"></div>
+   <p class="hint" id="routineNote">Время подготовки черновиков; публикацию ты подтверждаешь отдельно.</p>
+ </div>
+ <div class="card half"><h2>📅 Календарь публикаций</h2><div class="scroll" id="editorSchedule"></div><p class="hint">Публикации по расписанию формирует работающий Telegram-бот. В этом разделе видно, что уже создано.</p></div>
+ <div class="card half"><h2>💡 Подсказки для следующих постов</h2><div id="editorSuggestions"></div><p class="hint">Выбор тем — по истории публикаций, позициям и недавним покупкам. Это не AI-прогноз и не инвестиционная рекомендация.</p></div>
+ <div class="card side"><div class="editor-toolbar"><h2>Редакторская очередь</h2><button id="editorNew" class="editor-btn" type="button">+ Новый</button></div><div id="editorQueue" class="editor-list"></div></div>
+ <div class="card wide"><div class="editor-toolbar"><h2 id="editorTitle">Новый черновик</h2><span class="badge" id="editorStatus">—</span></div>
+   <form id="editorForm"><div class="editor-fields">
+    <label>Рубрика<select id="editorKind" class="editor-input"><option value="weekly">Еженедельный отчёт</option><option value="monthly">Ежемесячный отчёт</option><option value="plan">План на неделю</option><option value="paper">Бумага недели</option><option value="glossary">Ликбез</option><option value="purchase">Покупка</option></select></label>
+    <label>Период<input id="editorPeriod" class="editor-input" maxlength="40" required placeholder="YYYY-MM-DD"></label>
+   </div><label class="editor-label">Текст публикации<textarea id="editorBody" class="editor-input" maxlength="10000" required placeholder="Напиши или отредактируй пост…"></textarea></label>
+   <div class="editor-buttons"><button type="submit" id="editorSave">Сохранить</button><button type="button" id="editorReset">Сбросить</button></div></form>
+   <div class="editor-buttons" id="editorActions"></div>
+   <div class="editor-fields"><label>Дата публикации (часовой пояс проекта)<input type="datetime-local" id="editorWhen" class="editor-input"></label></div>
+   <div id="editorFeedback"></div><p class="hint">Изменение текста сбрасывает одобрение. Публикация в канал происходит только после подтверждения и при запущенном Telegram-боте. Ошибка отправки требует ручной проверки канала.</p>
+ </div>
+ <div class="card full"><h2>История выбранных тем</h2><div class="scroll" id="topics"></div></div>
+</div></section>
+<footer>Invest Blog Assistant v1.4.1 · Данные T-Invest API · Только локальный доступ. Даты и прогнозные купоны могут изменяться; оценки не являются гарантией выплат или инвестиционной рекомендацией. Все финансовые показатели следует сверять с отчётом брокера.</footer>
 </main></div>
 <script>
 const el=id=>document.getElementById(id);
@@ -119,7 +161,7 @@ const rub=n=>n===null||n===undefined?'н/д':new Intl.NumberFormat('ru-RU',{styl
 const num=n=>n===null||n===undefined?'н/д':new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(n);
 const txt=(tag,value)=>{const e=document.createElement(tag);e.textContent=String(value??'—');return e};
 const COLORS=['#74bcfa','#4ed0b5','#d8a35d','#ad96ed','#eb8491','#73d3db'];
-const state={overview:null,bonds:null,risk:null,goals:null,editorToken:null,editingGoal:null,drafts:[],topics:[],page:'overview',selectedMonth:null,charts:{}};
+const state={overview:null,bonds:null,risk:null,goals:null,editorToken:null,editingGoal:null,drafts:[],topics:[],contentPlan:null,editorDraft:null,page:'overview',selectedMonth:null,routine:null,charts:{}};
 function table(id,heads,rows){let holder=el(id);let t=document.createElement('table');let h=document.createElement('tr');heads.forEach(x=>h.append(txt('th',x)));t.append(h);if(!rows.length){holder.replaceChildren(txt('p','Нет данных для таблицы.'));return;}rows.forEach(row=>{const tr=document.createElement('tr');row.forEach(value=>tr.append(txt('td',value)));t.append(tr)});holder.replaceChildren(t)}
 function alertNode(message,kind='info'){let d=txt('div',message);d.className='alert'+(kind==='attention'||kind==='warning'?' warning':'');return d}
 function currencyMap(obj){return Object.entries(obj||{}).map(([c,v])=>c==='RUB'?rub(v):num(v)+' '+c).join(' · ')||'—'}
@@ -335,13 +377,134 @@ async function deleteGoal(g){if(!confirm('Удалить цель «'+g.name+'»
  try{await goalRequest('/api/goals/'+g.id,'DELETE');resetGoalForm();state.goals=await getJson('/api/goals');renderGoals();el('goalFeedback').replaceChildren(alertNode('Цель удалена.'))}
  catch(e){el('goalFeedback').replaceChildren(alertNode('Ошибка: '+e.message,'attention'))}
 }
-function renderContent(){table('drafts',['ID','Рубрика','Период','Статус'],state.drafts.map(r=>['#'+r.id,r.kind,r.period,r.state]));
- table('topics',['Рубрика','Инструмент','Дата'],state.topics.map(x=>[x.kind,x.topic_key,x.created_at.slice(0,10)]));}
+function editorNode(tag,label,css=''){const n=txt(tag,label);if(css)n.className=css;return n}
+const editorialStatuses={new:'Новый',draft:'Черновик',review:'На проверке',approved:'Одобрен',scheduled:'Запланирован',published:'Опубликован',rejected:'Отклонён',publishing:'Отправляется',deleted:'Удалён из очереди'};
+const editorialLabels={weekly:'Отчёт за неделю',monthly:'Отчёт за месяц',plan:'План на неделю',paper:'Бумага недели',glossary:'Ликбез',purchase:'Покупка'};
+function renderWeeklyRoutine(){
+ const data=state.routine, container=el('weeklyRoutine');container.replaceChildren();
+ if(!data){container.append(txt('p','Расписание не загружено'));return}
+ el('routineTimezone').textContent='Часовой пояс: '+data.timezone;
+ for(const day of data.weekdays){
+   const cell=document.createElement('div');cell.className='routine-day'+(day.items.length?' has-post':'');
+   cell.append(editorNode('div',day.name,'routine-weekday'));
+   if(day.items.length){for(const item of day.items){
+      cell.append(editorNode('div',item.label,'routine-topic'));
+      cell.append(editorNode('div',item.time,'routine-time'));
+   }}else cell.append(editorNode('div','Без рубрики','routine-off'));
+   container.append(cell);
+ }
+ const monthly=el('monthlyRoutine');monthly.replaceChildren();
+ monthly.append(txt('strong','📈 '+data.monthly.label+' · '+data.monthly.day+'-го числа каждого месяца'));
+ monthly.append(editorNode('span',data.monthly.time));
+ el('routineNote').textContent=data.note;
+}
+function renderContent(){
+ renderWeeklyRoutine();
+ const cal=state.contentPlan;
+ table('editorSchedule',['Дата','Рубрика','Статус'],(cal?.schedule||[]).map(x=>[x.day,x.label,x.state==='planned'?'План':(editorialStatuses[x.state]||x.state)]));
+ table('topics',['Рубрика','Тема / UID','Дата'],state.topics.map(x=>[x.kind,x.topic_key,x.created_at.slice(0,10)]));
+ const sug=el('editorSuggestions');sug.replaceChildren();
+ if(!cal){sug.append(txt('p','Контент-план пока не загружен'));return}
+ for(const p of (cal.paper_candidates||[]).slice(0,3)){
+   const wrap=editorNode('div','','editor-suggestion'),details=document.createElement('div');
+   details.append(editorNode('strong',p.name+' · '+p.ticker));details.append(editorNode('small',p.reason));
+   const btn=editorNode('button','Черновик','editor-btn');btn.type='button';btn.addEventListener('click',()=>newDraft('paper','📊 Бумага недели\n\n'+p.name+' ('+p.ticker+')\n\nЧто это за бумага: [проверить факты]\nПлюсы: [твоё мнение]\nРиски: [твоё мнение]\nПочему в портфеле / почему нет: [твоё мнение]\n\nНе инвестиционная рекомендация.'));
+   wrap.append(details,btn);sug.append(wrap);
+ }
+ for(const p of (cal.glossary_suggestions||[]).slice(0,2)){
+   const wrap=editorNode('div','','editor-suggestion'),details=document.createElement('div');
+   details.append(editorNode('strong','📚 '+p.title));details.append(editorNode('small',p.recently_used?'Недавно использовалась':'Можно разобрать для аудитории'));
+   const btn=editorNode('button','Черновик','editor-btn');btn.type='button';btn.addEventListener('click',()=>newDraft('glossary','📚 Ликбез за 2 минуты\n\n'+p.title+'\n\n[Пояснить простыми словами]\n[Пример]\n[Ограничения и риски]'));
+   wrap.append(details,btn);sug.append(wrap);
+ }
+ const queue=el('editorQueue');queue.replaceChildren();
+ const filt=state.editorFilter||'all';const drafts=state.drafts.filter(d=>filt==='all'||d.state===filt);
+ const sel=document.createElement('select');sel.className='editor-input';
+ for(const [key,value] of [['all','Все'],['new','Новые'],['review','На проверке'],['approved','Одобрены'],['scheduled','Запланированы'],['published','Опубликованы']]){const op=document.createElement('option');op.value=key;op.textContent=value;sel.append(op)}
+ sel.value=filt;sel.addEventListener('change',()=>{state.editorFilter=sel.value;renderContent()});queue.append(sel);
+ for(const d of drafts){
+   const wrapper=document.createElement('div');wrapper.className='editor-row-wrap';
+   const btn=editorNode('button',`#${d.id} · ${editorialLabels[d.kind]||d.kind}`,'editor-row');btn.type='button';
+   if(state.editorDraft?.id===d.id)btn.classList.add('active');
+   const meta=editorNode('small',`${d.period} · ${d.queued?'Ожидает отправки':(editorialStatuses[d.state]||d.state)}`);
+   btn.append(meta);btn.addEventListener('click',()=>openDraft(d.id));wrapper.append(btn);
+   if(!['published','publishing'].includes(d.state)){
+     const remove=editorNode('button','🗑','editor-delete');remove.type='button';
+     remove.setAttribute('aria-label','Удалить черновик #'+d.id+' из очереди');
+     remove.title='Удалить из редакторской очереди';
+     remove.addEventListener('click',()=>deleteEditorDraft(d));wrapper.append(remove);
+   }
+   queue.append(wrapper);
+ }
+ if(drafts.length===0)queue.append(editorNode('p','Очередь пуста.','empty'));
+ renderEditorActions();
+}
+function newDraft(kind='paper',body=''){
+ state.editorDraft=null;el('editorTitle').textContent='Новый черновик';el('editorStatus').textContent='Новый';
+ el('editorKind').disabled=false;el('editorPeriod').disabled=false;el('editorKind').value=kind;
+ el('editorPeriod').value=new Date().toISOString().slice(0,10);el('editorBody').value=body;el('editorSave').disabled=false;
+ el('editorFeedback').replaceChildren();renderEditorActions();
+}
+async function openDraft(id){try{
+ const draft=await getJson('/api/editor/drafts/'+id);state.editorDraft=draft;
+ el('editorTitle').textContent='Черновик #'+draft.id;el('editorStatus').textContent=editorialStatuses[draft.state]||draft.state;
+ el('editorKind').value=draft.kind;el('editorPeriod').value=draft.period;el('editorBody').value=draft.body;
+ el('editorKind').disabled=el('editorPeriod').disabled=true;
+ el('editorSave').disabled=['published','publishing'].includes(draft.state);
+ el('editorFeedback').replaceChildren();renderContent();
+ }catch(e){el('editorFeedback').replaceChildren(alertNode(e.message,'warning'))}}
+function renderEditorActions(){const actions=el('editorActions');actions.replaceChildren();const d=state.editorDraft;if(!d)return;
+ const make=(label,action)=>{const btn=editorNode('button',label);btn.type='button';btn.addEventListener('click',()=>performAction(action));actions.append(btn)};
+ if(['new','draft','rejected','approved','scheduled'].includes(d.state))make('🔎 На проверку','review');
+ if(['new','draft','review','scheduled'].includes(d.state))make('✅ Одобрить','approved');
+ if(['new','draft','review','approved','scheduled'].includes(d.state))make('🗑 Отклонить','rejected');
+ if(d.state==='approved'){make('🕒 Запланировать','schedule');make('📢 В очередь публикации','queue_publish')}
+ if(d.state==='scheduled')make('↩️ Отменить расписание','unschedule');
+ if(!['published','publishing','deleted'].includes(d.state)){
+   const btn=editorNode('button','🗑 Удалить из очереди');btn.type='button';
+   btn.addEventListener('click',()=>deleteEditorDraft(d));actions.append(btn);
+ }
+}
+async function deleteEditorDraft(d){
+ if(!d||['published','publishing','deleted'].includes(d.state))return;
+ if(!confirm(`Удалить черновик #${d.id} из редакторской очереди? Запланированная публикация или ожидающая отправка будут отменены.`))return;
+ try{
+   await editorRequest('/api/editor/drafts/'+d.id,'DELETE',{revision:d.revision});
+   if(state.editorDraft?.id===d.id)newDraft();
+   await refreshEditorial();
+   el('editorFeedback').replaceChildren(alertNode(`Черновик #${d.id} удалён из очереди. Публикация отменена.`));
+ }catch(e){
+   el('editorFeedback').replaceChildren(alertNode('Ошибка удаления: '+e.message,'warning'));
+   if(e.message.includes('409'))await refreshEditorial(d.id).catch(()=>{});
+ }
+}
+async function refreshEditorial(id){
+ const [drafts,plan,topics]=await Promise.all([getJson('/api/drafts'),getJson('/api/content-plan'),getJson('/api/topics')]);
+ state.drafts=drafts;state.contentPlan=plan;state.topics=topics;
+ if(id)await openDraft(id);else renderContent();
+}
+async function editorRequest(url,method,payload){const res=await fetch(url,{method,headers:{'Content-Type':'application/json','X-CSRF-Token':state.editorToken},body:JSON.stringify(payload)});
+ const json=await res.json().catch(()=>({}));if(!res.ok)throw Error(json.detail||('HTTP '+res.status));return json}
+async function performAction(action){const d=state.editorDraft;if(!d)return;
+ const payload={action,revision:d.revision};
+ if(action==='schedule'){payload.when=el('editorWhen').value;if(!payload.when){el('editorFeedback').replaceChildren(alertNode('Укажи дату и время.','warning'));return}}
+ if(action==='queue_publish'&&!confirm('Подтверди отправку этого поста в канал через работающего Telegram-бота.'))return;
+ try{await editorRequest('/api/editor/drafts/'+d.id+'/action','POST',payload);await refreshEditorial(d.id);
+ el('editorFeedback').replaceChildren(alertNode(action==='queue_publish'?'Запрос добавлен в очередь. Для отправки должен работать Telegram-бот.':'Статус обновлён.'))}
+ catch(e){el('editorFeedback').replaceChildren(alertNode('Ошибка: '+e.message,'warning'))}
+}
+el('editorNew').addEventListener('click',()=>newDraft());el('editorReset').addEventListener('click',()=>state.editorDraft?openDraft(state.editorDraft.id):newDraft());
+el('editorForm').addEventListener('submit',async event=>{event.preventDefault();const d=state.editorDraft;
+ try{const payload=d?{body:el('editorBody').value,revision:d.revision}:{kind:el('editorKind').value,period:el('editorPeriod').value,body:el('editorBody').value};
+ const row=await editorRequest(d?'/api/editor/drafts/'+d.id:'/api/editor/drafts',d?'PUT':'POST',payload);
+ await refreshEditorial(row.id);el('editorFeedback').replaceChildren(alertNode('Текст сохранён. Изменение требует повторного одобрения.'));
+ }catch(e){el('editorFeedback').replaceChildren(alertNode('Ошибка: '+e.message,'warning'))}
+});
 async function getJson(url){let response=await fetch(url,{cache:'no-store'});if(!response.ok)throw Error(url+': HTTP '+response.status);return response.json()}
 async function load(){try{
- const [a,b,risk,goals,editor,drafts,topics]=await Promise.all([getJson('/api/overview'),getJson('/api/bonds'),getJson('/api/risk'),getJson('/api/goals'),getJson('/api/editor-token'),getJson('/api/drafts'),getJson('/api/topics')]);
+ const [a,b,risk,goals,editor,drafts,topics,contentPlan,routine]=await Promise.all([getJson('/api/overview'),getJson('/api/bonds'),getJson('/api/risk'),getJson('/api/goals'),getJson('/api/editor-token'),getJson('/api/drafts'),getJson('/api/topics'),getJson('/api/content-plan'),getJson('/api/publication-routine')]);
  if(!a.has_data||!b.has_data){throw Error(a.message||b.message||'Сначала выполни синхронизацию портфеля.')}
- state.overview=a;state.bonds=b;state.risk=risk;state.goals=goals;state.editorToken=editor.token;state.drafts=drafts;state.topics=topics;
+ state.overview=a;state.bonds=b;state.risk=risk;state.goals=goals;state.editorToken=editor.token;state.drafts=drafts;state.topics=topics;state.contentPlan=contentPlan;state.routine=routine;
  el('status').textContent='Снимок '+a.as_of+' · '+(a.sync?.status||'нет статуса');
  renderOverview();renderBonds();renderCalendar();renderIncome();renderRisk();renderGoals();renderContent();showPage(state.page);
  }catch(err){el('fatal').style.display='block';el('fatal').textContent='Не удалось загрузить дашборд: '+err.message;el('status').textContent='Ошибка загрузки';}}

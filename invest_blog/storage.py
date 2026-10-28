@@ -32,10 +32,12 @@ class DraftStore:
             columns = {r[1] for r in db.execute("PRAGMA table_info(drafts)")}
             for column, declaration in {
                 "scheduled_at": "TEXT", "published_at": "TEXT", "channel_message_id": "INTEGER",
-                "last_error": "TEXT"
+                "last_error": "TEXT", "revision": "INTEGER NOT NULL DEFAULT 1"
             }.items():
                 if column not in columns:
                     db.execute(f"ALTER TABLE drafts ADD COLUMN {column} {declaration}")
+
+            db.execute("CREATE TABLE IF NOT EXISTS editorial_publish_requests (draft_id INTEGER PRIMARY KEY REFERENCES drafts(id), revision INTEGER NOT NULL, requested_at TEXT NOT NULL)")
 
     def _connect(self):
         db = sqlite3.connect(self.path, timeout=20)
@@ -59,11 +61,11 @@ class DraftStore:
 
     def list_recent(self, limit: int = 10) -> list[sqlite3.Row]:
         with self._connect() as db:
-            return db.execute("SELECT * FROM drafts ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+            return db.execute("SELECT * FROM drafts WHERE state != 'deleted' ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
 
     def unsent(self) -> list[sqlite3.Row]:
         with self._connect() as db:
-            return db.execute("SELECT * FROM drafts WHERE sent_at IS NULL ORDER BY id LIMIT 25").fetchall()
+            return db.execute("SELECT * FROM drafts WHERE sent_at IS NULL AND state != 'deleted' ORDER BY id LIMIT 25").fetchall()
 
     def sent(self, draft_id: int) -> None:
         with self._connect() as db:
@@ -73,14 +75,15 @@ class DraftStore:
         if not body.strip():
             raise ValueError('Пустой текст поста')
         with self._connect() as db:
-            result = db.execute("UPDATE drafts SET body=?,state='review',scheduled_at=NULL "
-                          "WHERE id=? AND state NOT IN ('published','publishing')", (body, draft_id))
+            result = db.execute("UPDATE drafts SET body=?,state='review',scheduled_at=NULL,revision=revision+1 "
+                          "WHERE id=? AND state NOT IN ('published','publishing','deleted')", (body, draft_id))
             if result.rowcount != 1:
                 raise ValueError('Черновик отсутствует либо уже опубликован')
+            db.execute('DELETE FROM editorial_publish_requests WHERE draft_id=?', (draft_id,))
 
     def mark_done(self, draft_id: int) -> None:
         with self._connect() as db:
-            db.execute("UPDATE drafts SET state='published' WHERE id=?", (draft_id,))
+            db.execute("UPDATE drafts SET state='published' WHERE id=? AND state!='deleted' ", (draft_id,))
 
     def link_message(self, msg_id: int, draft_id: int) -> None:
         with self._connect() as db:
@@ -91,10 +94,10 @@ class DraftStore:
             row = db.execute("SELECT draft_id FROM telegram_messages WHERE message_id=?", (msg_id,)).fetchone()
             return row["draft_id"] if row else None
 
-    def change_state(self, draft_id: int, state: str) -> bool:
+    def change_state(self, draft_id: int, state: str, expected_revision: int | None = None) -> bool:
         """Only permitted workflow transitions; never resurrect a published draft."""
         allowed = {
-            'review': ('new', 'draft', 'rejected'),
+            'review': ('new', 'draft', 'rejected', 'approved', 'scheduled'),
             'approved': ('review', 'new', 'draft', 'scheduled'),
             'rejected': ('review', 'new', 'draft', 'approved', 'scheduled'),
         }
@@ -102,14 +105,22 @@ class DraftStore:
             raise ValueError('Недопустимое состояние')
         with self._connect() as db:
             marks = ','.join('?' for _ in allowed[state])
-            result = db.execute(f'''UPDATE drafts SET state=?, scheduled_at=NULL
-                WHERE id=? AND state IN ({marks})''', (state, draft_id, *allowed[state]))
+            revision_clause = ' AND revision=?' if expected_revision is not None else ''
+            params = (state, draft_id, *allowed[state]) + ((expected_revision,) if expected_revision is not None else ())
+            result = db.execute(f'''UPDATE drafts SET state=?, scheduled_at=NULL,revision=revision+1
+                WHERE id=? AND state IN ({marks}){revision_clause}''', params)
+            if result.rowcount:
+                db.execute('DELETE FROM editorial_publish_requests WHERE draft_id=?', (draft_id,))
             return result.rowcount == 1
 
-    def schedule(self, draft_id: int, when_utc: str) -> bool:
+    def schedule(self, draft_id: int, when_utc: str, expected_revision: int | None = None) -> bool:
         with self._connect() as db:
-            return db.execute("UPDATE drafts SET state='scheduled', scheduled_at=? WHERE id=? AND state='approved'",
-                              (when_utc, draft_id)).rowcount == 1
+            revision_clause = ' AND revision=?' if expected_revision is not None else ''
+            result = db.execute("UPDATE drafts SET state='scheduled', scheduled_at=?,revision=revision+1 WHERE id=? AND state='approved'" + revision_clause,
+                                (when_utc, draft_id) + ((expected_revision,) if expected_revision is not None else ()))
+            if result.rowcount:
+                db.execute('DELETE FROM editorial_publish_requests WHERE draft_id=?', (draft_id,))
+            return result.rowcount == 1
 
     def due_scheduled(self, now_utc: str):
         with self._connect() as db:
@@ -120,8 +131,66 @@ class DraftStore:
         """Single winner across concurrent clicks. Ambiguous failure requires manual review."""
         expected = 'scheduled' if scheduled else 'approved'
         with self._connect() as db:
-            return db.execute("UPDATE drafts SET state='publishing',last_error=NULL WHERE id=? AND state=?",
-                              (draft_id, expected)).rowcount == 1
+            result = db.execute("UPDATE drafts SET state='publishing',last_error=NULL,revision=revision+1 WHERE id=? AND state=?",
+                                (draft_id, expected))
+            if result.rowcount:
+                db.execute('DELETE FROM editorial_publish_requests WHERE draft_id=?', (draft_id,))
+            return result.rowcount == 1
+
+    def create_manual(self, kind: str, period: str, body: str) -> int:
+        from .model import Draft
+        from .editorial import RUBRICS
+        if kind not in RUBRICS:
+            raise ValueError('Неизвестная рубрика')
+        if not isinstance(period, str) or not (1 <= len(period) <= 40):
+            raise ValueError('Период обязателен (не более 40 символов)')
+        if not isinstance(body, str) or not (1 <= len(body.strip()) <= 10000):
+            raise ValueError('Текст должен содержать от 1 до 10000 символов')
+        did, _ = self.insert(Draft(kind, period, body.strip()), scheduled=False)
+        return did
+
+    def update_body(self, did: int, body: str, revision: int) -> None:
+        """Optimistic locking between Telegram and local web editor."""
+        if not isinstance(body, str) or not (1 <= len(body.strip()) <= 10000):
+            raise ValueError('Текст должен содержать от 1 до 10000 символов')
+        with self._connect() as db:
+            updated = db.execute("UPDATE drafts SET body=?,state='review',scheduled_at=NULL, revision=revision+1 WHERE id=? AND revision=? AND state NOT IN ('published','publishing','deleted')",
+                                 (body.strip(), did, revision))
+            if not updated.rowcount:
+                raise RuntimeError('Черновик изменился с момента открытия или уже опубликован. Обнови страницу.')
+            db.execute('DELETE FROM editorial_publish_requests WHERE draft_id=?', (did,))
+
+    def delete_from_queue(self, did: int, expected_revision: int) -> bool:
+        """Hide a draft and atomically cancel any pending/scheduled publication.
+
+        Retain a tombstone with the dedup_key: scheduled jobs must not recreate
+        a user-deleted draft for the same period. Published/publishing posts are
+        immutable, and revision guards prevent deleting an updated draft.
+        """
+        if type(expected_revision) is not int:
+            raise ValueError('Требуется revision')
+        with self._connect() as db:
+            result = db.execute("UPDATE drafts SET state='deleted', scheduled_at=NULL, "
+                "revision=revision+1 WHERE id=? AND revision=? "
+                "AND state NOT IN ('published','publishing','deleted')",
+                (did, expected_revision))
+            if result.rowcount:
+                db.execute('DELETE FROM editorial_publish_requests WHERE draft_id=?', (did,))
+            return result.rowcount == 1
+
+    def queue_publish(self, did: int) -> bool:
+        """Web process queues a request; only bot process sends to Telegram."""
+        with self._connect() as db:
+            row = db.execute('SELECT state,revision,body FROM drafts WHERE id=?', (did,)).fetchone()
+            if not row or row['state'] != 'approved' or not (1 <= len(row['body']) <= 4096):
+                return False
+            db.execute("INSERT INTO editorial_publish_requests(draft_id,revision,requested_at) VALUES(?,?,?) ON CONFLICT(draft_id) DO UPDATE SET revision=excluded.revision, requested_at=excluded.requested_at",
+                       (did, row['revision'], datetime.now(timezone.utc).isoformat()))
+            return True
+
+    def pending_publications(self, limit: int = 10):
+        with self._connect() as db:
+            return db.execute("SELECT d.* FROM editorial_publish_requests q JOIN drafts d ON d.id=q.draft_id WHERE d.state='approved' AND d.revision=q.revision ORDER BY q.requested_at LIMIT ?", (limit,)).fetchall()
 
     def publish_success(self, draft_id: int, message_id: int) -> None:
         with self._connect() as db:
