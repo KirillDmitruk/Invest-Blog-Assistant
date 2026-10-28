@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 
 from .portfolio_store import PortfolioStore
 from .integrity import check_integrity
@@ -20,6 +20,8 @@ from .risk import analyze_portfolio
 from .goals import GoalStore, evaluate_goals
 from .editorial import ContentPlanner, RUBRICS
 from .publication_schedule import recurring_schedule
+from .performance import summarize
+from .exporter import export_tables, export_zip, export_all_tables
 
 HTML_PATH = Path(__file__).parent / 'web_static' / 'index.html'
 
@@ -62,6 +64,34 @@ def create_app(db_path: Path, bond_target: float = 0.60, max_position: float = 0
     @app.get('/api/bonds')
     def bonds():
         return get_bond_analytics(portfolio, today=datetime.now(timezone).date() if timezone else None)
+
+    def performance_report(start: str | None = None, end: str | None = None):
+        try:
+            beginning = date.fromisoformat(start) if start else None
+            finish = date.fromisoformat(end) if end else None
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail='Дата должна быть YYYY-MM-DD') from exc
+        if beginning and finish and (finish <= beginning or (finish - beginning).days > 3650):
+            raise HTTPException(status_code=422, detail='Укажи период от 1 до 3650 дней')
+        return summarize(portfolio, start=beginning, end=finish)
+
+    @app.get('/api/performance')
+    def performance(start: str | None = None, end: str | None = None):
+        return performance_report(start, end)
+
+    @app.get('/api/performance/export')
+    def performance_export(table: str = 'all', start: str | None = None, end: str | None = None):
+        report = performance_report(start, end)
+        if table == 'all':
+            return Response(export_zip(report, portfolio), media_type='application/zip',
+                            headers={'Content-Disposition':'attachment; filename="invest-analytics-v1.5.zip"',
+                                     'Cache-Control':'no-store'})
+        if table not in ('performance', 'broker_snapshots', 'external_cashflows', 'current_positions', 'income_by_month'):
+            raise HTTPException(status_code=422, detail='Неизвестный тип экспорта')
+        filename = table+'.csv'
+        return Response(export_all_tables(portfolio, report)[filename], media_type='text/csv; charset=utf-8',
+                        headers={'Content-Disposition': f'attachment; filename="{filename}"',
+                                 'Cache-Control':'no-store'})
 
     @app.get('/api/risk')
     def risk():

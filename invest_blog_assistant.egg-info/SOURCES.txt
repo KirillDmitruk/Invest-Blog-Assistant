@@ -7,11 +7,13 @@ invest_blog/cli.py
 invest_blog/config.py
 invest_blog/dashboard.py
 invest_blog/editorial.py
+invest_blog/exporter.py
 invest_blog/goals.py
 invest_blog/history.py
 invest_blog/integrity.py
 invest_blog/lessons.py
 invest_blog/model.py
+invest_blog/performance.py
 invest_blog/portfolio_store.py
 invest_blog/posts.py
 invest_blog/publication_schedule.py
@@ -40,3 +42,4 @@ tests/test_v13.py
 tests/test_v14.py
 tests/test_v141.py
 tests/test_v142.py
+tests/test_v15.py

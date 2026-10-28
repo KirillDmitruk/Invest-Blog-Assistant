@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><title>Invest Blog · Analytics v1.4.1</title>
+<meta name="robots" content="noindex,nofollow"><title>Invest Blog · Analytics v1.5.0</title>
 <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <style>
 :root{color-scheme:dark;--bg:#090f1c;--panel:#111d2e;--sub:#17273a;--line:#263950;--txt:#e7f1ff;--muted:#8fa4b9;--cyan:#64b9f6;--green:#57ceb2;--orange:#e6b16b;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
@@ -44,7 +44,7 @@
 <body>
 <div class="shell">
 <aside class="sidebar">
- <div class="brand"><span class="emblem">◈</span>Invest <b>Blog</b><small>ANALYTICS / v1.4.1</small></div>
+ <div class="brand"><span class="emblem">◈</span>Invest <b>Blog</b><small>ANALYTICS / v1.5</small></div>
  <nav class="nav" aria-label="Разделы">
  <button data-page="overview" class="active"><span>◫</span>Обзор</button>
  <button data-page="bonds"><span>▤</span>Облигации</button>
@@ -53,6 +53,7 @@
  <button data-page="risk"><span>◈</span>Риски</button>
  <button data-page="goals"><span>◎</span>Цели</button>
  <button data-page="content"><span>✎</span>Контент</button>
+ <button data-page="performance"><span>↗</span>Доходность</button>
  </nav>
  <div class="sidebar-foot">Локальный read-only дашборд.<br>Никаких торговых поручений.</div>
 </aside>
@@ -131,6 +132,27 @@
 <div class="card full"><div class="note">Прогресс — отношение текущего значения к цели, а не прогноз достижения к дате. Денежный поток рассчитывается только по завершённым загруженным месяцам (минимум три). Налоги и комиссии не вычитаются.</div></div>
 </div></section>
 
+<section class="section" id="page-performance"><div class="grid">
+ <div class="card full">
+  <div class="panel-head"><h2>📈 Доходность и сравнение периодов</h2><span class="badge">Снимки брокера, ₽</span></div>
+  <p class="hint">Считаем только по реальным сохранённым оценкам портфеля и подтверждённым пополнениям/выводам. Восстановленный исторический график для доходности НЕ используется.</p>
+  <div class="perf-toolbar">
+   <label>Начало периода<input id="perfStart" class="editor-input" type="date"></label>
+   <label>Конец периода<input id="perfEnd" class="editor-input" type="date"></label>
+   <button type="button" class="editor-btn" id="perfApply">Рассчитать</button>
+   <a id="perfExport" class="editor-btn" href="/api/performance/export?table=all" download>⬇ Экспорт ZIP + CSV</a>
+  </div>
+  <div id="perfWarnings"></div>
+ </div>
+ <div class="card metric"><div class="name">TWR / Modified Dietz</div><div class="value" id="perfTwr">н/д</div><div class="help" id="perfTwrHelp">При внешних потоках это оценка, не точная TWR</div></div>
+ <div class="card metric"><div class="name">XIRR (годовая)</div><div class="value" id="perfXirr">н/д</div><div class="help">С учётом размера и даты пополнений и выводов</div></div>
+ <div class="card metric"><div class="name">Инвестиционный результат</div><div class="value" id="perfProfit">н/д</div><div class="help">Изменение стоимости минус внешние потоки</div></div>
+ <div class="card metric"><div class="name">Чистые пополнения</div><div class="value" id="perfNet">н/д</div><div class="help">Пополнения за вычетом выводов</div></div>
+ <div class="card wide"><h2>Стоимость по фактическим снимкам</h2><div class="chart"><canvas id="perfHistory"></canvas></div><p class="hint">Без восстановленных значений, чтобы они не искажали расчёт доходности.</p></div>
+ <div class="card side"><h2>Сравнение периодов</h2><div class="chart"><canvas id="perfCompare"></canvas></div><p class="hint">1, 3, 6 и 12 месяцев. Показатели недоступны, если не хватает точных снимков или операций.</p></div>
+ <div class="card full"><h2>Доходность по периодам</h2><div class="scroll" id="perfTable"></div></div>
+ <div class="card full"><h2>Принцип расчёта и ограничения</h2><div id="perfNotes"></div></div>
+</div></section>
 <section class="section" id="page-content"><div class="grid">
  <div class="card full">
    <div class="panel-head"><h2>🗓 Недельный план публикаций</h2><span class="badge" id="routineTimezone">Часовой пояс: —</span></div>
@@ -153,7 +175,7 @@
  </div>
  <div class="card full"><h2>История выбранных тем</h2><div class="scroll" id="topics"></div></div>
 </div></section>
-<footer>Invest Blog Assistant v1.4.1 · Данные T-Invest API · Только локальный доступ. Даты и прогнозные купоны могут изменяться; оценки не являются гарантией выплат или инвестиционной рекомендацией. Все финансовые показатели следует сверять с отчётом брокера.</footer>
+<footer>Invest Blog Assistant v1.5 · Данные T-Invest API · Только локальный доступ. Даты и прогнозные купоны могут изменяться; оценки не являются гарантией выплат или инвестиционной рекомендацией. Все финансовые показатели следует сверять с отчётом брокера.</footer>
 </main></div>
 <script>
 const el=id=>document.getElementById(id);
@@ -161,11 +183,11 @@ const rub=n=>n===null||n===undefined?'н/д':new Intl.NumberFormat('ru-RU',{styl
 const num=n=>n===null||n===undefined?'н/д':new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(n);
 const txt=(tag,value)=>{const e=document.createElement(tag);e.textContent=String(value??'—');return e};
 const COLORS=['#74bcfa','#4ed0b5','#d8a35d','#ad96ed','#eb8491','#73d3db'];
-const state={overview:null,bonds:null,risk:null,goals:null,editorToken:null,editingGoal:null,drafts:[],topics:[],contentPlan:null,editorDraft:null,page:'overview',selectedMonth:null,routine:null,charts:{}};
+const state={overview:null,bonds:null,risk:null,goals:null,editorToken:null,editingGoal:null,drafts:[],topics:[],contentPlan:null,editorDraft:null,page:'overview',selectedMonth:null,routine:null,performance:null,charts:{}};
 function table(id,heads,rows){let holder=el(id);let t=document.createElement('table');let h=document.createElement('tr');heads.forEach(x=>h.append(txt('th',x)));t.append(h);if(!rows.length){holder.replaceChildren(txt('p','Нет данных для таблицы.'));return;}rows.forEach(row=>{const tr=document.createElement('tr');row.forEach(value=>tr.append(txt('td',value)));t.append(tr)});holder.replaceChildren(t)}
 function alertNode(message,kind='info'){let d=txt('div',message);d.className='alert'+(kind==='attention'||kind==='warning'?' warning':'');return d}
 function currencyMap(obj){return Object.entries(obj||{}).map(([c,v])=>c==='RUB'?rub(v):num(v)+' '+c).join(' · ')||'—'}
-function showPage(page){state.page=page;document.querySelectorAll('.section').forEach(s=>s.classList.toggle('active',s.id==='page-'+page));document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));let names={overview:'Обзор портфеля',bonds:'Облигации',calendar:'Купонный календарь',income:'Фактические доходы',risk:'Здоровье портфеля',goals:'Финансовые цели',content:'Контент-план'};el('pageTitle').textContent=names[page];el('pageDesc').textContent=page==='calendar'?'Ожидаемые купоны по текущему количеству бумаг':page==='income'?'Исполненные выплаты, погашения и пополнения':page==='bonds'?'Состав и характеристики облигационной части':'Долгосрочная структура, денежные потоки и редакторская очередь';requestAnimationFrame(()=>renderCharts(page));}
+function showPage(page){state.page=page;document.querySelectorAll('.section').forEach(s=>s.classList.toggle('active',s.id==='page-'+page));document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));let names={overview:'Обзор портфеля',bonds:'Облигации',calendar:'Купонный календарь',income:'Фактические доходы',risk:'Здоровье портфеля',goals:'Финансовые цели',content:'Контент-план',performance:'Доходность и экспорт'};el('pageTitle').textContent=names[page];el('pageDesc').textContent=page==='calendar'?'Ожидаемые купоны по текущему количеству бумаг':page==='income'?'Исполненные выплаты, погашения и пополнения':page==='performance'?'Сравнение доходности по подтверждённым снимкам брокера':page==='bonds'?'Состав и характеристики облигационной части':'Долгосрочная структура, денежные потоки и редакторская очередь';requestAnimationFrame(()=>{renderCharts(page);if(page==='performance')renderPerformanceCharts()});}
 document.querySelectorAll('.nav button').forEach(btn=>btn.addEventListener('click',()=>showPage(btn.dataset.page)));
 function fallbackChart(id,type,labels,datasets){
  const canvas=el(id),parent=canvas.parentElement;
@@ -263,6 +285,32 @@ function renderCharts(page){const a=state.overview,b=state.bonds;if(!a?.has_data
    {label:'Купоны, ₽',data:b.actual_income.months.map(x=>x.status==='no_coverage'?null:x.coupons.RUB||0),backgroundColor:COLORS[0]},
    {label:'Дивиденды, ₽',data:b.actual_income.months.map(x=>x.status==='no_coverage'?null:x.dividends.RUB||0),backgroundColor:COLORS[1]}]);
 }
+const percent=v=>v===null||v===undefined?'н/д':num(v)+'%';
+function renderPerformanceCharts(){let p=state.performance;if(!p)return;
+ chart('perfHistory','line',(p.history||[]).map(x=>x.date),[{label:'Стоимость по снимкам, ₽',data:(p.history||[]).map(x=>x.value_rub),borderColor:COLORS[0],tension:0,pointRadius:1}]);
+ let rows=(p.comparisons||[]);chart('perfCompare','bar',rows.map(x=>x.label),[
+ {label:'TWR / Dietz, %',data:rows.map(x=>x.twr_pct),backgroundColor:COLORS[0]},
+ {label:'XIRR годовая, %',data:rows.map(x=>x.xirr_pct),backgroundColor:COLORS[1]}]);
+}
+function renderPerformance(){let p=state.performance;if(!p)return;
+ let x=p.period||{};el('perfTwr').textContent=percent(x.twr_pct);el('perfXirr').textContent=percent(x.xirr_pct);
+ el('perfProfit').textContent=rub(x.profit_rub);el('perfNet').textContent=rub(x.net_contributions_rub);
+ el('perfTwrHelp').textContent=x.exact_twr?'Без внешних потоков: точная периодная доходность':'С внешними потоками: оценка Modified Dietz, не точная TWR';
+ if(x.from)el('perfStart').value=x.from;if(x.to)el('perfEnd').value=x.to;
+ const notes=el('perfNotes');notes.replaceChildren();(p.notes||[]).forEach(n=>notes.append(alertNode(n)));
+ const warnings=el('perfWarnings');warnings.replaceChildren();if(x.status!=='ok')warnings.append(alertNode('Недостаточно данных: '+(x.reason||p.reason||'период не подтверждён'),'attention'));
+ (x.warnings||[]).forEach(w=>warnings.append(alertNode(w,'info')));
+ const rows=[{label:'Выбранный период',...x},...(p.comparisons||[])];
+ table('perfTable',['Период','Даты снимков','TWR / Dietz','XIRR годовая','Результат','Статус'],rows.map(r=>[r.label,
+ (r.from||'—')+' — '+(r.to||'—'),percent(r.twr_pct),percent(r.xirr_pct),rub(r.profit_rub),r.status==='ok'?(r.exact_twr?'Подтверждено по снимкам':'Оценка при внешних потоках'):(r.reason||'Недоступно')]));
+ let qs=new URLSearchParams();if(x.from)qs.set('start',x.from);if(x.to)qs.set('end',x.to);
+ el('perfExport').href='/api/performance/export?table=all&'+qs.toString();
+}
+el('perfApply').addEventListener('click',async()=>{
+ const from=el('perfStart').value,to=el('perfEnd').value;if(!from||!to){el('perfWarnings').replaceChildren(alertNode('Выбери обе даты','attention'));return}
+ try {const p=await getJson('/api/performance?'+new URLSearchParams({start:from,end:to}));state.performance=p;renderPerformance();renderPerformanceCharts();}
+ catch(e){el('perfWarnings').replaceChildren(alertNode('Ошибка: '+e.message,'attention'))}
+});
 function renderOverview(){let a=state.overview,b=state.bonds;
  el('total').textContent=rub(a.total_rub);let lookup=Object.fromEntries(a.composition.map(x=>[x.label,x.value]));
  el('bond').textContent=rub(lookup['Облигации']||0);
@@ -502,11 +550,11 @@ el('editorForm').addEventListener('submit',async event=>{event.preventDefault();
 });
 async function getJson(url){let response=await fetch(url,{cache:'no-store'});if(!response.ok)throw Error(url+': HTTP '+response.status);return response.json()}
 async function load(){try{
- const [a,b,risk,goals,editor,drafts,topics,contentPlan,routine]=await Promise.all([getJson('/api/overview'),getJson('/api/bonds'),getJson('/api/risk'),getJson('/api/goals'),getJson('/api/editor-token'),getJson('/api/drafts'),getJson('/api/topics'),getJson('/api/content-plan'),getJson('/api/publication-routine')]);
+ const [a,b,risk,goals,editor,drafts,topics,contentPlan,routine,performance]=await Promise.all([getJson('/api/overview'),getJson('/api/bonds'),getJson('/api/risk'),getJson('/api/goals'),getJson('/api/editor-token'),getJson('/api/drafts'),getJson('/api/topics'),getJson('/api/content-plan'),getJson('/api/publication-routine'),getJson('/api/performance')]);
  if(!a.has_data||!b.has_data){throw Error(a.message||b.message||'Сначала выполни синхронизацию портфеля.')}
- state.overview=a;state.bonds=b;state.risk=risk;state.goals=goals;state.editorToken=editor.token;state.drafts=drafts;state.topics=topics;state.contentPlan=contentPlan;state.routine=routine;
+ state.overview=a;state.bonds=b;state.risk=risk;state.goals=goals;state.editorToken=editor.token;state.drafts=drafts;state.topics=topics;state.contentPlan=contentPlan;state.routine=routine;state.performance=performance;
  el('status').textContent='Снимок '+a.as_of+' · '+(a.sync?.status||'нет статуса');
- renderOverview();renderBonds();renderCalendar();renderIncome();renderRisk();renderGoals();renderContent();showPage(state.page);
+ renderOverview();renderBonds();renderCalendar();renderIncome();renderRisk();renderGoals();renderContent();renderPerformance();showPage(state.page);
  }catch(err){el('fatal').style.display='block';el('fatal').textContent='Не удалось загрузить дашборд: '+err.message;el('status').textContent='Ошибка загрузки';}}
 window.addEventListener('load',load);
 </script></body></html>
