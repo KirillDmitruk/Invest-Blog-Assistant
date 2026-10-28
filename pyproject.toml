@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "invest-blog-assistant"
+version = "0.1.0"
+description = "Read-only T-Invest portfolio to Telegram drafts"
+requires-python = ">=3.11"
+dependencies = [
+  "requests>=2.31,<3",
+  "python-telegram-bot>=21.0,<23",
+  "APScheduler>=3.10,<4",
+  "python-dotenv>=1,<2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10"]
+
+[project.scripts]
+invest-blog = "invest_blog.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["invest_blog*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,7 @@
+requests<3,>=2.31
+python-telegram-bot<23,>=21.0
+APScheduler<4,>=3.10
+python-dotenv<2,>=1
+
+[dev]
+pytest<10,>=8

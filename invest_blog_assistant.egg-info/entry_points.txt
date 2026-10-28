@@ -1,0 +1,2 @@
+[console_scripts]
+invest-blog = invest_blog.cli:main
