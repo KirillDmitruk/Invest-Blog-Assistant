@@ -1,3 +1,5 @@
+> **v1.2:** обновление, календарь облигаций, доходы по месяцам и инструкция через uv — см. [V1_2_README.md](V1_2_README.md). Утверждённые этапы развития — в [ROADMAP.md](ROADMAP.md).
+
 # **Новое в v1.1**
 
 Сначала прочитай [V1_1_README.md](V1_1_README.md) — безопасное обновление, веб-дашборд, Telegram-кнопки, аналитика и новые команды.
@@ -28,11 +30,9 @@
 Требуется Python 3.11+. В Ubuntu 24.04:
 
 ```bash
-unzip invest_blog_assistant.zip
+unzip invest_blog_assistant_v1_2_full.zip -d invest_blog_assistant
 cd invest_blog_assistant
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -e .
+uv sync --extra dev
 cp .env.example .env
 ```
 
@@ -96,8 +96,8 @@ cp .env.example .env
 ## Проверка
 
 ```bash
-python -m pip install -e '.[dev]'
-python -m pytest -q
+uv sync --extra dev
+uv run python -m pytest -q
 python -m invest_blog.cli preview weekly
 python -m invest_blog.cli preview plan
 ```

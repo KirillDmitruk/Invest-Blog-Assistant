@@ -126,7 +126,39 @@ class TInvest:
 
     def coupons(self, uid: str, start: date, end: date) -> list[dict]:
         a, b = utc_bounds(start, end, self.tz)
-        return self.call("InstrumentsService", "GetBondCoupons", {"instrumentId": uid, "from": a, "to": b}).get("events", [])
+        response = self.call("InstrumentsService", "GetBondCoupons", {"instrumentId": uid, "from": a, "to": b})
+        if "events" not in response or not isinstance(response["events"], list):
+            raise TInvestError("GetBondCoupons: отсутствует список events (не трактуем как 0 выплат)")
+        return response["events"]
+
+    def daily_candles(self, uid: str, start: date, end: date) -> list[dict]:
+        """Daily historical price candles (read-only). The broker does not expose past portfolio snapshots."""
+        if start > end:
+            return []
+        first, last = utc_bounds(start, end, self.tz)
+        response = self.call('MarketDataService','GetCandles',{
+            'instrumentId':uid,'from':first,'to':last,
+            'interval':'CANDLE_INTERVAL_DAY','limit':2400,
+        })
+        if not isinstance(response.get('candles'),list):
+            raise TInvestError('GetCandles: ответ без массива candles')
+        currency=response.get('priceCurrency')
+        return [dict(c,priceCurrency=currency) for c in response['candles']]
+
+    def bond_events(self, uid: str, start: date, end: date) -> list[dict]:
+        """Bond maturity/amortization events; payOneBond is principal per security.
+
+        Not a holder-specific amount: compare it with the account redemption payment
+        to infer units. Never use eventTotalVol for a personal account quantity.
+        """
+        first, last = utc_bounds(start, end, self.tz)
+        response = self.call("InstrumentsService", "GetBondEvents", {
+            "instrumentId": uid, "from": first, "to": last, "type": "EVENT_TYPE_MTY",
+        })
+        events = response.get("events")
+        if not isinstance(events, list):
+            raise TInvestError("GetBondEvents: ответ без массива events")
+        return events
 
     def dividends(self, uid: str, start: date, end: date) -> list[dict]:
         a, b = utc_bounds(start, end, self.tz)

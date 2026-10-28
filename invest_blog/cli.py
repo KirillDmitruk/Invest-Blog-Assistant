@@ -14,13 +14,14 @@ from .model import money, fmt_money
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Invest Blog Assistant")
-    parser.add_argument("action", choices=("bot", "accounts", "preview", "diagnose", "sync", "web", "audit"))
+    parser.add_argument("action", choices=("bot", "accounts", "preview", "diagnose", "sync", "web", "audit", "bonds", "backfill"))
     parser.add_argument("kind", nargs="?", choices=("weekly", "monthly", "plan", "paper", "glossary", "purchase"))
     parser.add_argument("--date", dest="date_string", help="Локальная дата YYYY-MM-DD для preview (брокерские данные — актуальные)")
     parser.add_argument("--start", help="Начало периода YYYY-MM-DD (для diagnose)")
     parser.add_argument("--end", help="Конец периода YYYY-MM-DD (для diagnose)")
     parser.add_argument("--days", type=int, default=365, help="Для sync: глубина импорта исполненных операций")
     parser.add_argument("--port", type=int, default=8000, help="Для web: порт localhost")
+    parser.add_argument("--partial", action="store_true", help="Для backfill: восстановить только подтверждённую часть истории")
     args = parser.parse_args()
     settings = Settings.load()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -33,7 +34,22 @@ def main() -> None:
         from .dashboard import create_app
         print(f"Открой http://127.0.0.1:{args.port} (только локальный доступ)")
         uvicorn.run(create_app(settings.db_path, settings.bond_target,
-                               settings.max_position_weight), host="127.0.0.1", port=args.port)
+                               settings.max_position_weight, settings.timezone), host="127.0.0.1", port=args.port)
+        return
+    if args.action == "bonds":
+        from .portfolio_store import PortfolioStore
+        from .bond_analytics import get_bond_analytics
+        import json
+        report = get_bond_analytics(PortfolioStore(settings.db_path), datetime.now(settings.timezone).date())
+        if not report.get('has_data'):
+            print(report['message'])
+        else:
+            cal = report['calendar']
+            print(f"Облигаций: {report['bond_count']}; период: {report['calendar_from']} — {report['calendar_to_exclusive']} (правая граница не включена)")
+            print(f"Календари: {cal['covered_bonds']}/{report['bond_count']}; пропущены: {len(cal['missing_bonds'])}; устарели: {len(cal['stale_bonds'])}")
+            print('Ожидаемые известные купоны по валютам:',json.dumps(cal['known_total'],ensure_ascii=False))
+            for e in cal['events'][:30]:
+                print(f"{e['date']} {e['name']}: {e['amount'] if e['amount'] is not None else 'сумма неизвестна'} {e['currency'] or ''}")
         return
     if args.action == "audit":
         from .integrity import check_integrity
@@ -52,12 +68,21 @@ def main() -> None:
     if not settings.account_ids:
         parser.error("Укажи TINVEST_ACCOUNT_IDS в .env")
     api = TInvest(settings.invest_token, settings.timezone)
+    if args.action == "backfill":
+        from .portfolio_store import PortfolioStore
+        from .history import HistoricalBackfill
+        result=HistoricalBackfill(api,settings.account_ids,PortfolioStore(settings.db_path)).run(days=args.days, partial=args.partial)
+        print(f"Восстановление {result['period']}: точек {result['points']}, пропусков {result['days_missing']}")
+        for warning in result['warnings']:
+            print('⚠️',warning)
+        return
     if args.action == "sync":
         from .portfolio_store import PortfolioStore
         from .sync import PortfolioSync
         report = PortfolioSync(api, settings.account_ids, PortfolioStore(settings.db_path)).run(
             datetime.now(settings.timezone).date(), days=args.days)
         print(f"Снимок {report['day']}: счетов {report['accounts']}, позиций {report['positions']}, операций прочитано {report['operations']}")
+        print(f"Карточек облигаций обновлено: {report['bond_profiles_updated']}, календарей купонов: {report['coupon_calendars_updated']}")
         for note in report['warnings']:
             print(f"⚠️ {note}")
         return

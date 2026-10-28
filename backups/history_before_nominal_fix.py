@@ -1,0 +1,285 @@
+"""Historical portfolio estimate from executed operations + daily closing prices.
+
+This is NOT a broker-confirmed daily NAV and NOT investment return.
+No extrapolation over missing prices; incomplete dates remain absent.
+"""
+from __future__ import annotations
+
+from collections import defaultdict
+from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
+import bisect
+import json
+import logging
+
+log = logging.getLogger(__name__)
+
+from .model import money, quotation
+from .portfolio_store import PortfolioStore, _now
+from .tinvest import TInvestError
+
+BUY_KINDS = {
+    'OPERATION_TYPE_BUY', 'OPERATION_TYPE_BUY_CARD', 'OPERATION_TYPE_BUY_MARGIN',
+    'OPERATION_TYPE_DELIVERY_BUY', 'OPERATION_TYPE_PRIMARY_ORDER',
+}
+SELL_KINDS = {
+    'OPERATION_TYPE_SELL', 'OPERATION_TYPE_SELL_CARD', 'OPERATION_TYPE_SELL_MARGIN',
+    'OPERATION_TYPE_DELIVERY_SELL', 'OPERATION_TYPE_BOND_REPAYMENT_FULL',
+}
+# Security transfers/corporate actions need special treatment, not invented as trades.
+UNSUPPORTED_SECURITY_KINDS = {
+    'OPERATION_TYPE_INPUT_SECURITIES','OPERATION_TYPE_OUTPUT_SECURITIES',
+    'OPERATION_TYPE_TRANS_IIS_BS','OPERATION_TYPE_TRANS_BS_BS',
+    'OPERATION_TYPE_OPTION_EXPIRATION','OPERATION_TYPE_FUTURE_EXPIRATION',
+    'OPERATION_TYPE_DFA_REDEMPTION',
+}
+
+
+def _D(value):
+    return Decimal(str(value))
+
+
+def _executed_quantity(operation: dict) -> Decimal:
+    # GetOperationsByCursor normally reports quantityDone; older records may
+    # have only quantity. Zero is not a valid completed trade quantity.
+    v = operation.get('quantityDone')
+    if v is None:
+        v = operation.get('quantity')
+    try:
+        result = _D(v)
+    except (ValueError, TypeError, ArithmeticError) as exc:
+        raise ValueError('Количество сделки отсутствует') from exc
+    if not result.is_finite() or result <= 0:
+        raise ValueError('Некорректное количество исполненных бумаг')
+    return result
+
+
+def _is_rub_cash_position(position) -> bool:
+    """Only an identifiable RUB cash row can be represented by cash_rub.
+
+    GetPortfolio includes cash in totalAmountCurrencies and may repeat RUB
+    as a position. The `currency` column here is the *price quote currency*,
+    not necessarily the denomination of the cash balance (USD often quotes
+    in RUB). Never skip an unidentified or foreign-currency position.
+    """
+    identity = {
+        str(position[field] or '').strip().upper()
+        for field in ('instrument_id', 'ticker')
+    }
+    name = str(position['name'] or '').strip().casefold()
+    is_rub = (bool(identity & {'RUB000UTSTOM', 'RUB'})
+              or name in {'российский рубль', 'российские рубли', 'рубль', 'рубли', 'russian ruble', 'russian rubles'})
+    if not is_rub:
+        return False
+    if str(position['currency'] or '').upper() != 'RUB':
+        return False
+    price = position['price']
+    return price is not None and _D(price) == Decimal('1')
+
+
+def _covering_interval(ranges, first: date, last: date) -> bool:
+    """Require continuous imported coverage, not only first and last dates."""
+    cursor = first
+    for a,b in sorted((date.fromisoformat(r['first_day']), date.fromisoformat(r['last_day'])) for r in ranges):
+        if a > cursor:
+            return False
+        if b >= cursor:
+            cursor = b + timedelta(days=1)
+        if cursor > last:
+            return True
+    return False
+
+
+class HistoricalBackfill:
+    def __init__(self, api, accounts: tuple[str,...], store: PortfolioStore):
+        self.api, self.accounts, self.store = api, tuple(accounts), store
+
+    def run(self, *, days: int = 365) -> dict:
+        if not 2 <= days <= 365:
+            raise ValueError('Для backfill укажи от 2 до 365 дней')
+        warnings: set[str] = set()
+        with self.store.connect() as db:
+            anchors = {aid: db.execute('''SELECT * FROM portfolio_snapshots
+                    WHERE account_id=? ORDER BY day DESC LIMIT 1''',(aid,)).fetchone() for aid in self.accounts}
+            if any(v is None for v in anchors.values()):
+                raise ValueError('Нет текущего снимка по всем счетам. Выполни sync --days 365.')
+            anchor = date.fromisoformat(next(iter(anchors.values()))['day'])
+            if any(a['day'] != anchor.isoformat() for a in anchors.values()):
+                raise ValueError('Последние снимки счетов сделаны в разные дни; сначала обнови sync.')
+            first = anchor-timedelta(days=days-1)
+            account_state = {}
+            instrument_ids=set()
+            for aid, a in anchors.items():
+                ranges=db.execute('SELECT first_day,last_day FROM operation_import_ranges WHERE account_id=?',(aid,)).fetchall()
+                if not _covering_interval(ranges, first, anchor):
+                    raise ValueError(f'Не хватает сплошной истории операций для счёта …{aid[-4:]}: '
+                                     f'{first} — {anchor}. Сначала выполни sync --days {days}.')
+                other=_D(a['other_rub'])
+                if abs(other) > Decimal('0.01'):
+                    raise ValueError('В портфеле есть активы вне поддерживаемых классов (other_rub). '
+                                     'Ретроспективная оценка может быть неверной; восстановление остановлено.')
+                holdings={}
+                kinds={}
+                for p in db.execute('''SELECT * FROM position_snapshots WHERE account_id=? AND day=?''',
+                                    (aid,anchor.isoformat())):
+                    kind=str(p['kind']).lower()
+                    if kind == 'currency':
+                        # Already included in totalAmountCurrencies -> cash_rub.
+                        # Counting a RUB cash position again would double NAV.
+                        if _is_rub_cash_position(p):
+                            continue
+                        ident = str(p['ticker'] or p['name'] or p['instrument_id'][-8:])
+                        raise ValueError(
+                            f'Валютная позиция {ident!r} на счёте …{aid[-4:]}: '
+                            'нельзя безопасно восстановить RUB-стоимость без '
+                            'исторических FX-курсов. Поле currency у позиции '
+                            'описывает валюту цены, а не обязательно сам актив.'
+                        )
+                    if kind not in ('bond','share','etf'):
+                        raise ValueError(f'Неподдерживаемый тип позиции {kind} для …{aid[-4:]}')
+                    if p['currency'] != 'RUB':
+                        raise ValueError('Есть позиции с ценой не в RUB: без исторического FX-курса '
+                                         'рублёвая стоимость не может быть восстановлена.')
+                    holdings[p['instrument_id']]=_D(p['quantity'])
+                    kinds[p['instrument_id']]=kind
+                    instrument_ids.add(p['instrument_id'])
+                ops=[]
+                for row in db.execute('''SELECT kind,executed_at,instrument_id,currency,amount,raw_json
+                    FROM broker_operations WHERE account_id=? AND substr(executed_at,1,10)>=?
+                    AND substr(executed_at,1,10)<=? ORDER BY executed_at DESC''',
+                                      (aid,first.isoformat(),anchor.isoformat())):
+                    op=json.loads(row['raw_json'])
+                    # Snapshot can be taken before the end of the local day; never reverse later operations.
+                    stamp=datetime.fromisoformat(row['executed_at'].replace('Z','+00:00'))
+                    snapshot_at=datetime.fromisoformat(a['captured_at'].replace('Z','+00:00'))
+                    if stamp.astimezone(timezone.utc) > snapshot_at.astimezone(timezone.utc):
+                        warnings.add('Операции позже момента снимка не использовались')
+                        continue
+                    ops.append((row['kind'],stamp.date(),row['currency'],_D(row['amount']),row['instrument_id'],op))
+                    if row['instrument_id'] and row['kind'] in BUY_KINDS | SELL_KINDS:
+                        instrument_ids.add(row['instrument_id'])
+                account_state[aid]={'cash':_D(a['cash_rub']),'holdings':holdings,'kinds':kinds,'ops':ops}
+
+        # Resolve identifiers and bond conversion factors before mutating any database state.
+        profiles={}
+        aliases={}
+        for uid in instrument_ids:
+            # Reject ambiguous records rather than assigning made-up prices.
+            info=self.api.instrument(uid=uid)
+            canonical=info.uid or uid
+            aliases[uid]=canonical
+            kind=info.kind.lower().replace('instrument_type_', '')
+            if kind not in ('bond','share','etf'):
+                raise ValueError(f'Историческая позиция {uid[-8:]}: неподдерживаемый тип {kind}')
+            if info.currency.upper() != 'RUB':
+                raise ValueError(f'Историческая позиция {uid[-8:]} не в RUB: нужен исторический FX')
+            nominal=None
+            if kind == 'bond':
+                b=self.api.bond(canonical)
+                nominal, currency=money(b.get('nominal'))
+                if currency!='RUB' or nominal<=0:
+                    raise ValueError(f'Для облигации {uid[-8:]} неизвестен рублёвый номинал')
+                if b.get('amortizationFlag'):
+                    warnings.add('Амортизируемые облигации рассчитаны по текущему номиналу: '
+                                 'значения до амортизации могут быть занижены')
+            profiles[canonical]={'kind':kind,'nominal':nominal}
+        # Alias map supports FIGI records that resolved to a UID.
+        for aid, state in account_state.items():
+            new=defaultdict(Decimal)
+            for uid,qty in state['holdings'].items():
+                new[aliases[uid]] += qty
+            state['holdings']=new
+            normalized=[]
+            for kind,day,cur,amount,uid,raw in state['ops']:
+                if kind in BUY_KINDS | SELL_KINDS and not uid:
+                    raise ValueError('Сделка без идентификатора инструмента; восстановление остановлено')
+                normalized.append((kind,day,cur,amount,aliases.get(uid,uid),raw))
+            state['ops_by_day']=defaultdict(list)
+            for op in normalized:
+                state['ops_by_day'][op[1]].append(op)
+
+        from_day=first-timedelta(days=35)
+        end_day=anchor-timedelta(days=1)
+        quotes={}
+        for i,(uid, profile) in enumerate(profiles.items(),start=1):
+            log.info('Загрузка исторических котировок: %d/%d, инструмент …%s',
+                     i,len(profiles),uid[-8:])
+            candles=self.api.daily_candles(uid,from_day,end_day)
+            quotes[uid]={}
+            for c in candles:
+                if not c.get('isComplete',True):
+                    continue
+                close=quotation(c.get('close'))
+                if close<=0:
+                    continue
+                qday=c['time'][:10]
+                currency=str(c.get('priceCurrency') or 'RUB').upper()
+                if currency!='RUB':
+                    raise ValueError(f'Котировка {uid[-8:]} в валюте {currency}, нужна конвертация')
+                # Bond candles are quoted in percent of the current face value.
+                px=close*profile['nominal']/Decimal(100) if profile['kind']=='bond' else close
+                quotes[uid][qday]=px
+            if not quotes[uid]:
+                warnings.add(f'Нет исторических цен для инструмента …{uid[-8:]}')
+        # End-of-day account balances calculated backward from the broker snapshot.
+        results=[]
+        missed=0
+        current=anchor
+        while current > first:
+            for aid, state in account_state.items():
+                for kind,op_day,cur,amount,uid,raw in state['ops_by_day'].get(current,[]):
+                    # date in broker_operations has already been localized by sync.
+                    if cur != 'RUB':
+                        raise ValueError(f'Есть операция в {cur}; без FX нельзя восстановить стоимость портфеля')
+                    if kind in UNSUPPORTED_SECURITY_KINDS:
+                        raise ValueError(f'Операция {kind} требует отдельного учёта движения бумаг')
+                    state['cash'] -= amount
+                    if kind in BUY_KINDS | SELL_KINDS:
+                        qty=_executed_quantity(raw)
+                        state['holdings'][uid] += (-qty if kind in BUY_KINDS else qty)
+                        if state['holdings'][uid] < 0:
+                            raise ValueError('Обратный расчёт дал отрицательное количество бумаги: '
+                                             f'{uid[-8:]}. Проверь историю и quantityDone.')
+            current -= timedelta(days=1)
+            date_s=current.isoformat()
+            for aid,state in account_state.items():
+                asset_value=Decimal(0)
+                valid=True
+                for uid,qty in state['holdings'].items():
+                    if qty == 0:
+                        continue
+                    prices=quotes.get(uid,{})
+                    keys=sorted(prices)
+                    ix=bisect.bisect_right(keys,date_s)-1
+                    if ix<0:
+                        valid=False
+                        break
+                    latest_day=date.fromisoformat(keys[ix])
+                    if (current-latest_day).days > 35:
+                        valid=False
+                        break
+                    asset_value += qty*prices[keys[ix]]
+                if valid:
+                    total=state['cash']+asset_value
+                    if total<0:
+                        warnings.add('Некоторые расчётные значения оказались отрицательными и пропущены')
+                        missed+=1
+                    else:
+                        results.append((date_s,aid,str(total)))
+                else:
+                    missed+=1
+        if missed:
+            warnings.add(f'Пропущено {missed} дней/счетов без достаточных исторических цен')
+        warnings.add('Исторические значения — оценки по ценам закрытия; НКД не восстановлен')
+        warnings.add('Это график стоимости, а не доходности; пополнения и выводы включены')
+        with self.store.connect() as db:
+            for aid in self.accounts:
+                db.execute('''DELETE FROM reconstructed_portfolio_history WHERE account_id=? AND day>=? AND day<?''',
+                           (aid,first.isoformat(),anchor.isoformat()))
+            db.executemany('''INSERT INTO reconstructed_portfolio_history VALUES (?,?,?,?,?)''',
+                           [(day,aid,value,'estimated',_now()) for day,aid,value in results])
+            db.execute('''INSERT INTO history_backfill_runs(ran_at,first_day,last_day,points,warnings_json)
+                          VALUES (?,?,?,?,?)''',(_now(),first.isoformat(),anchor.isoformat(),len(results),
+                                                 json.dumps(sorted(warnings),ensure_ascii=False)))
+        return {'period':f'{first} — {anchor}', 'points':len(results),
+                'warnings':sorted(warnings), 'days_missing':missed}

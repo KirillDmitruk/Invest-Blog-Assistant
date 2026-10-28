@@ -1,6 +1,7 @@
 README.md
 pyproject.toml
 invest_blog/__init__.py
+invest_blog/bond_analytics.py
 invest_blog/bot.py
 invest_blog/cli.py
 invest_blog/config.py
@@ -21,3 +22,4 @@ invest_blog_assistant.egg-info/requires.txt
 invest_blog_assistant.egg-info/top_level.txt
 tests/test_posts.py
 tests/test_v11.py
+tests/test_v12.py

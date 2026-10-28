@@ -57,6 +57,37 @@ class PortfolioStore:
                 id INTEGER PRIMARY KEY AUTOINCREMENT, started_at TEXT NOT NULL,
                 completed_at TEXT, status TEXT NOT NULL, notes TEXT NOT NULL DEFAULT ''
             );
+            CREATE TABLE IF NOT EXISTS bond_metadata (
+                instrument_id TEXT PRIMARY KEY, raw_json TEXT NOT NULL,
+                fetched_on TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS bond_calendar_refresh (
+                instrument_id TEXT PRIMARY KEY, fetched_on TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS bond_coupon_events (
+                instrument_id TEXT NOT NULL, coupon_date TEXT NOT NULL,
+                coupon_number INTEGER NOT NULL, payment TEXT,
+                currency TEXT, coupon_type TEXT,
+                PRIMARY KEY(instrument_id,coupon_date,coupon_number)
+            );
+            CREATE INDEX IF NOT EXISTS idx_coupon_date ON bond_coupon_events(coupon_date);
+            CREATE TABLE IF NOT EXISTS operation_import_ranges (
+                account_id TEXT NOT NULL, first_day TEXT NOT NULL,
+                last_day TEXT NOT NULL,
+                PRIMARY KEY(account_id,first_day,last_day)
+            );
+            CREATE TABLE IF NOT EXISTS reconstructed_portfolio_history (
+                day TEXT NOT NULL, account_id TEXT NOT NULL,
+                total_rub TEXT NOT NULL, source TEXT NOT NULL,
+                calculated_at TEXT NOT NULL,
+                PRIMARY KEY (day, account_id)
+            );
+            CREATE TABLE IF NOT EXISTS history_backfill_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ran_at TEXT NOT NULL, first_day TEXT NOT NULL,
+                last_day TEXT NOT NULL, points INTEGER NOT NULL,
+                warnings_json TEXT NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS editorial_topics (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 kind TEXT NOT NULL, topic_key TEXT NOT NULL, draft_id INTEGER,
@@ -82,7 +113,19 @@ class PortfolioStore:
             ticker=excluded.ticker, maturity_date=excluded.maturity_date,
             updated_at=excluded.updated_at''', (uid, name, ticker, maturity, _now()))
 
-    def save_batch(self, day: date, accounts: list[dict], operations: list[tuple[str, dict]], notes: list[str]):
+    def bond_cache(self, uid: str, day: date) -> tuple[bool, bool]:
+        """Profiles change slowly; coupon calendars are rechecked daily."""
+        with self.connect() as db:
+            m = db.execute('SELECT fetched_on FROM bond_metadata WHERE instrument_id=?',(uid,)).fetchone()
+            c = db.execute('SELECT fetched_on FROM bond_calendar_refresh WHERE instrument_id=?',(uid,)).fetchone()
+        meta_fresh = bool(m and (day - date.fromisoformat(m['fetched_on'])).days < 30)
+        coupons_fresh = bool(c and c['fetched_on'] >= day.isoformat())
+        return meta_fresh, coupons_fresh
+
+    def save_batch(self, day: date, accounts: list[dict], operations: list[tuple[str, dict]], notes: list[str],
+                   *, bond_metadata: dict[str, dict] | None = None,
+                   coupon_schedules: dict[str, list[dict]] | None = None,
+                   coverage_ranges: list[tuple[str, date, date]] | None = None):
         """All-or-nothing local commit; prevents a half-written multi-account snapshot."""
         with self.connect() as db:
             for account in accounts:
@@ -103,16 +146,27 @@ class PortfolioStore:
                     etf_rub=excluded.etf_rub, cash_rub=excluded.cash_rub,
                     other_rub=excluded.other_rub, captured_at=excluded.captured_at''',
                     (day.isoformat(), aid, *(_dec(values[k]) for k in ('total','bonds','shares','etf','cash')),
-                     _dec(other), _now()))
+                     _dec(other), account.get('captured_at') or _now()))
                 db.execute('DELETE FROM position_snapshots WHERE day=? AND account_id=?', (day.isoformat(), aid))
                 for pos in account['positions']:
                     db.execute('''INSERT INTO position_snapshots VALUES (?,?,?,?,?,?,?,?,?,?,?)''',
                         (day.isoformat(), aid, pos['id'], pos['name'], pos['ticker'], pos['kind'],
                          pos['quantity'], pos['price'], pos['currency'], pos['nkd'], pos['maturity']))
+            # T-Invest operation IDs may change between imports. An UPSERT by
+            # ID alone leaves an obsolete copy alongside its replacement.
+            # Refresh *only* complete, fetched account/date ranges, atomically
+            # in the same transaction as insertion and snapshots.
+            for aid, first, last in coverage_ranges or []:
+                if first > last:
+                    raise ValueError('Некорректный диапазон обновления операций')
+                db.execute("""DELETE FROM broker_operations
+                    WHERE account_id=? AND substr(executed_at, 1, 10) BETWEEN ? AND ?""",
+                    (aid, first.isoformat(), last.isoformat()))
+
             for aid, op in operations:
-                # API ids can sometimes change; prefer cursor, then ID. A changing cursor
-                # can still duplicate a historic operation, so reconcile with broker report.
-                base = op.get('cursor') or op.get('id')
+                # ID/cursor deduplication is safe within the current import;
+                # it is NOT a stable key across historical re-imports.
+                base = op.get('id') or op.get('cursor')
                 if not base:
                     raise ValueError('Operation without cursor/id: cannot safely deduplicate')
                 key = hashlib.sha256(f'{aid}:{base}'.encode()).hexdigest()
@@ -125,6 +179,29 @@ class PortfolioStore:
                     updated_at=excluded.updated_at''',
                     (aid, key, op['date'], operation_type(op), _dec(amount), currency,
                      op.get('instrumentUid') or op.get('figi'), json.dumps(op, ensure_ascii=False), _now()))
+            # Coupon data and snapshot are committed in one SQLite transaction.
+            for uid, profile in (bond_metadata or {}).items():
+                db.execute('''INSERT INTO bond_metadata(instrument_id,raw_json,fetched_on) VALUES (?,?,?)
+                    ON CONFLICT(instrument_id) DO UPDATE SET raw_json=excluded.raw_json,
+                    fetched_on=excluded.fetched_on''',
+                    (uid, json.dumps(profile, ensure_ascii=False),day.isoformat()))
+            for uid, events in (coupon_schedules or {}).items():
+                db.execute('DELETE FROM bond_coupon_events WHERE instrument_id=?',(uid,))
+                for ev in events:
+                    amt,cur = money(ev.get('payOneBond')) if ev.get('payOneBond') else (None,None)
+                    # API may return zero for an unannounced floating coupon.
+                    db.execute('''INSERT INTO bond_coupon_events
+                        (instrument_id,coupon_date,coupon_number,payment,currency,coupon_type)
+                        VALUES (?,?,?,?,?,?)''',
+                        (uid,ev['couponDate'][:10],int(ev.get('couponNumber') or 0),
+                         _dec(amt) if amt is not None and amt>0 else None,cur,
+                         str(ev.get('couponType') or '')))
+                db.execute('''INSERT INTO bond_calendar_refresh(instrument_id,fetched_on) VALUES (?,?)
+                    ON CONFLICT(instrument_id) DO UPDATE SET fetched_on=excluded.fetched_on''',
+                    (uid,day.isoformat()))
+            for aid, first, last in coverage_ranges or []:
+                db.execute('INSERT OR IGNORE INTO operation_import_ranges VALUES (?,?,?)',
+                           (aid,first.isoformat(),last.isoformat()))
             db.execute('INSERT INTO sync_runs(started_at,completed_at,status,notes) VALUES (?,?,?,?)',
                        (_now(), _now(), 'ok' if not notes else 'warning', '\n'.join(notes)))
 
@@ -159,6 +236,14 @@ class PortfolioStore:
                 return {'has_data': False, 'message': 'История отсутствует. Запусти python -m invest_blog.cli sync --days 365.'}
             days = [dict(r) for r in rows]
             last = days[-1]
+            estimates = [dict(r) for r in db.execute('''SELECT day, SUM(CAST(total_rub AS REAL)) AS total,
+                 COUNT(DISTINCT account_id) AS accounts FROM reconstructed_portfolio_history
+                 GROUP BY day ORDER BY day''')]
+            # Never sum incomplete accounts as if they were the complete portfolio.
+            num_accounts = db.execute('''SELECT COUNT(DISTINCT account_id) AS n FROM
+                 portfolio_snapshots WHERE day=?''', (last['day'],)).fetchone()['n']
+            estimates = [r for r in estimates if r['accounts'] == num_accounts]
+            backfill = db.execute('''SELECT * FROM history_backfill_runs ORDER BY id DESC LIMIT 1''').fetchone()
             pos = [dict(r) for r in db.execute('''SELECT * FROM position_snapshots WHERE day=?
                              ORDER BY kind,name''', (last['day'],))]
             # Group different accounts for identical instrument IDs.
@@ -242,7 +327,12 @@ class PortfolioStore:
                 alerts.append({'level':'attention', 'text':f'По известным рублёвым датам на {year} год приходится ~{value/known_sum*100:.0f}% оценённой стоимости облигаций с известным погашением. Проверь распределение сроков.'})
         return {'has_data':True, 'as_of':last['day'], 'total_rub':round(last['total'],2),
                 'rub_income_12m':{'coupons':round(ru_coupon_total,2), 'dividends':round(ru_dividend_total,2)},
-                'history':[{'day':r['day'],'total':round(r['total'],2)} for r in days],
+                'history':[{'day':r['day'],'total':round(r['total'],2),'source':'snapshot'} for r in days],
+                'history_estimated':[{'day':r['day'],'total':round(r['total'],2),'source':'estimated'}
+                                     for r in estimates if r['day'] not in {d['day'] for d in days}],
+                'history_backfill':({'first_day':backfill['first_day'],
+                    'last_day':backfill['last_day'],'points':backfill['points'],
+                    'warnings':json.loads(backfill['warnings_json'])} if backfill else None),
                 'composition':composition, 'positions':positions,
                 'income':[{'month':month,**values} for month,values in sorted(monthly.items())],
                 'maturity':[{'year':y,'estimated_value_rub':round(v,2)} for y,v in sorted(maturity.items())],

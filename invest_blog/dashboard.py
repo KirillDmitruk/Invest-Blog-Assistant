@@ -2,18 +2,22 @@
 from __future__ import annotations
 
 from pathlib import Path
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 
 from .portfolio_store import PortfolioStore
 from .integrity import check_integrity
 from .storage import DraftStore
+from .bond_analytics import get_bond_analytics
 
 HTML_PATH = Path(__file__).parent / 'web_static' / 'index.html'
 
 
-def create_app(db_path: Path, bond_target: float = 0.60, max_position: float = 0.15) -> FastAPI:
+def create_app(db_path: Path, bond_target: float = 0.60, max_position: float = 0.15,
+               timezone: ZoneInfo | None = None) -> FastAPI:
     app = FastAPI(title='Invest Blog Assistant Dashboard', docs_url=None, redoc_url=None, openapi_url=None)
     portfolio=PortfolioStore(db_path)
     drafts=DraftStore(db_path)
@@ -31,6 +35,10 @@ def create_app(db_path: Path, bond_target: float = 0.60, max_position: float = 0
             for issue in audit['issues']:
                 data['alerts'].append({'level':'attention','text':issue})
         return data
+
+    @app.get('/api/bonds')
+    def bonds():
+        return get_bond_analytics(portfolio, today=datetime.now(timezone).date() if timezone else None)
 
     @app.get('/api/drafts')
     def recent_drafts():
