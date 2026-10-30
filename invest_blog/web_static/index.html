@@ -39,14 +39,18 @@
 @media(max-width:1050px){.routine-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media(max-width:550px){.routine-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
+.nav-label{font-size:10px;letter-spacing:1.3px;color:#617f9b;padding:11px 12px 2px}
+.hub-welcome{margin-bottom:22px}.hub-projects{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-bottom:24px}.hub-project{cursor:pointer;text-align:left;border:1px solid #2a4b65;background:linear-gradient(140deg,#162b3e,#101b2b);border-radius:18px;padding:29px 22px;min-height:190px;display:flex;flex-direction:column;align-items:flex-start;gap:14px;color:var(--text);font:inherit}.hub-project:hover{border-color:#74bcfa;background:#1a354d}.hub-project strong{font-size:22px}.hub-project span{font-size:14px;color:#9ab4c9;line-height:1.5}.hub-project em{font-style:normal;color:#7dbdec;margin-top:auto}.tech-entry{border-bottom:1px solid #253f55;padding:12px 0}.tech-entry button{margin-right:7px}@media(max-width:700px){.hub-projects{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 <div class="shell">
 <aside class="sidebar">
- <div class="brand"><span class="emblem">◈</span>Invest <b>Blog</b><small>ANALYTICS / v1.5.1</small></div>
+ <div class="brand"><span class="emblem">◈</span>Content <b>Hub</b><small>MULTI-PROJECT / v2.0.0</small></div>
  <nav class="nav" aria-label="Разделы">
- <button data-page="overview" class="active"><span>◫</span>Обзор</button>
+ <button data-page="home" class="active"><span>⌂</span>Главная</button>
+ <div class="nav-label">ИНВЕСТИЦИИ</div>
+ <button data-page="overview"><span>◫</span>Обзор</button>
  <button data-page="bonds"><span>▤</span>Облигации</button>
  <button data-page="calendar"><span>▦</span>Купонный календарь</button>
  <button data-page="income"><span>▥</span>Доходы</button>
@@ -55,13 +59,37 @@
  <button data-page="content"><span>✎</span>Контент</button>
  <button data-page="placements"><span>🛰</span>Размещения</button>
  <button data-page="performance"><span>↗</span>Доходность</button>
+ <div class="nav-label">TECH & GADGETS</div>
+ <button data-page="tech"><span>⚙</span>Обзор и редактор</button>
  </nav>
  <div class="sidebar-foot">Локальный read-only дашборд.<br>Никаких торговых поручений.</div>
 </aside>
 <main class="main">
 <header class="top"><div><div class="eyebrow">Long-term investing / портфель</div><h1 id="pageTitle">Обзор портфеля</h1><p class="desc" id="pageDesc">Долгосрочная структура, фактический денежный поток и ожидаемые выплаты</p></div><span class="status"><i class="dot"></i><span id="status">Ожидаем данные</span></span></header>
 <div id="fatal" class="alert warning" style="display:none"></div>
-<section class="section active" id="page-overview">
+<section class="section active" id="page-home">
+ <div class="hub-welcome"><h2>Твои проекты</h2><p class="hint">Выбери направление. Черновики и данные проектов хранятся раздельно.</p></div>
+ <div class="hub-projects">
+  <button class="hub-project" type="button" data-target="overview"><strong>◈ Инвестиции</strong><span>Портфель, доходность, новые облигации и публикации</span><em>Перейти к аналитике →</em></button>
+  <button class="hub-project" type="button" data-target="tech"><strong>⚙ Tech &amp; Gadgets</strong><span>Технологический блог, собственные проекты и отдельная редакторская очередь</span><em>Открыть редактор →</em></button>
+ </div>
+ <div class="note">v2.0.0 — основа двух направлений. Сбор tech-новостей, AI и отправка в VK будут добавлены в следующих этапах.</div>
+</section>
+<section class="section" id="page-tech">
+ <div class="grid">
+  <div class="card full"><h2>Tech &amp; Gadgets · редакция</h2><p class="hint">Отдельная очередь постов о робототехнике, гаджетах, AI и собственных проектах. Пока без автоотправки и сбора новостей — подключим позже.</p></div>
+  <div class="card half"><h2>Новый / редактируемый черновик</h2>
+    <form id="techForm" class="goal-form">
+     <label>Заголовок<input id="techTitle" required maxlength="150" placeholder="Что нового в робототехнике"></label>
+     <label>Источник (необязательно)<input id="techSource" type="url" placeholder="https://..."></label>
+     <label>Текст<textarea id="techBody" required maxlength="4000" rows="10" placeholder="Текст публикации для технологического блога"></textarea></label>
+     <div class="goal-actions"><button type="submit">Сохранить</button><button type="button" id="techReset">Новый черновик</button></div>
+    </form><div id="techFeedback"></div>
+  </div>
+  <div class="card half"><h2>Редакторская очередь</h2><div id="techDrafts"></div></div>
+ </div>
+</section>
+<section class="section" id="page-overview">
 <div class="grid">
  <div class="card metric"><div class="name">Стоимость портфеля</div><div class="value" id="total">—</div><div class="help">Текущая оценка в ₽</div></div>
  <div class="card metric"><div class="name">Облигации</div><div class="value" id="bond">—</div><div class="help" id="bondShare">Доля в портфеле</div></div>
@@ -199,12 +227,13 @@ const rub=n=>n===null||n===undefined?'н/д':new Intl.NumberFormat('ru-RU',{styl
 const num=n=>n===null||n===undefined?'н/д':new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(n);
 const txt=(tag,value)=>{const e=document.createElement(tag);e.textContent=String(value??'—');return e};
 const COLORS=['#74bcfa','#4ed0b5','#d8a35d','#ad96ed','#eb8491','#73d3db'];
-const state={overview:null,bonds:null,risk:null,goals:null,editorToken:null,editingGoal:null,drafts:[],topics:[],contentPlan:null,editorDraft:null,page:'overview',selectedMonth:null,routine:null,performance:null,placements:null,charts:{}};
+const state={overview:null,bonds:null,risk:null,goals:null,editorToken:null,editingGoal:null,drafts:[],topics:[],contentPlan:null,editorDraft:null,page:'home',selectedMonth:null,routine:null,performance:null,placements:null,charts:{}};
 function table(id,heads,rows){let holder=el(id);let t=document.createElement('table');let h=document.createElement('tr');heads.forEach(x=>h.append(txt('th',x)));t.append(h);if(!rows.length){holder.replaceChildren(txt('p','Нет данных для таблицы.'));return;}rows.forEach(row=>{const tr=document.createElement('tr');row.forEach(value=>tr.append(txt('td',value)));t.append(tr)});holder.replaceChildren(t)}
 function alertNode(message,kind='info'){let d=txt('div',message);d.className='alert'+(kind==='attention'||kind==='warning'?' warning':'');return d}
 function currencyMap(obj){return Object.entries(obj||{}).map(([c,v])=>c==='RUB'?rub(v):num(v)+' '+c).join(' · ')||'—'}
-function showPage(page){state.page=page;if(page==='placements'&&state.placements)refreshPlacements();document.querySelectorAll('.section').forEach(s=>s.classList.toggle('active',s.id==='page-'+page));document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));let names={overview:'Обзор портфеля',bonds:'Облигации',calendar:'Купонный календарь',income:'Фактические доходы',risk:'Здоровье портфеля',goals:'Финансовые цели',content:'Контент-план',performance:'Доходность и экспорт',placements:'Будущие размещения'};el('pageTitle').textContent=names[page];el('pageDesc').textContent=page==='calendar'?'Ожидаемые купоны по текущему количеству бумаг':page==='income'?'Исполненные выплаты, погашения и пополнения':page==='performance'?'Сравнение доходности по подтверждённым снимкам брокера':page==='placements'?'Новые выпуски, сроки размещения и подготовка черновиков':page==='bonds'?'Состав и характеристики облигационной части':'Долгосрочная структура, денежные потоки и редакторская очередь';requestAnimationFrame(()=>{renderCharts(page);if(page==='performance')renderPerformanceCharts()});}
+function showPage(page){state.page=page;if(page==='placements'&&state.placements)refreshPlacements();document.querySelectorAll('.section').forEach(s=>s.classList.toggle('active',s.id==='page-'+page));document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));let names={overview:'Обзор портфеля',bonds:'Облигации',calendar:'Купонный календарь',income:'Фактические доходы',risk:'Здоровье портфеля',goals:'Финансовые цели',content:'Контент-план',performance:'Доходность и экспорт',placements:'Будущие размещения',home:'Content Hub',tech:'Tech & Gadgets'};el('pageTitle').textContent=names[page]||'Content Hub';el('pageDesc').textContent=page==='calendar'?'Ожидаемые купоны по текущему количеству бумаг':page==='income'?'Исполненные выплаты, погашения и пополнения':page==='performance'?'Сравнение доходности по подтверждённым снимкам брокера':page==='placements'?'Новые выпуски, сроки размещения и подготовка черновиков':page==='bonds'?'Состав и характеристики облигационной части':'Долгосрочная структура, денежные потоки и редакторская очередь';requestAnimationFrame(()=>{renderCharts(page);if(page==='performance')renderPerformanceCharts()});}
 document.querySelectorAll('.nav button').forEach(btn=>btn.addEventListener('click',()=>showPage(btn.dataset.page)));
+document.querySelectorAll('.hub-project').forEach(btn=>btn.addEventListener('click',()=>showPage(btn.dataset.target)));
 function fallbackChart(id,type,labels,datasets){
  const canvas=el(id),parent=canvas.parentElement;
  let width=Math.max(240,parent.clientWidth),height=Math.max(200,parent.clientHeight);
@@ -609,12 +638,34 @@ function renderPlacements(){
 el('placementRefresh').addEventListener('click',refreshPlacements);
 el('placementSearch').addEventListener('input',renderPlacements);
 async function getJson(url){let response=await fetch(url,{cache:'no-store'});if(!response.ok)throw Error(url+': HTTP '+response.status);return response.json()}
+
+let activeTech=null;
+function resetTech(){activeTech=null;el('techForm').reset();el('techFeedback').replaceChildren()}
+async function refreshTech(){
+ try {const rows=await getJson('/api/tech/drafts');const host=el('techDrafts');host.replaceChildren();
+ if(!rows.length){host.append(txt('p','Пока нет черновиков. Создай первый пост о технологиях.'));return}
+ for(const d of rows){const card=document.createElement('div');card.className='tech-entry';
+ card.append(txt('strong',d.title),txt('p',d.body.slice(0,130)));
+ const edit=txt('button','Редактировать');edit.type='button';edit.addEventListener('click',()=>{activeTech=d;el('techTitle').value=d.title;el('techBody').value=d.body;el('techSource').value=d.source_url||'';el('techFeedback').replaceChildren();window.scrollTo({top:0,behavior:'smooth'})});
+ const del=txt('button','Удалить');del.type='button';del.addEventListener('click',async()=>{if(!confirm('Удалить tech-черновик?'))return;try{await editorRequest('/api/tech/drafts/'+d.id,'DELETE',{revision:d.revision});if(activeTech?.id===d.id)resetTech();await refreshTech()}catch(e){el('techFeedback').replaceChildren(alertNode(e.message,'warning'))}});
+ card.append(edit,del);host.append(card)
+ }} catch(e){el('techFeedback').replaceChildren(alertNode('Tech: '+e.message,'warning'))}
+}
+el('techReset').addEventListener('click',resetTech);
+el('techForm').addEventListener('submit',async ev=>{ev.preventDefault();try{
+ const payload={title:el('techTitle').value,body:el('techBody').value,source_url:el('techSource').value};
+ if(activeTech)payload.revision=activeTech.revision;
+ await editorRequest(activeTech?'/api/tech/drafts/'+activeTech.id:'/api/tech/drafts',activeTech?'PUT':'POST',payload);
+ resetTech();await refreshTech();el('techFeedback').replaceChildren(alertNode('Tech-черновик сохранён. Автопубликация пока отключена.'))
+ }catch(e){el('techFeedback').replaceChildren(alertNode(e.message,'warning'))}});
+
 async function load(){try{
  const [a,b,risk,goals,editor,drafts,topics,contentPlan,routine,performance,placements]=await Promise.all([getJson('/api/overview'),getJson('/api/bonds'),getJson('/api/risk'),getJson('/api/goals'),getJson('/api/editor-token'),getJson('/api/drafts'),getJson('/api/topics'),getJson('/api/content-plan'),getJson('/api/publication-routine'),getJson('/api/performance'),getJson('/api/placements')]);
- if(!a.has_data||!b.has_data){throw Error(a.message||b.message||'Сначала выполни синхронизацию портфеля.')}
+ if(!a.has_data||!b.has_data){el('status').textContent='Данные портфеля ещё не загружены';}
  state.overview=a;state.bonds=b;state.risk=risk;state.goals=goals;state.editorToken=editor.token;state.drafts=drafts;state.topics=topics;state.contentPlan=contentPlan;state.routine=routine;state.performance=performance;state.placements=placements;
- el('status').textContent='Снимок '+a.as_of+' · '+(a.sync?.status||'нет статуса');
- renderOverview();renderBonds();renderCalendar();renderIncome();renderRisk();renderGoals();renderContent();renderPerformance();renderPlacements();showPage(state.page);
+ if(a.has_data)el('status').textContent='Снимок '+a.as_of+' · '+(a.sync?.status||'нет статуса');
+ if(a.has_data&&b.has_data){renderOverview();renderBonds();renderCalendar();renderIncome();renderRisk();renderGoals();renderPerformance();}
+ renderContent();renderPlacements();await refreshTech();showPage(state.page);
  }catch(err){el('fatal').style.display='block';el('fatal').textContent='Не удалось загрузить дашборд: '+err.message;el('status').textContent='Ошибка загрузки';}}
 window.addEventListener('load',load);
 setInterval(()=>{if(state.page==='placements')refreshPlacements()},60000);

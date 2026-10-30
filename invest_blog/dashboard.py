@@ -23,6 +23,7 @@ from .publication_schedule import recurring_schedule
 from .performance import summarize
 from .exporter import export_tables, export_zip, export_all_tables
 from .placements import PlacementStore
+from .tech_store import TechDraftStore
 
 HTML_PATH = Path(__file__).parent / 'web_static' / 'index.html'
 
@@ -30,10 +31,11 @@ HTML_PATH = Path(__file__).parent / 'web_static' / 'index.html'
 def create_app(db_path: Path, bond_target: float = 0.60, max_position: float = 0.15,
                timezone: ZoneInfo | None = None,
                times: dict[str, tuple[int, int]] | None = None) -> FastAPI:
-    app = FastAPI(title='Invest Blog Assistant Dashboard', docs_url=None, redoc_url=None, openapi_url=None)
+    app = FastAPI(title='Content Hub v2.0.0', docs_url=None, redoc_url=None, openapi_url=None)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=['127.0.0.1', 'localhost', 'testserver'])
     portfolio=PortfolioStore(db_path)
     drafts=DraftStore(db_path)
+    tech_drafts=TechDraftStore(db_path)
     placements=PlacementStore(db_path)
     goals=GoalStore(portfolio)
     planner=ContentPlanner(portfolio,drafts)
@@ -52,6 +54,45 @@ def create_app(db_path: Path, bond_target: float = 0.60, max_position: float = 0
     @app.get('/', response_class=HTMLResponse)
     def index():
         return HTML_PATH.read_text(encoding='utf-8')
+
+    @app.get('/api/projects')
+    def projects():
+        return {'projects':[{'id':'invest','name':'Инвестиции','enabled':True},
+                            {'id':'tech','name':'Tech & Gadgets','enabled':True}],
+                'tech':{'drafts':len(tech_drafts.list_recent()), 'news_collection':False,
+                        'ai_enabled':False,'publishing_enabled':False}}
+
+    @app.get('/api/tech/drafts')
+    def tech_list():
+        return tech_drafts.list_recent()
+
+    @app.post('/api/tech/drafts', status_code=201)
+    async def tech_create(request: Request):
+        require_editor(request)
+        payload=await request.json()
+        if not isinstance(payload,dict): raise HTTPException(422,'Ожидается объект')
+        try:
+            did=tech_drafts.create(payload.get('title'),payload.get('body'),payload.get('source_url',''))
+        except (ValueError,TypeError) as exc: raise HTTPException(422,str(exc)) from exc
+        return tech_drafts.get(did)
+
+    @app.put('/api/tech/drafts/{draft_id}')
+    async def tech_update(draft_id:int,request:Request):
+        require_editor(request)
+        payload=await request.json()
+        if not isinstance(payload,dict) or type(payload.get('revision')) is not int: raise HTTPException(422,'Требуется revision')
+        try:
+            ok=tech_drafts.update(draft_id,payload.get('title'),payload.get('body'),payload.get('source_url',''),payload['revision'])
+        except (ValueError,TypeError) as exc: raise HTTPException(422,str(exc)) from exc
+        if not ok: raise HTTPException(409,'Черновик изменён или отсутствует')
+        return tech_drafts.get(draft_id)
+
+    @app.delete('/api/tech/drafts/{draft_id}',status_code=204)
+    async def tech_delete(draft_id:int,request:Request):
+        require_editor(request)
+        payload=await request.json()
+        if not isinstance(payload,dict) or type(payload.get('revision')) is not int: raise HTTPException(422,'Требуется revision')
+        if not tech_drafts.delete(draft_id,payload['revision']): raise HTTPException(409,'Черновик изменён или отсутствует')
 
     @app.get('/api/overview')
     def overview():

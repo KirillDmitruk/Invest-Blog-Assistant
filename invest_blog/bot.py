@@ -296,8 +296,17 @@ class InvestBot:
 
     async def button_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not await self.guard(update):return
-        if update.effective_message.text == '🛰️ Новые размещения':
+        choice=update.effective_message.text
+        if choice == '🛰️ Новые размещения':
             await self.newbonds(update,context)
+        elif choice == '◈ Инвестиции':
+            await update.effective_message.reply_text(HELP)
+        elif choice == '⚙ Tech & Gadgets':
+            from .tech_store import TechDraftStore
+            rows=TechDraftStore(self.settings.db_path).list_recent(15)
+            message='⚙ Tech & Gadgets\n\n'+('\n'.join(f"#{r['id']} · {r['title']}" for r in rows) if rows else 'Черновиков пока нет.')
+            await update.effective_message.reply_text(message+'\n\nРедактирование — на сайте Content Hub. Публикация Tech пока отключена.')
+
 
     async def whoami(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if await self.guard(update):await update.effective_message.reply_text(f'ID чата: {update.effective_chat.id}')
@@ -305,7 +314,7 @@ class InvestBot:
     async def help(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if await self.guard(update):
             await update.effective_message.reply_text(HELP,
-                reply_markup=ReplyKeyboardMarkup([['🛰️ Новые размещения']],resize_keyboard=True))
+                reply_markup=ReplyKeyboardMarkup([['◈ Инвестиции','⚙ Tech & Gadgets'],['🛰️ Новые размещения']],resize_keyboard=True))
 
     async def generate_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not await self.guard(update):return
@@ -462,6 +471,6 @@ class InvestBot:
             app.add_handler(CommandHandler(name,handler))
         app.add_handler(CallbackQueryHandler(self.callback,pattern=r'^d:(review|approve|reject|edit|schedule|publish|unschedule):\d+$'))
         app.add_handler(CallbackQueryHandler(self.placement_callback,pattern=r'^p:(list|open|draft|noop):\d+$'))
-        app.add_handler(MessageHandler(filters.Regex(r'^🛰️ Новые размещения$') & filters.TEXT,self.button_menu))
+        app.add_handler(MessageHandler(filters.Regex(r'^(🛰️ Новые размещения|◈ Инвестиции|⚙ Tech & Gadgets)$') & filters.TEXT,self.button_menu))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND,self.reply_edit))
         app.run_polling(drop_pending_updates=False)
