@@ -56,6 +56,7 @@
  <button data-page="income"><span>▥</span>Доходы</button>
  <button data-page="risk"><span>◈</span>Риски</button>
  <button data-page="goals"><span>◎</span>Цели</button>
+ <button data-page="allocation"><span>◉</span>Распределение средств</button>
  <button data-page="content"><span>✎</span>Контент</button>
  <button data-page="placements"><span>🛰</span>Размещения</button>
  <button data-page="performance"><span>↗</span>Доходность</button>
@@ -96,6 +97,61 @@
   <div class="card half"><h2>Редакторская очередь</h2><div id="techDrafts"></div></div>
  </div>
 </section>
+<section class="section" id="page-allocation">
+<div class="grid">
+ <div class="card full"><h2>Калькулятор распределения</h2><p class="hint">Планирование новых средств, не фактическая структура портфеля. Покупки и переводы автоматически не выполняются.</p>
+  <div class="goal-form" style="margin-top:16px">
+   <label>Сумма к распределению, ₽<input id="allocAmount" type="number" min="0" max="1000000000000" step="0.01" value="100000" inputmode="decimal"></label>
+   <label>Состояние подушки<select id="allocStatus"><option value="building">Ещё коплю (40% в подушку)</option><option value="funded">6 месяцев накоплено (10% в подушку)</option><option value="auto">Рассчитать по расходам и накоплениям</option></select></label>
+   <label class="alloc-auto">Ежемесячные расходы, ₽<input id="allocExpenses" type="number" min="0" max="1000000000000" step="0.01" value="30000"></label>
+   <label class="alloc-auto">Уже в подушке, ₽<input id="allocSavings" type="number" min="0" max="1000000000000" step="0.01" value="0"></label>
+  </div><div id="allocError"></div><p class="hint" id="allocStatusInfo"></p>
+ </div>
+ <div class="card metric"><div class="name">В финансовую подушку</div><div class="value" id="allocReserve">—</div><div class="help" id="allocReservePercent">—</div></div>
+ <div class="card metric"><div class="name">На инвестиции</div><div class="value" id="allocInvest">—</div><div class="help">Все пять секторов вместе</div></div>
+ <div class="card metric"><div class="name">Рынок РФ</div><div class="value" id="allocRus">—</div><div class="help">20% инвестиционной суммы</div></div>
+ <div class="card metric"><div class="name">Зарубежные активы</div><div class="value" id="allocForeign">—</div><div class="help">45% инвестиционной суммы</div></div>
+ <div class="card full"><h2>Распределение по секторам</h2><div class="scroll" id="allocSectors"></div></div>
+ <div class="card full"><h2>Этап 2 · Telegram Wallet</h2>
+  <p class="hint">Независимый расчёт в USD. Вводишь сумму, которая уже находится в Telegram Wallet, и распределяешь её между четырьмя направлениями. На основной калькулятор и план покупки криптовалют это не влияет.</p>
+  <label style="display:block;margin:12px 0;max-width:420px">Сумма в Telegram Wallet, $<input id="walletStandaloneAmount" type="number" min="0" max="1000000000000" step="0.01" value="200" inputmode="decimal" style="display:block;width:100%;margin-top:6px"></label>
+  <div id="walletStandaloneError"></div>
+  <div class="scroll" id="walletStandaloneResults"></div>
+  <div class="goal-actions" style="margin-top:12px"><button type="button" id="walletStandaloneCopy">Скопировать распределение кошелька</button></div>
+  <p class="hint">Доли внутри кошелька: зарубежные активы 56,25%, криптовалюта 25%, золото 12,5%, боты / трейдинг 6,25%. Это исходные доли 45% / 20% / 10% / 5%, пересчитанные на 80% инвестиционной части.</p>
+ </div>
+ <div class="card half"><h2>Рынок РФ — 20%</h2><div class="scroll" id="allocRussia"></div></div>
+ <div class="card half"><h2>Зарубежные активы — 45%</h2><div class="scroll" id="allocGlobal"></div><p class="hint">Токенизированные инструменты в Telegram-кошельке: учитывай риск эмитента, хранения и доступности.</p></div>
+ <div class="card full"><h2>Этап 3 · Зарубежный рынок — покупки по пятницам</h2>
+  <p class="hint">Независимый калькулятор в USD: введи сумму для зарубежных активов. S&amp;P 500 — 40%, SCHF — 20%, IEMG — 20%, отдельные акции — 20%. Каждую пятницу выбранного месяца покупаются все четыре направления.</p>
+  <div class="goal-form" style="margin:12px 0">
+   <label>Сумма на зарубежный рынок, $<input id="foreignStandaloneAmount" type="number" min="0" max="1000000000000" step="0.01" value="200" inputmode="decimal"></label>
+   <label>Месяц покупок<input id="foreignMonth" type="month"></label>
+  </div>
+  <div id="foreignStandaloneError"></div>
+  <div class="scroll" id="foreignStandaloneResults"></div>
+  <div id="foreignStandaloneSchedule" style="margin-top:12px"></div>
+  <div class="goal-actions" style="margin-top:12px"><button type="button" id="foreignStandaloneCopy">Скопировать план зарубежных покупок</button></div>
+  <p class="hint">«Отдельные акции» — общий бюджет без выбора конкретной компании. Суммы указаны в USD, комиссии, спреды и минимальные размеры сделок не учтены. Автоматических покупок нет.</p>
+ </div>
+ <div class="card half"><h2>Криптовалюта — 20%</h2><div class="scroll" id="allocCrypto"></div><p class="hint">BTC и ETH: плановые покупки по пятницам. Калькулятор показывает бюджет из введённой суммы, не недельный график.</p>
+  <hr style="border:0;border-top:1px solid var(--border, #334155);margin:20px 0 16px">
+  <h3>Отдельный калькулятор криптовалют</h3>
+  <p class="hint">Независимый расчёт. Сумма здесь не влияет на распределение портфеля выше.</p>
+  <label style="display:block;margin:12px 0">Сумма на покупку криптовалют, $<input id="cryptoStandaloneAmount" type="number" min="0" max="1000000000000" step="0.01" value="100" inputmode="decimal" style="display:block;width:100%;margin-top:6px"></label>
+  <div class="goal-form" style="margin:12px 0">
+   <label>Стратегия покупок<select id="cryptoStrategy"><option value="hybrid">Гибрид — BTC и ETH по пятницам</option><option value="monthly">Все монеты в начале месяца</option><option value="weekly">Все монеты по пятницам</option></select></label>
+   <label>Месяц покупок<input id="cryptoMonth" type="month"></label>
+  </div>
+  <div id="cryptoStandaloneError"></div>
+  <div class="scroll" id="cryptoStandaloneResults"></div>
+  <div id="cryptoStandaloneSchedule" style="margin-top:12px"></div>
+  <div class="goal-actions" style="margin-top:12px"><button type="button" id="cryptoStandaloneCopy">Скопировать план покупок</button></div>
+  <p class="hint">BTC — 50%, ETH — 25%, SOL — 10%, TON — 5%, BNB — 5%, TRON — 5%.</p>
+ </div>
+ <div class="card half"><h2>Золото и высокий риск</h2><div class="scroll" id="allocOther"></div><p class="hint">Высокорисковый сектор 5% оставлен единым: внутренние доли для ботов/трейдинга не заданы.</p></div>
+ <div class="card full"><div class="toolbar"><h2>Проверка итогов</h2><button type="button" id="allocCopy">Скопировать расчёт</button></div><div id="allocCheck"></div><p class="hint">Все проценты внутри разделов считаются от соответствующего сектора. Округление до копеек; мелкие погрешности округления компенсируются в последней строке каждой группы.</p></div>
+</div></section>
 <section class="section" id="page-overview">
 <div class="grid">
  <div class="card metric"><div class="name">Стоимость портфеля</div><div class="value" id="total">—</div><div class="help">Текущая оценка в ₽</div></div>
@@ -238,9 +294,174 @@ const state={overview:null,bonds:null,risk:null,goals:null,editorToken:null,edit
 function table(id,heads,rows){let holder=el(id);let t=document.createElement('table');let h=document.createElement('tr');heads.forEach(x=>h.append(txt('th',x)));t.append(h);if(!rows.length){holder.replaceChildren(txt('p','Нет данных для таблицы.'));return;}rows.forEach(row=>{const tr=document.createElement('tr');row.forEach(value=>tr.append(txt('td',value)));t.append(tr)});holder.replaceChildren(t)}
 function alertNode(message,kind='info'){let d=txt('div',message);d.className='alert'+(kind==='attention'||kind==='warning'?' warning':'');return d}
 function currencyMap(obj){return Object.entries(obj||{}).map(([c,v])=>c==='RUB'?rub(v):num(v)+' '+c).join(' · ')||'—'}
-function showPage(page){state.page=page;if(page==='placements'&&state.placements)refreshPlacements();document.querySelectorAll('.section').forEach(s=>s.classList.toggle('active',s.id==='page-'+page));document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));let names={overview:'Обзор портфеля',bonds:'Облигации',calendar:'Купонный календарь',income:'Фактические доходы',risk:'Здоровье портфеля',goals:'Финансовые цели',content:'Контент-план',performance:'Доходность и экспорт',placements:'Будущие размещения',home:'Content Hub',tech:'Tech & Gadgets'};el('pageTitle').textContent=names[page]||'Content Hub';el('pageDesc').textContent=page==='calendar'?'Ожидаемые купоны по текущему количеству бумаг':page==='income'?'Исполненные выплаты, погашения и пополнения':page==='performance'?'Сравнение доходности по подтверждённым снимкам брокера':page==='placements'?'Новые выпуски, сроки размещения и подготовка черновиков':page==='bonds'?'Состав и характеристики облигационной части':'Долгосрочная структура, денежные потоки и редакторская очередь';requestAnimationFrame(()=>{renderCharts(page);if(page==='performance')renderPerformanceCharts()});}
+function showPage(page){state.page=page;if(page==='placements'&&state.placements)refreshPlacements();document.querySelectorAll('.section').forEach(s=>s.classList.toggle('active',s.id==='page-'+page));document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));let names={overview:'Обзор портфеля',bonds:'Облигации',calendar:'Купонный календарь',income:'Фактические доходы',risk:'Здоровье портфеля',goals:'Финансовые цели',allocation:'Распределение средств',content:'Контент-план',performance:'Доходность и экспорт',placements:'Будущие размещения',home:'Content Hub',tech:'Tech & Gadgets'};el('pageTitle').textContent=names[page]||'Content Hub';el('pageDesc').textContent=page==='calendar'?'Ожидаемые купоны по текущему количеству бумаг':page==='income'?'Исполненные выплаты, погашения и пополнения':page==='performance'?'Сравнение доходности по подтверждённым снимкам брокера':page==='placements'?'Новые выпуски, сроки размещения и подготовка черновиков':page==='bonds'?'Состав и характеристики облигационной части':'Долгосрочная структура, денежные потоки и редакторская очередь';requestAnimationFrame(()=>{renderCharts(page);if(page==='performance')renderPerformanceCharts()});}
 document.querySelectorAll('.nav button').forEach(btn=>btn.addEventListener('click',()=>showPage(btn.dataset.page)));
 document.querySelectorAll('.hub-project').forEach(btn=>btn.addEventListener('click',()=>showPage(btn.dataset.target)));
+
+// Allocation calculator is deliberately read-only and does not touch portfolio/SQLite.
+const allocationGroups = [
+ {name:'РФ рынок',weight:20,id:'allocRussia',items:[['Облигации',80],['Дивидендные акции',20]]},
+ {name:'Зарубежные активы',weight:45,id:'allocGlobal',items:[['S&P 500',40],['SCHF',20],['IEMG',20],['Отдельные акции',20]]},
+ {name:'Крипта',weight:20,id:'allocCrypto',items:[['BTC',50],['ETH',25],['SOL',10],['TON',5],['BNB',5],['TRON',5]]},
+ {name:'Золото',weight:10,id:'allocOther'},
+ {name:'Трейдинг / боты / высокий риск',weight:5,id:'allocOther'}
+];
+function allocSplit(cents,parts){let used=0;return parts.map((p,i)=>{let n=i===parts.length-1?cents-used:Math.round(cents*p/100);used+=n;return n})}
+function allocMoney(cents){return rub(cents/100)}
+function allocTable(id,rows){table(id,['Категория','Доля','Сумма'],rows)}
+let allocLastText='';
+function renderAllocation(){
+ const amount=Number(el('allocAmount').value),expenses=Number(el('allocExpenses').value),savings=Number(el('allocSavings').value),mode=el('allocStatus').value;
+ document.querySelectorAll('.alloc-auto').forEach(x=>x.style.display=mode==='auto'?'grid':'none');
+ const error=el('allocError');error.replaceChildren();
+ if(!Number.isFinite(amount)||amount<0||amount>1e12||!Number.isFinite(expenses)||expenses<0||!Number.isFinite(savings)||savings<0||(mode==='auto'&&expenses===0)){
+  error.append(alertNode('Введите корректные неотрицательные суммы. Для автоматического режима расходы должны быть больше нуля.','warning'));
+  ['allocReserve','allocInvest','allocRus','allocForeign'].forEach(id=>el(id).textContent='—');
+  ['allocSectors','allocRussia','allocGlobal','allocCrypto','allocOther','allocCheck'].forEach(id=>el(id).replaceChildren());allocLastText='';return;
+ }
+ let cents=Math.round(amount*100),goal=Math.round(expenses*600),saved=Math.round(savings*100),investCents=0,reserveCents=0;
+ if(mode==='auto'){
+  // 40% until the 6-month reserve is filled, then 10% of remaining contribution.
+  // This avoids overfilling the cushion within one allocation.
+  let gap=Math.max(0,goal-saved);
+  if(gap===0){reserveCents=Math.round(cents*.1)}
+  else if(Math.round(cents*.4)<=gap){reserveCents=Math.round(cents*.4)}
+  else {let before=Math.min(cents,Math.ceil(gap/.4));reserveCents=Math.min(gap,Math.round(before*.4))+Math.round((cents-before)*.1)}
+  el('allocStatusInfo').textContent='Цель подушки: '+allocMoney(goal)+'. Уже накоплено: '+allocMoney(saved)+'. Недостаток до цели: '+allocMoney(gap)+'. При достижении цели в рамках суммы остаток распределяется по правилу 10%.';
+ } else {reserveCents=Math.round(cents*(mode==='building'?.4:.1));el('allocStatusInfo').textContent=mode==='building'?'Режим накопления: в подушку направляется 40% всей суммы.':'Цель достигнута: в подушку направляется 10% всей суммы.'}
+ investCents=cents-reserveCents;
+ const sectorCents=allocSplit(investCents,allocationGroups.map(x=>x.weight));
+ el('allocReserve').textContent=allocMoney(reserveCents);el('allocInvest').textContent=allocMoney(investCents);el('allocRus').textContent=allocMoney(sectorCents[0]);el('allocForeign').textContent=allocMoney(sectorCents[1]);el('allocReservePercent').textContent=mode==='auto'?'По фактической цели':'Доля '+(mode==='building'?40:10)+'%';
+ const sectorRows=[],otherRows=[],lines=['Распределение '+allocMoney(cents),'Подушка: '+allocMoney(reserveCents),'Инвестиции: '+allocMoney(investCents)];
+ allocationGroups.forEach((group,i)=>{
+  let value=sectorCents[i];sectorRows.push([group.name,group.weight+'%',allocMoney(value)]);lines.push(group.name+': '+allocMoney(value));
+  if(group.items){let entries=allocSplit(value,group.items.map(p=>p[1]));allocTable(group.id,group.items.map((item,j)=>[item[0],item[1]+'%',allocMoney(entries[j])]));group.items.forEach((item,j)=>lines.push('  '+item[0]+': '+allocMoney(entries[j])))}
+  else otherRows.push([group.name,group.weight+'% от инвестиций',allocMoney(value)]);
+ });
+ allocTable('allocSectors',sectorRows);allocTable('allocOther',otherRows);
+ let sum=reserveCents+sectorCents.reduce((a,b)=>a+b,0);
+ el('allocCheck').replaceChildren(alertNode('Итого: '+allocMoney(sum)+' из '+allocMoney(cents)+(sum===cents?' · сходится до копейки':' · проверь расчёт'),sum===cents?'info':'warning'));
+ allocLastText=lines.join('\n');
+}
+['allocAmount','allocStatus','allocExpenses','allocSavings'].forEach(id=>el(id).addEventListener('input',renderAllocation));
+el('allocCopy').addEventListener('click',()=>{if(allocLastText&&navigator.clipboard)navigator.clipboard.writeText(allocLastText).catch(()=>{});});
+renderAllocation();
+
+// Separate Telegram Wallet allocation, independent from all other calculators.
+const walletWeights=[['Зарубежные активы',56.25],['Криптовалюта',25],['Золото',12.5],['Боты / трейдинг / высокий риск',6.25]];
+const walletUsd=cents=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(cents/100);
+let walletStandaloneText='';
+function renderWalletStandalone(){
+ const raw=el('walletStandaloneAmount').value.trim(),amount=Number(raw),error=el('walletStandaloneError');
+ error.replaceChildren();
+ if(raw===''||!Number.isFinite(amount)||amount<0||amount>1e12){
+  error.append(alertNode('Введите корректную неотрицательную сумму в USD.','warning'));
+  el('walletStandaloneResults').replaceChildren();walletStandaloneText='';return;
+ }
+ const total=Math.round(amount*100),chunks=allocSplit(total,walletWeights.map(x=>x[1]));
+ allocTable('walletStandaloneResults',walletWeights.map((row,i)=>[row[0],row[1].toLocaleString('ru-RU')+'%',walletUsd(chunks[i])]));
+ walletStandaloneText=['Telegram Wallet: '+walletUsd(total),...walletWeights.map((row,i)=>row[0]+' ('+row[1].toLocaleString('ru-RU')+'%): '+walletUsd(chunks[i]))].join('\n');
+}
+el('walletStandaloneAmount').addEventListener('input',renderWalletStandalone);
+el('walletStandaloneCopy').addEventListener('click',()=>{if(walletStandaloneText&&navigator.clipboard)navigator.clipboard.writeText(walletStandaloneText).catch(()=>{});});
+renderWalletStandalone();
+
+// Independent USD crypto purchase planner: does not modify the main allocation.
+const cryptoWeights=[['BTC',50],['ETH',25],['SOL',10],['TON',5],['BNB',5],['TRON',5]];
+const cryptoUsd=cents=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(cents/100);
+let cryptoStandaloneText='';
+function cryptoFridays(year,month){
+ const found=[];
+ for(let day=1;day<=new Date(year,month,0).getDate();day++){
+  if(new Date(year,month-1,day).getDay()===5)found.push(day);
+ }
+ return found;
+}
+function cryptoSpread(cents,count){
+ const base=Math.floor(cents/count);
+ return Array.from({length:count},(_,i)=>base+(i<cents%count?1:0));
+}
+function renderCryptoStandalone(){
+ const raw=el('cryptoStandaloneAmount').value.trim(),amount=Number(raw);
+ const strategy=el('cryptoStrategy').value,monthText=el('cryptoMonth').value;
+ const error=el('cryptoStandaloneError'),schedule=el('cryptoStandaloneSchedule');
+ error.replaceChildren();schedule.replaceChildren();
+ if(raw===''||!Number.isFinite(amount)||amount<0||amount>1e12||!/^[0-9]{4}-(0[1-9]|1[0-2])$/.test(monthText)){
+  error.append(alertNode('Введите корректную сумму в USD и выберите месяц.','warning'));
+  el('cryptoStandaloneResults').replaceChildren();cryptoStandaloneText='';return;
+ }
+ const [year,month]=monthText.split('-').map(Number),fridays=cryptoFridays(year,month),cents=Math.round(amount*100);
+ const allocated=allocSplit(cents,cryptoWeights.map(c=>c[1]));
+ const plan=cryptoWeights.map((coin,i)=>{
+  const weekly=strategy==='weekly'||(strategy==='hybrid'&&i<2);
+  return {name:coin[0],percent:coin[1],cents:allocated[i],weekly,parts:weekly?cryptoSpread(allocated[i],fridays.length):[allocated[i]]};
+ });
+ allocTable('cryptoStandaloneResults',plan.map(c=>[c.name,c.percent+'%',cryptoUsd(c.cents)]));
+ const monthly=plan.filter(c=>!c.weekly),weekly=plan.filter(c=>c.weekly);
+ const dateFormat=new Intl.DateTimeFormat('ru-RU',{day:'numeric',month:'long'});
+ const monthLabel=new Intl.DateTimeFormat('ru-RU',{month:'long',year:'numeric'}).format(new Date(year,month-1,1));
+ const blocks=[];
+ if(monthly.length)blocks.push({label:'1 '+monthLabel+' — единоразовые покупки',items:monthly.map(c=>c.name+': '+cryptoUsd(c.cents))});
+ fridays.forEach((day,i)=>{
+  if(weekly.length)blocks.push({label:dateFormat.format(new Date(year,month-1,day))+' (пятница)',items:weekly.map(c=>c.name+': '+cryptoUsd(c.parts[i]))});
+ });
+ const header=document.createElement('h3');header.textContent='Календарь покупок · '+fridays.length+' пятницы';schedule.append(header);
+ blocks.forEach(block=>{
+  const div=document.createElement('div');div.className='check-item';
+  const strong=document.createElement('strong');strong.textContent=block.label;div.append(strong);
+  const info=document.createElement('small');info.textContent=block.items.join(' · ');div.append(info);schedule.append(div);
+ });
+ const modeLabel=strategy==='hybrid'?'гибрид':strategy==='monthly'?'в начале месяца':'еженедельно';
+ const lines=['Криптовалютный план: '+cryptoUsd(cents),'Стратегия: '+modeLabel,'Месяц: '+monthLabel];
+ plan.forEach(c=>{
+  const unit=c.weekly?fridays.length+' покупок по ~'+cryptoUsd(Math.floor(c.cents/fridays.length)):'одна покупка';
+  lines.push(c.name+' ('+c.percent+'%): '+cryptoUsd(c.cents)+' — '+unit);
+ });
+ lines.push('','График:',...blocks.map(b=>b.label+': '+b.items.join(', ')));
+ cryptoStandaloneText=lines.join('\n');
+}
+const cryptoNow=new Date();
+el('cryptoMonth').value=cryptoNow.getFullYear()+'-'+String(cryptoNow.getMonth()+1).padStart(2,'0');
+['cryptoStandaloneAmount','cryptoStrategy','cryptoMonth'].forEach(id=>el(id).addEventListener('input',renderCryptoStandalone));
+el('cryptoStandaloneCopy').addEventListener('click',()=>{if(cryptoStandaloneText&&navigator.clipboard)navigator.clipboard.writeText(cryptoStandaloneText).catch(()=>{});});
+renderCryptoStandalone();
+
+// Independent USD foreign-assets planner. It does not change other calculator fields.
+const foreignWeights=[['S&P 500',40],['SCHF',20],['IEMG',20],['Отдельные акции',20]];
+let foreignStandaloneText='';
+function renderForeignStandalone(){
+ const raw=el('foreignStandaloneAmount').value.trim(),amount=Number(raw),monthText=el('foreignMonth').value;
+ const error=el('foreignStandaloneError'),schedule=el('foreignStandaloneSchedule');error.replaceChildren();schedule.replaceChildren();
+ if(raw===''||!Number.isFinite(amount)||amount<0||amount>1e12||!/^\d{4}-\d{2}$/.test(monthText)){
+  error.append(alertNode('Укажи корректную сумму в USD и месяц покупок.','warning'));
+  el('foreignStandaloneResults').replaceChildren();foreignStandaloneText='';return;
+ }
+ const [year,month]=monthText.split('-').map(Number);
+ if(month<1||month>12||year<2000||year>9999){error.append(alertNode('Некорректный месяц.','warning'));el('foreignStandaloneResults').replaceChildren();foreignStandaloneText='';return;}
+ const fridays=cryptoFridays(year,month),total=Math.round(amount*100);
+ if(!fridays.length){error.append(alertNode('В выбранном месяце нет доступных пятниц.','warning'));return;}
+ const chunks=allocSplit(total,foreignWeights.map(x=>x[1]));
+ const plan=foreignWeights.map((row,i)=>({name:row[0],percent:row[1],cents:chunks[i],parts:cryptoSpread(chunks[i],fridays.length)}));
+ allocTable('foreignStandaloneResults',plan.map(c=>[c.name,c.percent+'%',walletUsd(c.cents)]));
+ const dateFormat=new Intl.DateTimeFormat('ru-RU',{day:'numeric',month:'long',timeZone:'UTC'});
+ const blocks=fridays.map((day,i)=>({day,label:dateFormat.format(new Date(Date.UTC(year,month-1,day)))+' (пятница)',items:plan.map(c=>c.name+': '+walletUsd(c.parts[i]))}));
+ blocks.forEach(b=>{
+  const section=document.createElement('div');section.style.marginTop='10px';
+  const heading=document.createElement('div');heading.className='hint';heading.style.fontWeight='600';heading.textContent=b.label;section.append(heading);
+  const list=document.createElement('ul');list.style.paddingLeft='20px';list.style.margin='4px 0';
+  b.items.forEach(item=>{const li=document.createElement('li');li.textContent=item;list.append(li)});
+  section.append(list);schedule.append(section);
+ });
+ const monthLabel=new Intl.DateTimeFormat('ru-RU',{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(Date.UTC(year,month-1,1)));
+ foreignStandaloneText=['Зарубежный рынок: '+walletUsd(total),'Месяц: '+monthLabel,'Пятниц: '+fridays.length,...plan.map(c=>c.name+' ('+c.percent+'%): '+walletUsd(c.cents)+' — '+fridays.length+' покупок по ~'+walletUsd(Math.floor(c.cents/fridays.length))), '',...blocks.flatMap(b=>[b.label,...b.items])].join('\n');
+}
+const foreignNow=new Date();
+el('foreignMonth').value=foreignNow.getFullYear()+'-'+String(foreignNow.getMonth()+1).padStart(2,'0');
+['foreignStandaloneAmount','foreignMonth'].forEach(id=>el(id).addEventListener('input',renderForeignStandalone));
+el('foreignStandaloneCopy').addEventListener('click',()=>{if(foreignStandaloneText&&navigator.clipboard)navigator.clipboard.writeText(foreignStandaloneText).catch(()=>{});});
+renderForeignStandalone();
+
+
 function fallbackChart(id,type,labels,datasets){
  const canvas=el(id),parent=canvas.parentElement;
  let width=Math.max(240,parent.clientWidth),height=Math.max(200,parent.clientHeight);
