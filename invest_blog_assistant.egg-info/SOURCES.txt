@@ -14,6 +14,7 @@ invest_blog/integrity.py
 invest_blog/lessons.py
 invest_blog/model.py
 invest_blog/performance.py
+invest_blog/placements.py
 invest_blog/portfolio_store.py
 invest_blog/posts.py
 invest_blog/publication_schedule.py
@@ -43,3 +44,5 @@ tests/test_v14.py
 tests/test_v141.py
 tests/test_v142.py
 tests/test_v15.py
+tests/test_v151.py
+tests/test_v152.py

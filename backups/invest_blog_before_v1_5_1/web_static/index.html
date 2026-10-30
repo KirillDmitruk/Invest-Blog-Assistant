@@ -1,0 +1,560 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><title>Invest Blog · Analytics v1.5.0</title>
+<script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root{color-scheme:dark;--bg:#090f1c;--panel:#111d2e;--sub:#17273a;--line:#263950;--txt:#e7f1ff;--muted:#8fa4b9;--cyan:#64b9f6;--green:#57ceb2;--orange:#e6b16b;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse 60% 45% at 90% -12%,#143455 0%,transparent 75%),var(--bg);color:var(--txt)}button{font:inherit;cursor:pointer}
+.shell{display:flex;min-height:100vh}.sidebar{width:236px;flex-shrink:0;position:sticky;top:0;height:100vh;padding:28px 15px;background:#0b1625e8;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:28px}
+.brand{font-size:20px;font-weight:780;letter-spacing:-.5px;padding:0 12px}.brand .emblem{display:inline-grid;place-items:center;background:linear-gradient(145deg,#318ac6,#3775c3);height:32px;width:32px;border-radius:10px;margin-right:8px;color:white}.brand b{color:#7dc5fc}.brand small{display:block;color:var(--muted);font-size:11px;font-weight:500;letter-spacing:1.8px;padding-left:44px;margin-top:4px}
+.nav{display:grid;gap:7px}.nav button{border:1px solid transparent;background:transparent;border-radius:11px;color:#93aabe;padding:12px 13px;text-align:left;font-size:14px;transition:background .16s}.nav button:hover{background:#13263a}.nav button.active{background:#1a3650;border-color:#25537a;color:#d7efff;font-weight:650}.nav button span{display:inline-block;width:28px;font-size:17px}.sidebar-foot{margin-top:auto;font-size:12px;color:#6e869b;line-height:1.6;padding:10px}
+.main{width:calc(100% - 236px);max-width:1530px;padding:36px 38px 80px;margin:0 auto}.top{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin-bottom:29px}.eyebrow{font-size:11px;color:#75b8e8;letter-spacing:2.3px;text-transform:uppercase;font-weight:800}.top h1{font-size:32px;letter-spacing:-1.2px;margin:7px 0}.desc{font-size:13px;color:var(--muted);line-height:1.65;margin:0;max-width:800px}
+.status{display:flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:24px;font-size:12px;color:#a6bad0;padding:9px 13px;white-space:nowrap;background:#112335}.dot{width:7px;height:7px;border-radius:50%;background:#51cda8;display:inline-block}.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:15px}.card{background:linear-gradient(145deg,#142237 0%,#101c2b 96%);border:1px solid var(--line);border-radius:16px;padding:19px;min-width:0;box-shadow:0 10px 24px #0000000d}.metric{grid-column:span 3}.metric .name{color:#97afc6;font-size:12px}.metric .value{font-size:26px;font-weight:800;letter-spacing:-.7px;margin:11px 0 5px;word-break:break-word}.metric .help{font-size:11px;color:#7193ad;line-height:1.4}.wide{grid-column:span 8}.side{grid-column:span 4}.half{grid-column:span 6}.full{grid-column:span 12}.chart{height:290px;position:relative}.chart.sm{height:245px}h2{font-size:16px;letter-spacing:-.2px;margin:0 0 15px}h3{font-size:14px;margin:0}.hint{color:var(--muted);font-size:12px;line-height:1.6;margin:12px 0 0}.panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:13px}.badge{border:1px solid #385778;border-radius:9px;padding:5px 9px;color:#acd7f1;background:#1a3550;font-size:11px;display:inline-block}.alert{padding:10px 12px;border-radius:9px;font-size:12px;line-height:1.55;background:#16304b;border-left:3px solid var(--cyan);margin:7px 0}.alert.warning{background:#31271f;border-color:var(--orange);color:#ecd4b6}.alert.muted{background:#17263a;border-color:#6c879b}.scroll{overflow:auto}table{border-collapse:collapse;width:100%;font-size:12px;min-width:560px}th{text-align:left;color:#7e9ab3;font-weight:600;white-space:nowrap}td,th{padding:12px 9px;border-bottom:1px solid #263b51}td{color:#c9dcf0}tr:hover td{background:#162b41}td:last-child,th:last-child{text-align:right}.right{text-align:right}.num{font-variant-numeric:tabular-nums}.empty{color:#91a5b9;font-size:13px;line-height:1.6}.section{display:none}.section.active{display:block}.month-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin:17px 0}.month{background:#15283b;border:1px solid #2c4155;border-radius:12px;text-align:left;padding:12px;min-width:0;color:#d6e4f3}.month:hover{border-color:#569fcd}.month.active{border-color:#76c6fd;box-shadow:inset 0 0 0 1px #60baf6}.month-name{font-weight:700;font-size:12px;color:#8eb2cd;margin-bottom:9px}.month-value{font-size:16px;font-weight:800;white-space:nowrap}.month-sub{font-size:11px;color:#8ca5bb;margin-top:6px}.month.missing .month-value{color:#d5ae74}.legend{display:flex;flex-wrap:wrap;gap:10px;font-size:12px;color:var(--muted)}.legend span{border:1px solid #31485d;padding:5px 9px;border-radius:7px}.note{border:1px dashed #40617f;border-radius:13px;background:#112438;padding:13px 16px;color:#b5ccdf;font-size:12px;line-height:1.6}.warning-text{color:#e8bd82}.tag{font-size:10px;background:#21354a;color:#a9c6e0;padding:4px 7px;border-radius:5px;white-space:nowrap}.tag.bad{background:#493c2b;color:#f2d19d}.toolbar{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-bottom:12px}.toolbar button{border:1px solid #3b6081;background:#17344c;color:#cce9fc;border-radius:10px;padding:7px 11px;font-size:12px}.small-stat{font-size:12px;color:#8fadc6}.goal-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.goal-form label{display:grid;gap:5px;color:#a4bbd1;font-size:12px}.goal-form input,.goal-form select{min-width:0;width:100%;background:#0c1d2c;border:1px solid #365269;color:#e7f1ff;border-radius:8px;padding:9px}.goal-actions{display:flex;gap:9px;align-items:center}.goal-actions button{border:1px solid #426b87;color:#e7f1ff;background:#1b425e;border-radius:9px;padding:8px 12px}.goal-item{border:1px solid #30506a;border-radius:11px;padding:13px;margin:9px 0}.goal-item small{display:block;color:#a2b7ce;margin-top:4px}.progress{height:9px;background:#283f55;border-radius:10px;overflow:hidden;margin:9px 0}.progress span{height:100%;background:#58cdaa;display:block}.check-item{border:1px solid #2c4760;border-radius:11px;padding:12px;margin:8px 0}.check-item small{display:block;color:#9bb4cc;margin:7px 0 0;line-height:1.5}.metric-head{display:flex;justify-content:space-between;gap:12px}@media(max-width:550px){.goal-form{grid-template-columns:1fr}}footer{color:#617c95;font-size:12px;line-height:1.75;margin-top:30px;max-width:920px}
+@media(max-width:1200px){.month-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.metric{grid-column:span 6}.wide,.side{grid-column:span 12}}
+@media(max-width:850px){.shell{display:block}.sidebar{height:auto;width:100%;position:relative;border-right:0;border-bottom:1px solid var(--line);padding:14px 15px;gap:11px}.brand small,.sidebar-foot{display:none}.nav{display:flex;overflow-x:auto}.nav button{white-space:nowrap;flex:0 0 auto}.main{width:100%;padding:22px 16px 50px}.top h1{font-size:27px}.month-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:550px){.top{display:block}.status{margin-top:14px;width:max-content}.metric{grid-column:span 12}.half{grid-column:span 12}.month-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.card{padding:14px}}
+
+.editor-input {display:block;width:100%;padding:11px;border-radius:9px;border:1px solid #3b546d;background:#0c1b2d;color:#dfefff;font:inherit;font-size:13px}
+.editor-input:focus{outline:2px solid #397eb2}textarea.editor-input{min-height:285px;resize:vertical;line-height:1.6}
+.editor-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}.editor-fields label,.editor-label{font-size:12px;color:#9cb5cd;display:grid;gap:6px}
+.editor-buttons{display:flex;gap:8px;flex-wrap:wrap;margin:13px 0}.editor-buttons button,.editor-btn{border:1px solid #416789;border-radius:9px;padding:9px 13px;color:#dceeff;background:#18374e;font:inherit;font-size:12px;cursor:pointer}
+.editor-buttons button:hover,.editor-btn:hover{background:#255276}.editor-buttons button:disabled{opacity:.4;cursor:not-allowed}
+.editor-list{display:grid;gap:8px;max-height:570px;overflow-y:auto}.editor-row{background:#13283b;border:1px solid #2d4660;border-radius:10px;padding:10px;text-align:left;color:#dcefff;font-size:12px}.editor-row.active{border-color:#6dbef7}.editor-row small{display:block;color:#93b2ca;margin-top:5px}
+.editor-suggestion{padding:11px;border:1px solid #31485d;border-radius:10px;background:#12273a;margin:7px 0;display:flex;justify-content:space-between;gap:12px;align-items:center}.editor-suggestion strong{font-size:12px}.editor-suggestion small{display:block;color:#96afc6;margin-top:4px;line-height:1.4;font-size:11px}
+.editor-toolbar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px}.editor-toolbar select{border:1px solid #44647b;border-radius:8px;padding:7px;background:#142a3c;color:#dceeff}
+@media(max-width:650px){.editor-fields{grid-template-columns:1fr}}
+.routine-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:9px}
+.routine-day{border:1px solid #304d64;border-radius:11px;background:#122739;padding:11px;min-height:112px;min-width:0}
+.routine-day.has-post{border-color:#367199;background:linear-gradient(145deg,#19394e,#142a3e)}
+.routine-weekday{font-size:12px;font-weight:750;color:#bcd2e6;margin-bottom:10px}
+.routine-topic{font-size:11px;line-height:1.4;color:#e5f3ff;font-weight:650;min-height:30px}
+.routine-time{font-weight:780;color:#71c7ff;font-size:15px;margin-top:8px;font-variant-numeric:tabular-nums}
+.routine-off{font-size:11px;color:#7b9bb1;line-height:1.5}
+.routine-monthly{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:12px;border:1px solid #39516b;border-radius:10px;padding:10px 12px;background:#192c40;color:#c9e4f8;font-size:12px}
+.editor-row-wrap{display:flex;gap:6px;align-items:stretch}.editor-row-wrap .editor-row{flex:1;min-width:0}
+.editor-delete{border:1px solid #7c4b50;background:#40272c;color:#ffd3d3;border-radius:10px;padding:8px 11px;font-size:14px;cursor:pointer}
+.editor-delete:hover{background:#653238}.editor-delete:focus-visible{outline:2px solid #ffa5a5}
+@media(max-width:1050px){.routine-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:550px){.routine-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+</style>
+</head>
+<body>
+<div class="shell">
+<aside class="sidebar">
+ <div class="brand"><span class="emblem">◈</span>Invest <b>Blog</b><small>ANALYTICS / v1.5</small></div>
+ <nav class="nav" aria-label="Разделы">
+ <button data-page="overview" class="active"><span>◫</span>Обзор</button>
+ <button data-page="bonds"><span>▤</span>Облигации</button>
+ <button data-page="calendar"><span>▦</span>Купонный календарь</button>
+ <button data-page="income"><span>▥</span>Доходы</button>
+ <button data-page="risk"><span>◈</span>Риски</button>
+ <button data-page="goals"><span>◎</span>Цели</button>
+ <button data-page="content"><span>✎</span>Контент</button>
+ <button data-page="performance"><span>↗</span>Доходность</button>
+ </nav>
+ <div class="sidebar-foot">Локальный read-only дашборд.<br>Никаких торговых поручений.</div>
+</aside>
+<main class="main">
+<header class="top"><div><div class="eyebrow">Long-term investing / портфель</div><h1 id="pageTitle">Обзор портфеля</h1><p class="desc" id="pageDesc">Долгосрочная структура, фактический денежный поток и ожидаемые выплаты</p></div><span class="status"><i class="dot"></i><span id="status">Ожидаем данные</span></span></header>
+<div id="fatal" class="alert warning" style="display:none"></div>
+<section class="section active" id="page-overview">
+<div class="grid">
+ <div class="card metric"><div class="name">Стоимость портфеля</div><div class="value" id="total">—</div><div class="help">Текущая оценка в ₽</div></div>
+ <div class="card metric"><div class="name">Облигации</div><div class="value" id="bond">—</div><div class="help" id="bondShare">Доля в портфеле</div></div>
+ <div class="card metric"><div class="name">Получено купонов</div><div class="value" id="couponTotal">—</div><div class="help">Доступная история за 12 календарных месяцев</div></div>
+ <div class="card metric"><div class="name">Ожидаемые купоны</div><div class="value" id="nextTotal">—</div><div class="help">Известные суммы, ₽; неполный прогноз</div></div>
+ <div class="card wide"><h2>Динамика стоимости портфеля</h2><div class="chart"><canvas id="history"></canvas></div><p class="hint" id="historyHint">Сплошная линия — сохранённые снимки; пунктир — оценка по историческим котировкам и операциям. Изменение стоимости не равно доходности.</p><div id="historyWarnings"></div></div>
+ <div class="card side"><h2>Структура активов</h2><div class="chart"><canvas id="composition"></canvas></div></div>
+ <div class="card half"><h2>Фактические купоны и дивиденды, ₽</h2><div class="chart sm"><canvas id="overviewIncome"></canvas></div><p class="hint">Незагруженные месяцы не считаются подтверждёнными нулями.</p></div>
+ <div class="card half"><h2>Ближайшие купонные события</h2><div id="upcoming"></div></div>
+ <div class="card full"><h2>Предупреждения и качество данных</h2><div id="alerts"></div></div>
+</div>
+</section>
+<section class="section" id="page-bonds">
+<div class="grid">
+ <div class="card metric"><div class="name">Выпусков в портфеле</div><div class="value" id="bondCount">—</div><div class="help">Уникальные инструменты</div></div>
+ <div class="card metric"><div class="name">Флоатеров</div><div class="value" id="floatCount">—</div><div class="help">По доступным карточкам выпуска</div></div>
+ <div class="card metric"><div class="name">Календарь загружен</div><div class="value" id="calendarCount">—</div><div class="help">Облигаций с актуальной проверкой</div></div>
+ <div class="card metric"><div class="name">Событий с неизвестной суммой</div><div class="value" id="unknownCount">—</div><div class="help">Не включены в прогноз</div></div>
+ <div class="card wide"><h2>Лестница погашений</h2><div class="chart"><canvas id="maturities"></canvas></div><p class="hint">Текущая оценка рублёвых бумаг с известной датой погашения, а не сумма номиналов к возврату.</p></div>
+ <div class="card side"><h2>О параметрах выпусков</h2><div class="note">Номинал, даты, частота купонов и признаки флоатеров загружаются из карточки облигации. Ставка купона не равна доходности к погашению (YTM). Неизвестные значения не рассчитываются по догадкам.</div><div id="missingMeta"></div></div>
+ <div class="card full"><div class="panel-head"><h2>Позиции в облигациях</h2><span class="small-stat" id="bondTableMeta"></span></div><div class="scroll" id="bondPositions"></div></div>
+</div>
+</section>
+<section class="section" id="page-calendar">
+<div class="grid">
+ <div class="card full"><div class="panel-head"><h2>Календарь на 12 календарных месяцев</h2><span class="badge" id="calendarPeriod">—</span></div>
+  <p class="hint">Текущий месяц и следующие 11. События до даты снимка исключены. Суммы рассчитаны по сегодняшним количествам бумаг без налогов.</p>
+  <div class="month-grid" id="monthGrid"></div><div class="legend"><span>Число = объявленная сумма × количество бумаг</span><span>«?» = сумма ещё неизвестна</span><span>Выбери месяц для фильтра</span></div></div>
+ <div class="card half"><h2>Известные купоны по месяцам, ₽</h2><div class="chart"><canvas id="futureCoupons"></canvas></div><p class="hint">Для валют, отличных от ₽, смотри календарь событий; пересчёт по произвольному курсу отключён.</p></div>
+ <div class="card half"><h2>Полнота календаря</h2><div id="coverage"></div></div>
+ <div class="card full"><div class="toolbar"><h2 id="eventsTitle">Предстоящие купоны</h2><button id="resetMonth" type="button">Показать все</button></div><div class="scroll" id="events"></div></div>
+</div>
+</section>
+<section class="section" id="page-income">
+<div class="grid">
+ <div class="card metric"><div class="name">Купоны за период</div><div class="value" id="actualCoupons">—</div><div class="help">₽, по импортированной истории</div></div>
+ <div class="card metric"><div class="name">Дивиденды за период</div><div class="value" id="actualDividends">—</div><div class="help">₽, по импортированной истории</div></div>
+ <div class="card metric"><div class="name">Погашения за период</div><div class="value" id="actualRepayments">—</div><div class="help">₽, возврат капитала, не прибыль</div></div>
+ <div class="card metric"><div class="name">Пополнения за период</div><div class="value" id="actualDeposits">—</div><div class="help">₽, не инвестиционный доход</div></div>
+ <div class="card full"><h2>Поступления по месяцам</h2><div class="chart"><canvas id="actualIncome"></canvas></div><p class="hint">Данные по исполненным операциям, без искусственного пересчёта других валют. Текущий месяц не завершён.</p></div>
+ <div class="card full"><h2>Какие инструменты принесли купоны</h2><div class="scroll" id="couponSources"></div><p class="hint">На основе исполненных операций за показанный период, включая бумаги, которые могли быть проданы.</p></div>
+ <div class="card full"><h2>Помесячная детализация</h2><div class="scroll" id="incomeTable"></div></div>
+ <div class="card full"><div class="note">Полученные купоны и дивиденды — денежные потоки, а не полная доходность портфеля. Пополнения и погашения отражаются отдельно. Налоги и комиссии пока не учитываются в этих суммах отдельно.</div></div>
+</div>
+</section>
+<section class="section" id="page-risk"><div class="grid">
+ <div class="card metric"><div class="name">Оценка доступных проверок</div><div class="value" id="healthScore">—</div><div class="help">Не рейтинг надёжности бумаг</div></div>
+ <div class="card metric"><div class="name">Покрытие проверок</div><div class="value" id="healthCoverage">—</div><div class="help">Доля учитываемых факторов</div></div>
+ <div class="card metric"><div class="name">Облигации</div><div class="value" id="healthBondShare">—</div><div class="help">Доля портфеля по API</div></div>
+ <div class="card metric"><div class="name">Известный номинал</div><div class="value" id="healthPrincipal">—</div><div class="help">Подтверждённый номинал RUB</div></div>
+ <div class="card half"><h2>Факторы портфеля</h2><div id="healthChecks"></div></div>
+ <div class="card half"><h2>На что обратить внимание</h2><div id="riskFindings"></div></div>
+ <div class="card full"><h2>Полнота и ограничения данных</h2><div id="riskQuality"></div><p class="hint" id="riskDisclaimer"></p></div>
+ <div class="card full"><h2>Погашения по годам (подтверждённый рублёвый номинал)</h2><div class="chart"><canvas id="riskMaturities"></canvas></div><p class="hint">Номинал — не рыночная стоимость и не прогноз доходности.</p></div>
+</div></section>
+<section class="section" id="page-goals"><div class="grid">
+<div class="card half"><h2>Новая / редактируемая цель</h2>
+ <form id="goalForm" class="goal-form">
+  <label>Название<input id="goalName" required maxlength="80" placeholder="Купоны на ежемесячные расходы"></label>
+  <label>Тип<select id="goalKind"><option value="portfolio_value">Стоимость портфеля, ₽</option><option value="monthly_income">Купоны + дивиденды, ₽/мес.</option><option value="monthly_coupons">Купоны, ₽/мес.</option><option value="bond_share">Доля облигаций, %</option></select></label>
+  <label>Целевое значение<input type="number" id="goalTarget" min="0.01" max="1000000000000000" step="0.01" required placeholder="30000"></label>
+  <label>Желаемая дата<input type="date" id="goalDue"></label>
+  <label>Комментарий<input id="goalNote" maxlength="500" placeholder="Зачем нужна эта цель"></label>
+  <div class="goal-actions"><button type="submit" id="goalSave">Сохранить цель</button><button type="button" id="goalCancel">Сбросить</button></div>
+ </form><div id="goalFeedback"></div>
+</div>
+<div class="card half"><h2>Подтверждённые значения</h2><div id="goalMeasures"></div></div>
+<div class="card full"><h2>Мои цели</h2><div id="goalList"></div></div>
+<div class="card full"><div class="note">Прогресс — отношение текущего значения к цели, а не прогноз достижения к дате. Денежный поток рассчитывается только по завершённым загруженным месяцам (минимум три). Налоги и комиссии не вычитаются.</div></div>
+</div></section>
+
+<section class="section" id="page-performance"><div class="grid">
+ <div class="card full">
+  <div class="panel-head"><h2>📈 Доходность и сравнение периодов</h2><span class="badge">Снимки брокера, ₽</span></div>
+  <p class="hint">Считаем только по реальным сохранённым оценкам портфеля и подтверждённым пополнениям/выводам. Восстановленный исторический график для доходности НЕ используется.</p>
+  <div class="perf-toolbar">
+   <label>Начало периода<input id="perfStart" class="editor-input" type="date"></label>
+   <label>Конец периода<input id="perfEnd" class="editor-input" type="date"></label>
+   <button type="button" class="editor-btn" id="perfApply">Рассчитать</button>
+   <a id="perfExport" class="editor-btn" href="/api/performance/export?table=all" download>⬇ Экспорт ZIP + CSV</a>
+  </div>
+  <div id="perfWarnings"></div>
+ </div>
+ <div class="card metric"><div class="name">TWR / Modified Dietz</div><div class="value" id="perfTwr">н/д</div><div class="help" id="perfTwrHelp">При внешних потоках это оценка, не точная TWR</div></div>
+ <div class="card metric"><div class="name">XIRR (годовая)</div><div class="value" id="perfXirr">н/д</div><div class="help">С учётом размера и даты пополнений и выводов</div></div>
+ <div class="card metric"><div class="name">Инвестиционный результат</div><div class="value" id="perfProfit">н/д</div><div class="help">Изменение стоимости минус внешние потоки</div></div>
+ <div class="card metric"><div class="name">Чистые пополнения</div><div class="value" id="perfNet">н/д</div><div class="help">Пополнения за вычетом выводов</div></div>
+ <div class="card wide"><h2>Стоимость по фактическим снимкам</h2><div class="chart"><canvas id="perfHistory"></canvas></div><p class="hint">Без восстановленных значений, чтобы они не искажали расчёт доходности.</p></div>
+ <div class="card side"><h2>Сравнение периодов</h2><div class="chart"><canvas id="perfCompare"></canvas></div><p class="hint">1, 3, 6 и 12 месяцев. Показатели недоступны, если не хватает точных снимков или операций.</p></div>
+ <div class="card full"><h2>Доходность по периодам</h2><div class="scroll" id="perfTable"></div></div>
+ <div class="card full"><h2>Принцип расчёта и ограничения</h2><div id="perfNotes"></div></div>
+</div></section>
+<section class="section" id="page-content"><div class="grid">
+ <div class="card full">
+   <div class="panel-head"><h2>🗓 Недельный план публикаций</h2><span class="badge" id="routineTimezone">Часовой пояс: —</span></div>
+   <div id="weeklyRoutine" class="routine-grid"></div>
+   <div id="monthlyRoutine" class="routine-monthly"></div>
+   <p class="hint" id="routineNote">Время подготовки черновиков; публикацию ты подтверждаешь отдельно.</p>
+ </div>
+ <div class="card half"><h2>📅 Календарь публикаций</h2><div class="scroll" id="editorSchedule"></div><p class="hint">Публикации по расписанию формирует работающий Telegram-бот. В этом разделе видно, что уже создано.</p></div>
+ <div class="card half"><h2>💡 Подсказки для следующих постов</h2><div id="editorSuggestions"></div><p class="hint">Выбор тем — по истории публикаций, позициям и недавним покупкам. Это не AI-прогноз и не инвестиционная рекомендация.</p></div>
+ <div class="card side"><div class="editor-toolbar"><h2>Редакторская очередь</h2><button id="editorNew" class="editor-btn" type="button">+ Новый</button></div><div id="editorQueue" class="editor-list"></div></div>
+ <div class="card wide"><div class="editor-toolbar"><h2 id="editorTitle">Новый черновик</h2><span class="badge" id="editorStatus">—</span></div>
+   <form id="editorForm"><div class="editor-fields">
+    <label>Рубрика<select id="editorKind" class="editor-input"><option value="weekly">Еженедельный отчёт</option><option value="monthly">Ежемесячный отчёт</option><option value="plan">План на неделю</option><option value="paper">Бумага недели</option><option value="glossary">Ликбез</option><option value="purchase">Покупка</option></select></label>
+    <label>Период<input id="editorPeriod" class="editor-input" maxlength="40" required placeholder="YYYY-MM-DD"></label>
+   </div><label class="editor-label">Текст публикации<textarea id="editorBody" class="editor-input" maxlength="10000" required placeholder="Напиши или отредактируй пост…"></textarea></label>
+   <div class="editor-buttons"><button type="submit" id="editorSave">Сохранить</button><button type="button" id="editorReset">Сбросить</button></div></form>
+   <div class="editor-buttons" id="editorActions"></div>
+   <div class="editor-fields"><label>Дата публикации (часовой пояс проекта)<input type="datetime-local" id="editorWhen" class="editor-input"></label></div>
+   <div id="editorFeedback"></div><p class="hint">Изменение текста сбрасывает одобрение. Публикация в канал происходит только после подтверждения и при запущенном Telegram-боте. Ошибка отправки требует ручной проверки канала.</p>
+ </div>
+ <div class="card full"><h2>История выбранных тем</h2><div class="scroll" id="topics"></div></div>
+</div></section>
+<footer>Invest Blog Assistant v1.5 · Данные T-Invest API · Только локальный доступ. Даты и прогнозные купоны могут изменяться; оценки не являются гарантией выплат или инвестиционной рекомендацией. Все финансовые показатели следует сверять с отчётом брокера.</footer>
+</main></div>
+<script>
+const el=id=>document.getElementById(id);
+const rub=n=>n===null||n===undefined?'н/д':new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB',maximumFractionDigits:2}).format(n);
+const num=n=>n===null||n===undefined?'н/д':new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(n);
+const txt=(tag,value)=>{const e=document.createElement(tag);e.textContent=String(value??'—');return e};
+const COLORS=['#74bcfa','#4ed0b5','#d8a35d','#ad96ed','#eb8491','#73d3db'];
+const state={overview:null,bonds:null,risk:null,goals:null,editorToken:null,editingGoal:null,drafts:[],topics:[],contentPlan:null,editorDraft:null,page:'overview',selectedMonth:null,routine:null,performance:null,charts:{}};
+function table(id,heads,rows){let holder=el(id);let t=document.createElement('table');let h=document.createElement('tr');heads.forEach(x=>h.append(txt('th',x)));t.append(h);if(!rows.length){holder.replaceChildren(txt('p','Нет данных для таблицы.'));return;}rows.forEach(row=>{const tr=document.createElement('tr');row.forEach(value=>tr.append(txt('td',value)));t.append(tr)});holder.replaceChildren(t)}
+function alertNode(message,kind='info'){let d=txt('div',message);d.className='alert'+(kind==='attention'||kind==='warning'?' warning':'');return d}
+function currencyMap(obj){return Object.entries(obj||{}).map(([c,v])=>c==='RUB'?rub(v):num(v)+' '+c).join(' · ')||'—'}
+function showPage(page){state.page=page;document.querySelectorAll('.section').forEach(s=>s.classList.toggle('active',s.id==='page-'+page));document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));let names={overview:'Обзор портфеля',bonds:'Облигации',calendar:'Купонный календарь',income:'Фактические доходы',risk:'Здоровье портфеля',goals:'Финансовые цели',content:'Контент-план',performance:'Доходность и экспорт'};el('pageTitle').textContent=names[page];el('pageDesc').textContent=page==='calendar'?'Ожидаемые купоны по текущему количеству бумаг':page==='income'?'Исполненные выплаты, погашения и пополнения':page==='performance'?'Сравнение доходности по подтверждённым снимкам брокера':page==='bonds'?'Состав и характеристики облигационной части':'Долгосрочная структура, денежные потоки и редакторская очередь';requestAnimationFrame(()=>{renderCharts(page);if(page==='performance')renderPerformanceCharts()});}
+document.querySelectorAll('.nav button').forEach(btn=>btn.addEventListener('click',()=>showPage(btn.dataset.page)));
+function fallbackChart(id,type,labels,datasets){
+ const canvas=el(id),parent=canvas.parentElement;
+ let width=Math.max(240,parent.clientWidth),height=Math.max(200,parent.clientHeight);
+ const dpr=Math.min(window.devicePixelRatio||1,2);
+ canvas.width=width*dpr;canvas.height=height*dpr;
+ canvas.style.width=width+'px';canvas.style.height=height+'px';
+ const g=canvas.getContext('2d');g.scale(dpr,dpr);
+ g.font='12px system-ui';g.textBaseline='middle';g.fillStyle='#8ca6be';
+ const series=datasets||[];
+ const totalValues=series.flatMap(x=>x.data||[]).filter(x=>x!==null&&x!==undefined).map(Number);
+ if(!labels.length||!totalValues.length||!totalValues.some(x=>x!==0)){
+   g.fillText('Недостаточно данных для графика',24,height/2);return;
+ }
+ if(type==='doughnut'){
+   const values=series[0].data.map(x=>Math.max(0,Number(x)));const sum=values.reduce((a,b)=>a+b,0);
+   const radius=Math.min(width*.26,height*.35),cx=Math.min(width*.35,160),cy=height*.45;
+   let start=-Math.PI/2;
+   values.forEach((value,i)=>{const end=start+value/sum*Math.PI*2;
+     g.beginPath();g.arc(cx,cy,radius,start,end);g.arc(cx,cy,radius*.60,end,start,true);
+     g.closePath();g.fillStyle=COLORS[i%COLORS.length];g.fill();start=end;});
+   labels.forEach((label,i)=>{const row=25+i*23;
+     g.fillStyle=COLORS[i%COLORS.length];g.fillRect(width*.62,row,10,10);
+     g.fillStyle='#adc1d6';g.fillText(String(label).slice(0,17),width*.62+15,row+6);});
+   return;
+ }
+ const left=62,right=width-18,top=25,bottom=height-52,plotH=bottom-top,plotW=right-left;
+ const max=Math.max(...totalValues,1)*1.08,min=type==='line'?Math.min(0,Math.min(...totalValues)) : 0;
+ for(let i=0;i<=4;i++){
+   const y=top+i*plotH/4;g.strokeStyle='#284056';g.beginPath();g.moveTo(left,y);g.lineTo(right,y);g.stroke();
+   g.fillStyle='#8ea5bd';g.textAlign='right';g.fillText(num(max-(max-min)*i/4),left-7,y);
+ }
+ const xOf=i=>left+(labels.length<=1?plotW/2:i*plotW/(labels.length-1));
+ const yOf=v=>bottom-((Number(v)-min)/(max-min||1))*plotH;
+ if(type==='line'){
+   series.forEach((dataset,j)=>{
+     g.strokeStyle=dataset.borderColor||COLORS[j];g.lineWidth=2.4;g.beginPath();
+     let started=false;
+     dataset.data.forEach((value,i)=>{if(value===null||value===undefined){started=false;return}
+       if(!started){g.moveTo(xOf(i),yOf(value));started=true}else g.lineTo(xOf(i),yOf(value));});
+     g.stroke();
+     dataset.data.forEach((value,i)=>{if(value===null||value===undefined)return;
+       g.fillStyle=dataset.borderColor||COLORS[j];g.beginPath();g.arc(xOf(i),yOf(value),2.5,0,Math.PI*2);g.fill();});
+   });
+ }else{
+   const count=Math.max(labels.length,1),slot=plotW/count;
+   series.forEach((dataset,j)=>dataset.data.forEach((value,i)=>{
+     const bw=Math.max(3,Math.min(32,slot*.70/series.length));
+     const x=left+i*slot+(slot-series.length*bw)/2+j*bw,y=yOf(value);
+     g.fillStyle=dataset.backgroundColor||COLORS[j];g.fillRect(x,y,bw,Math.max(0,bottom-y));
+   }));
+ }
+ g.fillStyle='#93abc2';g.textAlign='center';
+ const step=Math.max(1,Math.ceil(labels.length/5));
+ labels.forEach((label,i)=>{if(i%step===0||i===labels.length-1){
+   const x=type==='line'?xOf(i):left+(i+.5)*plotW/labels.length;
+   g.fillText(String(label),x,height-31);
+ }});
+ series.forEach((dataset,j)=>{g.textAlign='left';g.fillStyle=dataset.borderColor||dataset.backgroundColor||COLORS[j];
+   g.fillText(String(dataset.label||''),left+j*145,height-10);});
+}
+function chart(id,type,labels,datasets){const node=el(id);if(!node)return;
+ if(state.charts[id]){state.charts[id].destroy();delete state.charts[id]}
+ if(typeof Chart==='undefined'){fallbackChart(id,type,labels,datasets);return}
+ state.charts[id]=new Chart(node,{type,data:{labels,datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#bdd1e4',font:{size:11}}}},
+ scales:type==='doughnut'?{}:{x:{ticks:{color:'#90a7bf',maxRotation:50,font:{size:10}},grid:{color:'#23384a'}},y:{beginAtZero:type==='bar',ticks:{color:'#90a7bf',font:{size:10}},grid:{color:'#23384a'}}}}});
+}
+function renderCharts(page){const a=state.overview,b=state.bonds;if(!a?.has_data||!b?.has_data)return;
+ if(page==='overview'){
+  const actual = new Map(a.history.map(x=>[x.day,x.total]));
+  const predicted = new Map((a.history_estimated||[]).map(x=>[x.day,x.total]));
+  const labels = [...new Set([...actual.keys(),...predicted.keys()])].sort();
+  // Bridge reconstructed history to the first broker snapshot, but never imply
+  // that reconstructed points are confirmed by the broker.
+  const firstActual = [...actual.keys()].sort()[0];
+  const estimatedValues = labels.map(d=>predicted.has(d)?predicted.get(d):(d===firstActual&&predicted.size?actual.get(d):null));
+  chart('history','line',labels,[
+   {label:'Снимки брокера, ₽',data:labels.map(d=>actual.get(d)??null),borderColor:COLORS[0],tension:.15,pointRadius:labels.length>60?1:3,spanGaps:false},
+   {label:'Расчётная история, ₽',data:estimatedValues,borderColor:COLORS[2],borderDash:[6,4],tension:0,pointRadius:0,spanGaps:false}
+  ]);
+  const explain=el('historyWarnings');explain.replaceChildren();
+  if(!predicted.size)explain.append(alertNode('До первого снимка данных нет. Для восстановления за прошлый год запусти: uv run python -m invest_blog.cli backfill --days 365.','info'));
+  const run=a.history_backfill;
+  if(run){const info=(run.warnings||[]);for(const w of info)explain.append(alertNode(w,'info'));}
+
+  chart('composition','doughnut',a.composition.map(x=>x.label),[{data:a.composition.map(x=>x.value),backgroundColor:COLORS,borderWidth:2,borderColor:'#111d2e'}]);
+  let months=b.actual_income.months;
+  chart('overviewIncome','bar',months.map(x=>x.month),[{label:'Купоны',data:months.map(x=>x.status==='no_coverage'?null:x.coupons.RUB||0),backgroundColor:COLORS[0]},
+   {label:'Дивиденды',data:months.map(x=>x.status==='no_coverage'?null:x.dividends.RUB||0),backgroundColor:COLORS[1]}]);
+ }
+ if(page==='bonds')chart('maturities','bar',a.maturity.map(x=>x.year),[{label:'Оценка, ₽',data:a.maturity.map(x=>x.estimated_value_rub),backgroundColor:COLORS[3]}]);
+ if(page==='calendar')chart('futureCoupons','bar',b.calendar.months.map(x=>x.month),[{label:'Известные купоны, ₽',data:b.calendar.months.map(x=>x.known.RUB||0),backgroundColor:COLORS[0]}]);
+ if(page==='risk'&&state.risk?.has_data){let m=state.risk.risk_metrics.maturity_by_year;chart('riskMaturities','bar',m.map(x=>x.year),[{label:'Номинал, ₽',data:m.map(x=>x.principal_rub),backgroundColor:COLORS[1]}]);}
+ if(page==='income')chart('actualIncome','bar',b.actual_income.months.map(x=>x.month),[
+   {label:'Купоны, ₽',data:b.actual_income.months.map(x=>x.status==='no_coverage'?null:x.coupons.RUB||0),backgroundColor:COLORS[0]},
+   {label:'Дивиденды, ₽',data:b.actual_income.months.map(x=>x.status==='no_coverage'?null:x.dividends.RUB||0),backgroundColor:COLORS[1]}]);
+}
+const percent=v=>v===null||v===undefined?'н/д':num(v)+'%';
+function renderPerformanceCharts(){let p=state.performance;if(!p)return;
+ chart('perfHistory','line',(p.history||[]).map(x=>x.date),[{label:'Стоимость по снимкам, ₽',data:(p.history||[]).map(x=>x.value_rub),borderColor:COLORS[0],tension:0,pointRadius:1}]);
+ let rows=(p.comparisons||[]);chart('perfCompare','bar',rows.map(x=>x.label),[
+ {label:'TWR / Dietz, %',data:rows.map(x=>x.twr_pct),backgroundColor:COLORS[0]},
+ {label:'XIRR годовая, %',data:rows.map(x=>x.xirr_pct),backgroundColor:COLORS[1]}]);
+}
+function renderPerformance(){let p=state.performance;if(!p)return;
+ let x=p.period||{};el('perfTwr').textContent=percent(x.twr_pct);el('perfXirr').textContent=percent(x.xirr_pct);
+ el('perfProfit').textContent=rub(x.profit_rub);el('perfNet').textContent=rub(x.net_contributions_rub);
+ el('perfTwrHelp').textContent=x.exact_twr?'Без внешних потоков: точная периодная доходность':'С внешними потоками: оценка Modified Dietz, не точная TWR';
+ if(x.from)el('perfStart').value=x.from;if(x.to)el('perfEnd').value=x.to;
+ const notes=el('perfNotes');notes.replaceChildren();(p.notes||[]).forEach(n=>notes.append(alertNode(n)));
+ const warnings=el('perfWarnings');warnings.replaceChildren();if(x.status!=='ok')warnings.append(alertNode('Недостаточно данных: '+(x.reason||p.reason||'период не подтверждён'),'attention'));
+ (x.warnings||[]).forEach(w=>warnings.append(alertNode(w,'info')));
+ const rows=[{label:'Выбранный период',...x},...(p.comparisons||[])];
+ table('perfTable',['Период','Даты снимков','TWR / Dietz','XIRR годовая','Результат','Статус'],rows.map(r=>[r.label,
+ (r.from||'—')+' — '+(r.to||'—'),percent(r.twr_pct),percent(r.xirr_pct),rub(r.profit_rub),r.status==='ok'?(r.exact_twr?'Подтверждено по снимкам':'Оценка при внешних потоках'):(r.reason||'Недоступно')]));
+ let qs=new URLSearchParams();if(x.from)qs.set('start',x.from);if(x.to)qs.set('end',x.to);
+ el('perfExport').href='/api/performance/export?table=all&'+qs.toString();
+}
+el('perfApply').addEventListener('click',async()=>{
+ const from=el('perfStart').value,to=el('perfEnd').value;if(!from||!to){el('perfWarnings').replaceChildren(alertNode('Выбери обе даты','attention'));return}
+ try {const p=await getJson('/api/performance?'+new URLSearchParams({start:from,end:to}));state.performance=p;renderPerformance();renderPerformanceCharts();}
+ catch(e){el('perfWarnings').replaceChildren(alertNode('Ошибка: '+e.message,'attention'))}
+});
+function renderOverview(){let a=state.overview,b=state.bonds;
+ el('total').textContent=rub(a.total_rub);let lookup=Object.fromEntries(a.composition.map(x=>[x.label,x.value]));
+ el('bond').textContent=rub(lookup['Облигации']||0);
+ el('bondShare').textContent=a.total_rub>0?num(100*(lookup['Облигации']||0)/a.total_rub)+'% портфеля':'Нет данных о доле';
+ el('couponTotal').textContent=rub(b.actual_income.months.reduce((s,m)=>s+(m.coupons.RUB||0),0));
+ el('nextTotal').textContent=rub(b.calendar.known_total.RUB||0);
+ const events=b.calendar.events.filter(e=>e.amount!==null).slice(0,5);
+ const box=el('upcoming');box.replaceChildren();
+ if(events.length){events.forEach(e=>{let d=txt('div',`${e.date}  ·  ${e.name} — ${currencyMap({[e.currency]:e.amount})}`);d.className='alert';box.append(d)});}else box.append(alertNode('Не найдено будущих купонов с объявленной суммой. Это не подтверждает отсутствие выплат.'));
+ const alerts=el('alerts');alerts.replaceChildren();
+ if(b.snapshot_stale)alerts.append(alertNode('Снимок портфеля устарел. Для актуального прогноза обнови данные командой sync.','attention'));
+ (a.alerts||[]).forEach(x=>alerts.append(alertNode(x.text,x.level)));
+ if(b.calendar.missing_bonds.length||b.calendar.stale_bonds.length)alerts.append(alertNode('Прогноз купонов неполный: отсутствуют или устарели календари у '+(b.calendar.missing_bonds.length+b.calendar.stale_bonds.length)+' выпусков.','attention'));
+ if(!alerts.childNodes.length)alerts.append(alertNode('Предупреждений не обнаружено. Отсутствие предупреждений не означает отсутствие рисков.'));
+}
+function renderBonds(){const b=state.bonds,a=state.overview,c=b.calendar;
+ el('bondCount').textContent=num(b.bond_count);el('floatCount').textContent=num(b.bonds.filter(x=>x.floating===true).length);
+ el('calendarCount').textContent=num(c.covered_bonds)+' / '+num(b.bond_count);el('unknownCount').textContent=num(c.unknown_amount_events);
+ el('bondTableMeta').textContent='На дату '+b.as_of;
+ const status=el('missingMeta');status.replaceChildren();
+ const missing=b.bonds.filter(x=>!x.metadata_updated).length;
+ if(missing)status.append(alertNode('Нет подробной карточки для '+missing+' облигаций.','attention'));
+ table('bondPositions',['Облигация / ISIN','Шт.','Текущая оценка','НКД','Тип купона','Купонов/год','Номинал','Погашение','Ближайший купон'],b.bonds.map(x=>[
+  x.name+(x.isin?' · '+x.isin:''),num(x.quantity),
+  x.market_value_native===null?'н/д':currencyMap({[x.currency]:x.market_value_native}),
+  x.nkd_native===null?'н/д':currencyMap({[x.currency]:x.nkd_native}),
+  x.coupon_structure,x.coupon_frequency??'н/д',
+  x.nominal===null?'н/д':num(x.nominal)+' '+x.nominal_currency,x.maturity_date||'н/д',
+  x.next_coupon_date?(x.next_coupon_date+' · '+(x.next_coupon_amount===null?'сумма неизвестна':currencyMap({[x.next_coupon_currency]:x.next_coupon_amount}))):'нет данных'
+ ]));
+}
+function makeCalendarGrid(){let b=state.bonds,c=b.calendar,wrapper=el('monthGrid');wrapper.replaceChildren();
+ for(let m of c.months){let btn=document.createElement('button');btn.type='button';btn.className='month'+(m.unknown_events?' missing':'')+(state.selectedMonth===m.month?' active':'');
+  let name=txt('div',new Date(m.month+'-15T12:00:00').toLocaleDateString('ru-RU',{month:'long',year:'numeric'}));name.className='month-name';
+  let value=txt('div',m.known.RUB!==undefined?rub(m.known.RUB):m.events?'сумма н/д':'—');value.className='month-value';
+  let sub=txt('div',m.events+' событий'+(m.unknown_events?' · ? '+m.unknown_events:'')+(Object.keys(m.known).filter(c=>c!=='RUB').length?' · + др. валюты':''));sub.className='month-sub';
+  btn.append(name,value,sub);btn.addEventListener('click',()=>{state.selectedMonth=m.month;makeCalendarGrid();renderEvents()});wrapper.append(btn);
+ }
+}
+function renderEvents(){let c=state.bonds.calendar,events=c.events.filter(e=>!state.selectedMonth||e.date.slice(0,7)===state.selectedMonth);
+ el('eventsTitle').textContent=state.selectedMonth?'События · '+state.selectedMonth:'Все ближайшие события';
+ table('events',['Дата','Облигация','Количество','Купон на шт.','Ожидаемая сумма'],events.map(e=>[
+  e.date,e.name,num(e.quantity),e.per_bond===null?'неизвестен':currencyMap({[e.currency]:e.per_bond}),e.amount===null?'неизвестна':currencyMap({[e.currency]:e.amount})]));
+}
+el('resetMonth').addEventListener('click',()=>{state.selectedMonth=null;makeCalendarGrid();renderEvents()});
+function renderCalendar(){let b=state.bonds,c=b.calendar;
+ el('calendarPeriod').textContent=b.calendar_from+' — '+b.calendar_to_exclusive+' (не включая)';
+ makeCalendarGrid();renderEvents();
+ let coverage=el('coverage');coverage.replaceChildren();
+ coverage.append(alertNode('Проверено по API: '+c.covered_bonds+' из '+b.bond_count+' выпусков.'));
+ if(c.missing_bonds.length)coverage.append(alertNode('Не удалось получить расписание: '+c.missing_bonds.join(', '),'attention'));
+ if(c.stale_bonds.length)coverage.append(alertNode('Устаревшие данные исключены из прогноза: '+c.stale_bonds.join(', '),'attention'));
+ if(c.unknown_amount_events)coverage.append(alertNode(c.unknown_amount_events+' будущих купонных событий без опубликованной суммы. Их денежное значение неизвестно.','attention'));
+ coverage.append(alertNode('Всего известных сумм: '+currencyMap(c.known_total)));
+ coverage.append(alertNode(c.disclaimer));
+}
+function renderIncome(){let months=state.bonds.actual_income.months;
+ const sum=k=>months.reduce((s,m)=>s+(m[k].RUB||0),0);
+ el('actualCoupons').textContent=rub(sum('coupons'));el('actualDividends').textContent=rub(sum('dividends'));
+ el('actualRepayments').textContent=rub(sum('repayments'));el('actualDeposits').textContent=rub(sum('deposits'));
+ table('couponSources',['Инструмент','Сумма купонов'],state.bonds.actual_income.top_coupon_sources.map(x=>[x.name,currencyMap({[x.currency]:x.amount})]));
+ table('incomeTable',['Месяц','Купоны','Дивиденды','Погашения','Пополнения','Полнота'],months.map(x=>[
+  x.month,currencyMap(x.coupons),currencyMap(x.dividends),currencyMap(x.repayments),currencyMap(x.deposits),
+  x.status==='complete'?'Полный месяц':x.status==='partial'?'Текущий месяц': 'История неполная'
+ ]));
+}
+function renderRisk(){let a=state.risk;if(!a?.has_data){el('healthScore').textContent='н/д';return}
+ el('healthScore').textContent=a.health.score===null?'н/д':num(a.health.score)+'/100';
+ el('healthCoverage').textContent=num(a.health.evaluated_weight_pct)+'%';
+ el('healthBondShare').textContent=a.bond_share_pct===null?'н/д':num(a.bond_share_pct)+'%';
+ el('healthPrincipal').textContent=rub(a.risk_metrics.principal_known_rub);
+ const checks=el('healthChecks');checks.replaceChildren();
+ a.health.checks.forEach(c=>{let box=document.createElement('div');box.className='check-item';let h=document.createElement('div');h.className='metric-head';h.append(txt('strong',c.title),txt('span',c.score===null?'Не оценивается':num(c.score)+' / '+c.weight));box.append(h,txt('small',c.reason));checks.append(box)});
+ const findings=el('riskFindings');findings.replaceChildren();
+ if(!a.findings.length)findings.append(alertNode('Среди оценённых факторов отклонений нет. Это не означает отсутствие рисков.'));
+ a.findings.forEach(x=>{let box=document.createElement('div');box.className='check-item';box.append(txt('strong',x.title),txt('p',x.detail),txt('small',x.suggestion));findings.append(box)});
+ const quality=el('riskQuality');quality.replaceChildren();
+ if(!a.data_quality.length)quality.append(alertNode('Снимки доступны; кредитные рейтинги и отчётность эмитентов автоматически не проверяются.'));
+ a.data_quality.forEach(x=>quality.append(alertNode(x,'attention')));
+ el('riskDisclaimer').textContent=a.disclaimer;
+}
+function renderGoals(){let a=state.goals;if(!a)return;
+ const measures=el('goalMeasures');measures.replaceChildren();
+ for(let [key,name,unit] of [['portfolio_value','Стоимость портфеля','RUB'],['monthly_income','Средний доход в месяц','RUB'],['monthly_coupons','Средний купонный доход','RUB'],['bond_share','Доля облигаций','%']]){
+  let v=a.measures[key];measures.append(alertNode(name+': '+(v===null?'н/д':unit==='RUB'?rub(v):num(v)+'%')))
+ }
+ measures.append(alertNode('Полных месяцев в расчёте: '+num(a.measures.verified_months)+' / 12'));
+ const list=el('goalList');list.replaceChildren();
+ if(!a.goals.length){list.append(alertNode('Создай первую финансовую цель.'));return}
+ for(let g of a.goals){let box=document.createElement('div');box.className='goal-item';const fmt=x=>x===null?'н/д':g.unit==='RUB'?rub(x):num(x)+'%';
+ box.append(txt('strong',g.name),txt('div',g.type_label+': '+fmt(g.current)+' / '+fmt(g.target)));
+ let status={unknown:'Недостаточно данных',complete:'Достигнуто',overdue:'Срок прошёл',in_progress:'В процессе'}[g.status];
+ box.append(txt('small',status+(g.due_date?' · '+g.due_date:'')+(g.note?' · '+g.note:'')));
+ if(g.progress_pct!==null){let progress=document.createElement('div');progress.className='progress';let fill=document.createElement('span');fill.style.width=Math.min(100,Math.max(0,g.progress_pct))+'%';progress.append(fill);box.append(progress,txt('small',num(g.progress_pct)+'% от цели'))}
+ let actions=document.createElement('div');actions.className='goal-actions';let edit=txt('button','Изменить'),del=txt('button','Удалить');edit.type=del.type='button';
+ edit.addEventListener('click',()=>startGoalEdit(g));del.addEventListener('click',()=>deleteGoal(g));actions.append(edit,del);box.append(actions);list.append(box);
+ }
+}
+function startGoalEdit(g){state.editingGoal=g.id;el('goalName').value=g.name;el('goalKind').value=g.kind;el('goalTarget').value=g.target;
+ el('goalDue').value=g.due_date||'';el('goalNote').value=g.note||'';el('goalSave').textContent='Сохранить изменения';el('goalName').focus()}
+function resetGoalForm(){state.editingGoal=null;el('goalForm').reset();el('goalSave').textContent='Сохранить цель'}
+el('goalCancel').addEventListener('click',resetGoalForm);
+async function goalRequest(url,method,payload){const res=await fetch(url,{method,headers:{'Content-Type':'application/json','X-CSRF-Token':state.editorToken},body:payload?JSON.stringify(payload):undefined});
+ if(!res.ok){const data=await res.json().catch(()=>({}));throw Error(data.detail||('HTTP '+res.status))}
+ return res.status===204?null:res.json()}
+el('goalForm').addEventListener('submit',async event=>{event.preventDefault();const id=state.editingGoal;
+ const data={name:el('goalName').value,kind:el('goalKind').value,target:el('goalTarget').value,due_date:el('goalDue').value||null,note:el('goalNote').value};
+ try{await goalRequest(id?'/api/goals/'+id:'/api/goals',id?'PUT':'POST',data);resetGoalForm();state.goals=await getJson('/api/goals');renderGoals();el('goalFeedback').replaceChildren(alertNode('Цель сохранена.'))}
+ catch(e){el('goalFeedback').replaceChildren(alertNode('Ошибка: '+e.message,'attention'))}
+});
+async function deleteGoal(g){if(!confirm('Удалить цель «'+g.name+'»?'))return;
+ try{await goalRequest('/api/goals/'+g.id,'DELETE');resetGoalForm();state.goals=await getJson('/api/goals');renderGoals();el('goalFeedback').replaceChildren(alertNode('Цель удалена.'))}
+ catch(e){el('goalFeedback').replaceChildren(alertNode('Ошибка: '+e.message,'attention'))}
+}
+function editorNode(tag,label,css=''){const n=txt(tag,label);if(css)n.className=css;return n}
+const editorialStatuses={new:'Новый',draft:'Черновик',review:'На проверке',approved:'Одобрен',scheduled:'Запланирован',published:'Опубликован',rejected:'Отклонён',publishing:'Отправляется',deleted:'Удалён из очереди'};
+const editorialLabels={weekly:'Отчёт за неделю',monthly:'Отчёт за месяц',plan:'План на неделю',paper:'Бумага недели',glossary:'Ликбез',purchase:'Покупка'};
+function renderWeeklyRoutine(){
+ const data=state.routine, container=el('weeklyRoutine');container.replaceChildren();
+ if(!data){container.append(txt('p','Расписание не загружено'));return}
+ el('routineTimezone').textContent='Часовой пояс: '+data.timezone;
+ for(const day of data.weekdays){
+   const cell=document.createElement('div');cell.className='routine-day'+(day.items.length?' has-post':'');
+   cell.append(editorNode('div',day.name,'routine-weekday'));
+   if(day.items.length){for(const item of day.items){
+      cell.append(editorNode('div',item.label,'routine-topic'));
+      cell.append(editorNode('div',item.time,'routine-time'));
+   }}else cell.append(editorNode('div','Без рубрики','routine-off'));
+   container.append(cell);
+ }
+ const monthly=el('monthlyRoutine');monthly.replaceChildren();
+ monthly.append(txt('strong','📈 '+data.monthly.label+' · '+data.monthly.day+'-го числа каждого месяца'));
+ monthly.append(editorNode('span',data.monthly.time));
+ el('routineNote').textContent=data.note;
+}
+function renderContent(){
+ renderWeeklyRoutine();
+ const cal=state.contentPlan;
+ table('editorSchedule',['Дата','Рубрика','Статус'],(cal?.schedule||[]).map(x=>[x.day,x.label,x.state==='planned'?'План':(editorialStatuses[x.state]||x.state)]));
+ table('topics',['Рубрика','Тема / UID','Дата'],state.topics.map(x=>[x.kind,x.topic_key,x.created_at.slice(0,10)]));
+ const sug=el('editorSuggestions');sug.replaceChildren();
+ if(!cal){sug.append(txt('p','Контент-план пока не загружен'));return}
+ for(const p of (cal.paper_candidates||[]).slice(0,3)){
+   const wrap=editorNode('div','','editor-suggestion'),details=document.createElement('div');
+   details.append(editorNode('strong',p.name+' · '+p.ticker));details.append(editorNode('small',p.reason));
+   const btn=editorNode('button','Черновик','editor-btn');btn.type='button';btn.addEventListener('click',()=>newDraft('paper','📊 Бумага недели\n\n'+p.name+' ('+p.ticker+')\n\nЧто это за бумага: [проверить факты]\nПлюсы: [твоё мнение]\nРиски: [твоё мнение]\nПочему в портфеле / почему нет: [твоё мнение]\n\nНе инвестиционная рекомендация.'));
+   wrap.append(details,btn);sug.append(wrap);
+ }
+ for(const p of (cal.glossary_suggestions||[]).slice(0,2)){
+   const wrap=editorNode('div','','editor-suggestion'),details=document.createElement('div');
+   details.append(editorNode('strong','📚 '+p.title));details.append(editorNode('small',p.recently_used?'Недавно использовалась':'Можно разобрать для аудитории'));
+   const btn=editorNode('button','Черновик','editor-btn');btn.type='button';btn.addEventListener('click',()=>newDraft('glossary','📚 Ликбез за 2 минуты\n\n'+p.title+'\n\n[Пояснить простыми словами]\n[Пример]\n[Ограничения и риски]'));
+   wrap.append(details,btn);sug.append(wrap);
+ }
+ const queue=el('editorQueue');queue.replaceChildren();
+ const filt=state.editorFilter||'all';const drafts=state.drafts.filter(d=>filt==='all'||d.state===filt);
+ const sel=document.createElement('select');sel.className='editor-input';
+ for(const [key,value] of [['all','Все'],['new','Новые'],['review','На проверке'],['approved','Одобрены'],['scheduled','Запланированы'],['published','Опубликованы']]){const op=document.createElement('option');op.value=key;op.textContent=value;sel.append(op)}
+ sel.value=filt;sel.addEventListener('change',()=>{state.editorFilter=sel.value;renderContent()});queue.append(sel);
+ for(const d of drafts){
+   const wrapper=document.createElement('div');wrapper.className='editor-row-wrap';
+   const btn=editorNode('button',`#${d.id} · ${editorialLabels[d.kind]||d.kind}`,'editor-row');btn.type='button';
+   if(state.editorDraft?.id===d.id)btn.classList.add('active');
+   const meta=editorNode('small',`${d.period} · ${d.queued?'Ожидает отправки':(editorialStatuses[d.state]||d.state)}`);
+   btn.append(meta);btn.addEventListener('click',()=>openDraft(d.id));wrapper.append(btn);
+   if(!['published','publishing'].includes(d.state)){
+     const remove=editorNode('button','🗑','editor-delete');remove.type='button';
+     remove.setAttribute('aria-label','Удалить черновик #'+d.id+' из очереди');
+     remove.title='Удалить из редакторской очереди';
+     remove.addEventListener('click',()=>deleteEditorDraft(d));wrapper.append(remove);
+   }
+   queue.append(wrapper);
+ }
+ if(drafts.length===0)queue.append(editorNode('p','Очередь пуста.','empty'));
+ renderEditorActions();
+}
+function newDraft(kind='paper',body=''){
+ state.editorDraft=null;el('editorTitle').textContent='Новый черновик';el('editorStatus').textContent='Новый';
+ el('editorKind').disabled=false;el('editorPeriod').disabled=false;el('editorKind').value=kind;
+ el('editorPeriod').value=new Date().toISOString().slice(0,10);el('editorBody').value=body;el('editorSave').disabled=false;
+ el('editorFeedback').replaceChildren();renderEditorActions();
+}
+async function openDraft(id){try{
+ const draft=await getJson('/api/editor/drafts/'+id);state.editorDraft=draft;
+ el('editorTitle').textContent='Черновик #'+draft.id;el('editorStatus').textContent=editorialStatuses[draft.state]||draft.state;
+ el('editorKind').value=draft.kind;el('editorPeriod').value=draft.period;el('editorBody').value=draft.body;
+ el('editorKind').disabled=el('editorPeriod').disabled=true;
+ el('editorSave').disabled=['published','publishing'].includes(draft.state);
+ el('editorFeedback').replaceChildren();renderContent();
+ }catch(e){el('editorFeedback').replaceChildren(alertNode(e.message,'warning'))}}
+function renderEditorActions(){const actions=el('editorActions');actions.replaceChildren();const d=state.editorDraft;if(!d)return;
+ const make=(label,action)=>{const btn=editorNode('button',label);btn.type='button';btn.addEventListener('click',()=>performAction(action));actions.append(btn)};
+ if(['new','draft','rejected','approved','scheduled'].includes(d.state))make('🔎 На проверку','review');
+ if(['new','draft','review','scheduled'].includes(d.state))make('✅ Одобрить','approved');
+ if(['new','draft','review','approved','scheduled'].includes(d.state))make('🗑 Отклонить','rejected');
+ if(d.state==='approved'){make('🕒 Запланировать','schedule');make('📢 В очередь публикации','queue_publish')}
+ if(d.state==='scheduled')make('↩️ Отменить расписание','unschedule');
+ if(!['published','publishing','deleted'].includes(d.state)){
+   const btn=editorNode('button','🗑 Удалить из очереди');btn.type='button';
+   btn.addEventListener('click',()=>deleteEditorDraft(d));actions.append(btn);
+ }
+}
+async function deleteEditorDraft(d){
+ if(!d||['published','publishing','deleted'].includes(d.state))return;
+ if(!confirm(`Удалить черновик #${d.id} из редакторской очереди? Запланированная публикация или ожидающая отправка будут отменены.`))return;
+ try{
+   await editorRequest('/api/editor/drafts/'+d.id,'DELETE',{revision:d.revision});
+   if(state.editorDraft?.id===d.id)newDraft();
+   await refreshEditorial();
+   el('editorFeedback').replaceChildren(alertNode(`Черновик #${d.id} удалён из очереди. Публикация отменена.`));
+ }catch(e){
+   el('editorFeedback').replaceChildren(alertNode('Ошибка удаления: '+e.message,'warning'));
+   if(e.message.includes('409'))await refreshEditorial(d.id).catch(()=>{});
+ }
+}
+async function refreshEditorial(id){
+ const [drafts,plan,topics]=await Promise.all([getJson('/api/drafts'),getJson('/api/content-plan'),getJson('/api/topics')]);
+ state.drafts=drafts;state.contentPlan=plan;state.topics=topics;
+ if(id)await openDraft(id);else renderContent();
+}
+async function editorRequest(url,method,payload){const res=await fetch(url,{method,headers:{'Content-Type':'application/json','X-CSRF-Token':state.editorToken},body:JSON.stringify(payload)});
+ const json=await res.json().catch(()=>({}));if(!res.ok)throw Error(json.detail||('HTTP '+res.status));return json}
+async function performAction(action){const d=state.editorDraft;if(!d)return;
+ const payload={action,revision:d.revision};
+ if(action==='schedule'){payload.when=el('editorWhen').value;if(!payload.when){el('editorFeedback').replaceChildren(alertNode('Укажи дату и время.','warning'));return}}
+ if(action==='queue_publish'&&!confirm('Подтверди отправку этого поста в канал через работающего Telegram-бота.'))return;
+ try{await editorRequest('/api/editor/drafts/'+d.id+'/action','POST',payload);await refreshEditorial(d.id);
+ el('editorFeedback').replaceChildren(alertNode(action==='queue_publish'?'Запрос добавлен в очередь. Для отправки должен работать Telegram-бот.':'Статус обновлён.'))}
+ catch(e){el('editorFeedback').replaceChildren(alertNode('Ошибка: '+e.message,'warning'))}
+}
+el('editorNew').addEventListener('click',()=>newDraft());el('editorReset').addEventListener('click',()=>state.editorDraft?openDraft(state.editorDraft.id):newDraft());
+el('editorForm').addEventListener('submit',async event=>{event.preventDefault();const d=state.editorDraft;
+ try{const payload=d?{body:el('editorBody').value,revision:d.revision}:{kind:el('editorKind').value,period:el('editorPeriod').value,body:el('editorBody').value};
+ const row=await editorRequest(d?'/api/editor/drafts/'+d.id:'/api/editor/drafts',d?'PUT':'POST',payload);
+ await refreshEditorial(row.id);el('editorFeedback').replaceChildren(alertNode('Текст сохранён. Изменение требует повторного одобрения.'));
+ }catch(e){el('editorFeedback').replaceChildren(alertNode('Ошибка: '+e.message,'warning'))}
+});
+async function getJson(url){let response=await fetch(url,{cache:'no-store'});if(!response.ok)throw Error(url+': HTTP '+response.status);return response.json()}
+async function load(){try{
+ const [a,b,risk,goals,editor,drafts,topics,contentPlan,routine,performance]=await Promise.all([getJson('/api/overview'),getJson('/api/bonds'),getJson('/api/risk'),getJson('/api/goals'),getJson('/api/editor-token'),getJson('/api/drafts'),getJson('/api/topics'),getJson('/api/content-plan'),getJson('/api/publication-routine'),getJson('/api/performance')]);
+ if(!a.has_data||!b.has_data){throw Error(a.message||b.message||'Сначала выполни синхронизацию портфеля.')}
+ state.overview=a;state.bonds=b;state.risk=risk;state.goals=goals;state.editorToken=editor.token;state.drafts=drafts;state.topics=topics;state.contentPlan=contentPlan;state.routine=routine;state.performance=performance;
+ el('status').textContent='Снимок '+a.as_of+' · '+(a.sync?.status||'нет статуса');
+ renderOverview();renderBonds();renderCalendar();renderIncome();renderRisk();renderGoals();renderContent();renderPerformance();showPage(state.page);
+ }catch(err){el('fatal').style.display='block';el('fatal').textContent='Не удалось загрузить дашборд: '+err.message;el('status').textContent='Ошибка загрузки';}}
+window.addEventListener('load',load);
+</script></body></html>

@@ -44,7 +44,7 @@
 <body>
 <div class="shell">
 <aside class="sidebar">
- <div class="brand"><span class="emblem">◈</span>Invest <b>Blog</b><small>ANALYTICS / v1.5</small></div>
+ <div class="brand"><span class="emblem">◈</span>Invest <b>Blog</b><small>ANALYTICS / v1.5.1</small></div>
  <nav class="nav" aria-label="Разделы">
  <button data-page="overview" class="active"><span>◫</span>Обзор</button>
  <button data-page="bonds"><span>▤</span>Облигации</button>
@@ -53,6 +53,7 @@
  <button data-page="risk"><span>◈</span>Риски</button>
  <button data-page="goals"><span>◎</span>Цели</button>
  <button data-page="content"><span>✎</span>Контент</button>
+ <button data-page="placements"><span>🛰</span>Размещения</button>
  <button data-page="performance"><span>↗</span>Доходность</button>
  </nav>
  <div class="sidebar-foot">Локальный read-only дашборд.<br>Никаких торговых поручений.</div>
@@ -153,6 +154,21 @@
  <div class="card full"><h2>Доходность по периодам</h2><div class="scroll" id="perfTable"></div></div>
  <div class="card full"><h2>Принцип расчёта и ограничения</h2><div id="perfNotes"></div></div>
 </div></section>
+<section class="section" id="page-placements"><div class="grid">
+ <div class="card full">
+   <div class="panel-head"><h2>🛰️ На радаре: будущие облигации</h2><span class="badge">Проверка каждые 4 часа</span></div>
+   <p class="hint">Список сортируется по дате размещения. Источник T-Invest не гарантирует полное совпадение с вкладкой «Будущие размещения» приложения. Ставки и даты могут измениться.</p>
+   <div id="placementSources" class="note">Ожидаем сведения об источниках.</div>
+   <div class="editor-toolbar" style="margin-top:16px;flex-wrap:wrap">
+      <input id="placementSearch" class="editor-input" type="search" placeholder="Поиск по названию, тикеру или ISIN" style="max-width:360px" aria-label="Поиск размещений">
+      <button class="editor-btn" id="placementRefresh" type="button">↻ Обновить список</button>
+   </div>
+   <div id="placementsCount" class="hint"></div>
+   <div class="scroll" id="placementsTable"></div>
+   <div id="placementsFeedback"></div>
+   <p class="hint">Кнопка «Черновик» создаёт пост по нашему шаблону и добавляет его в редакторскую очередь. Для получения свежих выпусков должен работать Telegram-бот. На сайте кнопка обновляет уже сохранённую SQLite-базу, не обращаясь к брокеру напрямую.</p>
+ </div>
+</div></section>
 <section class="section" id="page-content"><div class="grid">
  <div class="card full">
    <div class="panel-head"><h2>🗓 Недельный план публикаций</h2><span class="badge" id="routineTimezone">Часовой пояс: —</span></div>
@@ -165,7 +181,7 @@
  <div class="card side"><div class="editor-toolbar"><h2>Редакторская очередь</h2><button id="editorNew" class="editor-btn" type="button">+ Новый</button></div><div id="editorQueue" class="editor-list"></div></div>
  <div class="card wide"><div class="editor-toolbar"><h2 id="editorTitle">Новый черновик</h2><span class="badge" id="editorStatus">—</span></div>
    <form id="editorForm"><div class="editor-fields">
-    <label>Рубрика<select id="editorKind" class="editor-input"><option value="weekly">Еженедельный отчёт</option><option value="monthly">Ежемесячный отчёт</option><option value="plan">План на неделю</option><option value="paper">Бумага недели</option><option value="glossary">Ликбез</option><option value="purchase">Покупка</option></select></label>
+    <label>Рубрика<select id="editorKind" class="editor-input"><option value="weekly">Еженедельный отчёт</option><option value="monthly">Ежемесячный отчёт</option><option value="plan">План на неделю</option><option value="paper">Бумага недели</option><option value="glossary">Ликбез</option><option value="purchase">Покупка</option><option value="placement">На радаре — новый выпуск</option></select></label>
     <label>Период<input id="editorPeriod" class="editor-input" maxlength="40" required placeholder="YYYY-MM-DD"></label>
    </div><label class="editor-label">Текст публикации<textarea id="editorBody" class="editor-input" maxlength="10000" required placeholder="Напиши или отредактируй пост…"></textarea></label>
    <div class="editor-buttons"><button type="submit" id="editorSave">Сохранить</button><button type="button" id="editorReset">Сбросить</button></div></form>
@@ -175,7 +191,7 @@
  </div>
  <div class="card full"><h2>История выбранных тем</h2><div class="scroll" id="topics"></div></div>
 </div></section>
-<footer>Invest Blog Assistant v1.5 · Данные T-Invest API · Только локальный доступ. Даты и прогнозные купоны могут изменяться; оценки не являются гарантией выплат или инвестиционной рекомендацией. Все финансовые показатели следует сверять с отчётом брокера.</footer>
+<footer>Invest Blog Assistant v1.5.1 · Данные T-Invest API · Только локальный доступ. Даты и прогнозные купоны могут изменяться; оценки не являются гарантией выплат или инвестиционной рекомендацией. Все финансовые показатели следует сверять с отчётом брокера.</footer>
 </main></div>
 <script>
 const el=id=>document.getElementById(id);
@@ -183,11 +199,11 @@ const rub=n=>n===null||n===undefined?'н/д':new Intl.NumberFormat('ru-RU',{styl
 const num=n=>n===null||n===undefined?'н/д':new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(n);
 const txt=(tag,value)=>{const e=document.createElement(tag);e.textContent=String(value??'—');return e};
 const COLORS=['#74bcfa','#4ed0b5','#d8a35d','#ad96ed','#eb8491','#73d3db'];
-const state={overview:null,bonds:null,risk:null,goals:null,editorToken:null,editingGoal:null,drafts:[],topics:[],contentPlan:null,editorDraft:null,page:'overview',selectedMonth:null,routine:null,performance:null,charts:{}};
+const state={overview:null,bonds:null,risk:null,goals:null,editorToken:null,editingGoal:null,drafts:[],topics:[],contentPlan:null,editorDraft:null,page:'overview',selectedMonth:null,routine:null,performance:null,placements:null,charts:{}};
 function table(id,heads,rows){let holder=el(id);let t=document.createElement('table');let h=document.createElement('tr');heads.forEach(x=>h.append(txt('th',x)));t.append(h);if(!rows.length){holder.replaceChildren(txt('p','Нет данных для таблицы.'));return;}rows.forEach(row=>{const tr=document.createElement('tr');row.forEach(value=>tr.append(txt('td',value)));t.append(tr)});holder.replaceChildren(t)}
 function alertNode(message,kind='info'){let d=txt('div',message);d.className='alert'+(kind==='attention'||kind==='warning'?' warning':'');return d}
 function currencyMap(obj){return Object.entries(obj||{}).map(([c,v])=>c==='RUB'?rub(v):num(v)+' '+c).join(' · ')||'—'}
-function showPage(page){state.page=page;document.querySelectorAll('.section').forEach(s=>s.classList.toggle('active',s.id==='page-'+page));document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));let names={overview:'Обзор портфеля',bonds:'Облигации',calendar:'Купонный календарь',income:'Фактические доходы',risk:'Здоровье портфеля',goals:'Финансовые цели',content:'Контент-план',performance:'Доходность и экспорт'};el('pageTitle').textContent=names[page];el('pageDesc').textContent=page==='calendar'?'Ожидаемые купоны по текущему количеству бумаг':page==='income'?'Исполненные выплаты, погашения и пополнения':page==='performance'?'Сравнение доходности по подтверждённым снимкам брокера':page==='bonds'?'Состав и характеристики облигационной части':'Долгосрочная структура, денежные потоки и редакторская очередь';requestAnimationFrame(()=>{renderCharts(page);if(page==='performance')renderPerformanceCharts()});}
+function showPage(page){state.page=page;if(page==='placements'&&state.placements)refreshPlacements();document.querySelectorAll('.section').forEach(s=>s.classList.toggle('active',s.id==='page-'+page));document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));let names={overview:'Обзор портфеля',bonds:'Облигации',calendar:'Купонный календарь',income:'Фактические доходы',risk:'Здоровье портфеля',goals:'Финансовые цели',content:'Контент-план',performance:'Доходность и экспорт',placements:'Будущие размещения'};el('pageTitle').textContent=names[page];el('pageDesc').textContent=page==='calendar'?'Ожидаемые купоны по текущему количеству бумаг':page==='income'?'Исполненные выплаты, погашения и пополнения':page==='performance'?'Сравнение доходности по подтверждённым снимкам брокера':page==='placements'?'Новые выпуски, сроки размещения и подготовка черновиков':page==='bonds'?'Состав и характеристики облигационной части':'Долгосрочная структура, денежные потоки и редакторская очередь';requestAnimationFrame(()=>{renderCharts(page);if(page==='performance')renderPerformanceCharts()});}
 document.querySelectorAll('.nav button').forEach(btn=>btn.addEventListener('click',()=>showPage(btn.dataset.page)));
 function fallbackChart(id,type,labels,datasets){
  const canvas=el(id),parent=canvas.parentElement;
@@ -427,7 +443,7 @@ async function deleteGoal(g){if(!confirm('Удалить цель «'+g.name+'»
 }
 function editorNode(tag,label,css=''){const n=txt(tag,label);if(css)n.className=css;return n}
 const editorialStatuses={new:'Новый',draft:'Черновик',review:'На проверке',approved:'Одобрен',scheduled:'Запланирован',published:'Опубликован',rejected:'Отклонён',publishing:'Отправляется',deleted:'Удалён из очереди'};
-const editorialLabels={weekly:'Отчёт за неделю',monthly:'Отчёт за месяц',plan:'План на неделю',paper:'Бумага недели',glossary:'Ликбез',purchase:'Покупка'};
+const editorialLabels={weekly:'Отчёт за неделю',monthly:'Отчёт за месяц',plan:'План на неделю',paper:'Бумага недели',glossary:'Ликбез',purchase:'Покупка',placement:'На радаре'};
 function renderWeeklyRoutine(){
  const data=state.routine, container=el('weeklyRoutine');container.replaceChildren();
  if(!data){container.append(txt('p','Расписание не загружено'));return}
@@ -548,13 +564,58 @@ el('editorForm').addEventListener('submit',async event=>{event.preventDefault();
  await refreshEditorial(row.id);el('editorFeedback').replaceChildren(alertNode('Текст сохранён. Изменение требует повторного одобрения.'));
  }catch(e){el('editorFeedback').replaceChildren(alertNode('Ошибка: '+e.message,'warning'))}
 });
+// v1.5.1: all untrusted source text is rendered via textContent only.
+async function refreshPlacements(){
+ try{state.placements=await getJson('/api/placements');renderPlacements()}
+ catch(err){el('placementsFeedback').replaceChildren(alertNode('Не удалось загрузить размещения: '+err.message,'warning'))}
+}
+function renderPlacements(){
+ const data=state.placements||{items:[],sources:[]};
+ const src=el('placementSources');src.replaceChildren();
+ if(!data.sources.length)src.append(txt('div','Проверки ещё не запускались. Запусти Telegram-бота или команду make placements.'));
+ else for(const s of data.sources){
+   let label=s.source==='tinvest'?'T-Invest API':s.source==='finam'?'Финам · календарь':s.source==='feed'?'Дополнительный JSON-календарь':s.source;
+   src.append(txt('div',`${label} · ${s.ok?'Успешно':'Ошибка'} · ${s.checked_at.slice(0,16).replace('T',' ')} UTC · ${s.ok?s.count+' выпусков':(s.error||'неизвестная ошибка')}`));
+ }
+ const q=el('placementSearch').value.toLocaleLowerCase('ru');
+ const entries=(data.items||[]).filter(x=>[x.name,x.ticker,x.isin].some(v=>String(v||'').toLocaleLowerCase('ru').includes(q)));
+ el('placementsCount').textContent=`Найдено: ${entries.length} из ${(data.items||[]).length} · даты размещения по возрастанию`;
+ const host=el('placementsTable');host.replaceChildren();
+ if(!entries.length){host.append(txt('p','Нет будущих размещений с такими условиями или источник пока ничего не вернул.'));return}
+ const tab=document.createElement('table'),head=document.createElement('tr');
+ ['Размещение','Выпуск / тикер','Купон','Номинал / погашение','Источник','Действие'].forEach(h=>head.append(txt('th',h)));tab.append(head);
+ for(const p of entries){
+   const tr=document.createElement('tr');
+   tr.append(txt('td',p.placement_date));
+   tr.append(txt('td',p.name+' · '+(p.ticker||p.isin||'без тикера')));
+   tr.append(txt('td',(p.coupon_type||'тип не известен')+(p.coupon_frequency?' · '+p.coupon_frequency+' раз/год':'')));
+   tr.append(txt('td',(p.nominal==null?'н/д':num(p.nominal)+' '+(p.nominal_currency||''))+' · '+(p.maturity_date||'погашение н/д')));
+   const sourceTd=document.createElement('td');
+   const sourceLabel=p.source==='tinvest'?'T-Invest':p.source==='finam'?'Финам':'Календарь';
+   if(p.source_url&&p.source!=='tinvest'&&p.source_url.startsWith('https://')){
+     const link=txt('a',sourceLabel);link.href=p.source_url;link.target='_blank';link.rel='noopener noreferrer';sourceTd.append(link);
+   }else sourceTd.append(txt('span',sourceLabel));
+   tr.append(sourceTd);
+   const td=document.createElement('td'),btn=txt('button','📝 Черновик');btn.className='editor-btn';btn.type='button';
+   btn.addEventListener('click',async()=>{btn.disabled=true;
+     try{const draft=await editorRequest('/api/placements/'+p.id+'/draft','POST',{});
+       await refreshEditorial(draft.id);showPage('content');el('editorFeedback').replaceChildren(alertNode('Черновик нового выпуска #'+draft.id+' готов. Проверь условия перед публикацией.'));
+     }catch(err){el('placementsFeedback').replaceChildren(alertNode('Ошибка: '+err.message,'warning'))}
+     finally{btn.disabled=false}
+   });td.append(btn);tr.append(td);tab.append(tr);
+ }
+ host.append(tab);
+}
+el('placementRefresh').addEventListener('click',refreshPlacements);
+el('placementSearch').addEventListener('input',renderPlacements);
 async function getJson(url){let response=await fetch(url,{cache:'no-store'});if(!response.ok)throw Error(url+': HTTP '+response.status);return response.json()}
 async function load(){try{
- const [a,b,risk,goals,editor,drafts,topics,contentPlan,routine,performance]=await Promise.all([getJson('/api/overview'),getJson('/api/bonds'),getJson('/api/risk'),getJson('/api/goals'),getJson('/api/editor-token'),getJson('/api/drafts'),getJson('/api/topics'),getJson('/api/content-plan'),getJson('/api/publication-routine'),getJson('/api/performance')]);
+ const [a,b,risk,goals,editor,drafts,topics,contentPlan,routine,performance,placements]=await Promise.all([getJson('/api/overview'),getJson('/api/bonds'),getJson('/api/risk'),getJson('/api/goals'),getJson('/api/editor-token'),getJson('/api/drafts'),getJson('/api/topics'),getJson('/api/content-plan'),getJson('/api/publication-routine'),getJson('/api/performance'),getJson('/api/placements')]);
  if(!a.has_data||!b.has_data){throw Error(a.message||b.message||'Сначала выполни синхронизацию портфеля.')}
- state.overview=a;state.bonds=b;state.risk=risk;state.goals=goals;state.editorToken=editor.token;state.drafts=drafts;state.topics=topics;state.contentPlan=contentPlan;state.routine=routine;state.performance=performance;
+ state.overview=a;state.bonds=b;state.risk=risk;state.goals=goals;state.editorToken=editor.token;state.drafts=drafts;state.topics=topics;state.contentPlan=contentPlan;state.routine=routine;state.performance=performance;state.placements=placements;
  el('status').textContent='Снимок '+a.as_of+' · '+(a.sync?.status||'нет статуса');
- renderOverview();renderBonds();renderCalendar();renderIncome();renderRisk();renderGoals();renderContent();renderPerformance();showPage(state.page);
+ renderOverview();renderBonds();renderCalendar();renderIncome();renderRisk();renderGoals();renderContent();renderPerformance();renderPlacements();showPage(state.page);
  }catch(err){el('fatal').style.display='block';el('fatal').textContent='Не удалось загрузить дашборд: '+err.message;el('status').textContent='Ошибка загрузки';}}
 window.addEventListener('load',load);
+setInterval(()=>{if(state.page==='placements')refreshPlacements()},60000);
 </script></body></html>

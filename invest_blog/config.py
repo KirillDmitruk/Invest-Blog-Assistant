@@ -37,6 +37,8 @@ class Settings:
     auto_snapshot: bool = False
     bond_target: float = .60
     max_position_weight: float = .15
+    placements_feed_url: str = ""
+    placements_finam_enabled: bool = True
 
     @classmethod
     def load(cls) -> Settings:
@@ -55,6 +57,8 @@ class Settings:
             auto_snapshot=getenv("AUTO_SNAPSHOT", "false").lower() in ("1", "true", "yes"),
             bond_target=float(getenv("BOND_TARGET", ".60")),
             max_position_weight=float(getenv("MAX_POSITION_WEIGHT", ".15")),
+            placements_feed_url=getenv("PLACEMENTS_FEED_URL", "").strip(),
+            placements_finam_enabled=getenv("PLACEMENTS_FINAM_ENABLED", "true").lower() in ("1", "true", "yes"),
             times={kind: _time(f'{kind.upper()}_TIME', f'{h:02d}:{m:02d}')
                    for kind, (h, m) in DEFAULT_TIMES.items()},
         )

@@ -14,7 +14,7 @@ from .model import money, fmt_money
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Invest Blog Assistant")
-    parser.add_argument("action", choices=("bot", "accounts", "preview", "diagnose", "sync", "web", "audit", "bonds", "backfill", "risk", "performance"))
+    parser.add_argument("action", choices=("bot", "accounts", "preview", "diagnose", "sync", "web", "audit", "bonds", "backfill", "risk", "performance", "placements"))
     parser.add_argument("kind", nargs="?", choices=("weekly", "monthly", "plan", "paper", "glossary", "purchase"))
     parser.add_argument("--date", dest="date_string", help="Локальная дата YYYY-MM-DD для preview (брокерские данные — актуальные)")
     parser.add_argument("--start", help="Начало периода YYYY-MM-DD (для diagnose)")
@@ -35,6 +35,17 @@ def main() -> None:
         print(f"Открой http://127.0.0.1:{args.port} (только локальный доступ)")
         uvicorn.run(create_app(settings.db_path, settings.bond_target,
                                settings.max_position_weight, settings.timezone, settings.times), host="127.0.0.1", port=args.port)
+        return
+    if args.action == "placements":
+        import json
+        from .placements import PlacementMonitor, PlacementStore
+        settings.validate_api()
+        store = PlacementStore(settings.db_path)
+        report = PlacementMonitor(store, TInvest(settings.invest_token, settings.timezone),
+                                  feed_url=settings.placements_feed_url, finam_enabled=settings.placements_finam_enabled).scan()
+        print(json.dumps({'scan': report, 'sources': store.status(),
+                          'upcoming': store.upcoming(datetime.now(settings.timezone).date())},
+                         ensure_ascii=False, indent=2))
         return
     if args.action == "performance":
         from .portfolio_store import PortfolioStore

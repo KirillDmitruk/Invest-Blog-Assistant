@@ -22,6 +22,7 @@ from .editorial import ContentPlanner, RUBRICS
 from .publication_schedule import recurring_schedule
 from .performance import summarize
 from .exporter import export_tables, export_zip, export_all_tables
+from .placements import PlacementStore
 
 HTML_PATH = Path(__file__).parent / 'web_static' / 'index.html'
 
@@ -33,6 +34,7 @@ def create_app(db_path: Path, bond_target: float = 0.60, max_position: float = 0
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=['127.0.0.1', 'localhost', 'testserver'])
     portfolio=PortfolioStore(db_path)
     drafts=DraftStore(db_path)
+    placements=PlacementStore(db_path)
     goals=GoalStore(portfolio)
     planner=ContentPlanner(portfolio,drafts)
     csrf_nonce=secrets.token_urlsafe(32)
@@ -231,6 +233,21 @@ def create_app(db_path: Path, bond_target: float = 0.60, max_position: float = 0
         else:
             raise HTTPException(status_code=422,detail='Неизвестное действие')
         return dict(drafts.get(draft_id))
+
+    @app.get('/api/placements')
+    def upcoming_placements():
+        now = datetime.now(timezone).date() if timezone else date.today()
+        return {'items': placements.upcoming(now), 'sources': placements.status(),
+                'timezone': str(timezone or ZoneInfo('Europe/Moscow'))}
+
+    @app.post('/api/placements/{placement_id}/draft', status_code=201)
+    def placement_to_draft(placement_id: int, request: Request):
+        require_editor(request)
+        try:
+            did = placements.create_draft(placement_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return dict(drafts.get(did))
 
     @app.get('/api/topics')
     def topics():

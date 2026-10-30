@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, Update
 from telegram.ext import (Application, ApplicationBuilder, CallbackQueryHandler,
                           CommandHandler, ContextTypes, MessageHandler, filters)
 
@@ -20,6 +20,7 @@ from .publication_schedule import WEEKLY_RULES
 from .storage import DraftStore
 from .sync import PortfolioSync
 from .tinvest import TInvest
+from .placements import PlacementStore, PlacementMonitor
 
 log = logging.getLogger(__name__)
 # Avoid the token embedded in Telegram request URLs in INFO logs.
@@ -30,6 +31,7 @@ HELP = ("🤖 Invest Blog Assistant\n\n"
         "/drafts — последние черновики; /show ID — показать\n"
         "/edit ID ТЕКСТ — заменить; /done ID — отметка ручной публикации\n"
         "/contentplan — темы и график; /queue — редакторская очередь; /cancel — отмена ввода\n"
+        "/newbonds — будущие размещения; /checkbonds — проверить сейчас\n"
         "/whoami — ID чата\n\n"
         "Кнопки: На проверку → Одобрить → Опубликовать / Запланировать.\n"
         "Для редактирования нажми кнопку или ответь на черновик новым текстом.\n"
@@ -43,6 +45,7 @@ class InvestBot:
         self.store = DraftStore(settings.db_path)
         self.portfolio_store = PortfolioStore(settings.db_path)
         self.planner = ContentPlanner(self.portfolio_store,self.store)
+        self.placements = PlacementStore(settings.db_path)
         self.scheduler = AsyncIOScheduler(timezone=settings.timezone)
 
     def _generate_sync(self, kind: str):
@@ -186,21 +189,123 @@ class InvestBot:
         self.scheduler.add_job(self.run_scheduled,CronTrigger(day=1,hour=h,minute=m,timezone=self.settings.timezone),
                                args=['monthly',app],id='monthly',max_instances=1,misfire_grace_time=3600,coalesce=True)
         self.scheduler.add_job(self.tick_scheduled,'interval',minutes=1,args=[app],id='publishing',max_instances=1,coalesce=True)
+        self.scheduler.add_job(self.run_placements,'interval',hours=4,args=[app],id='placements',
+                               max_instances=1,coalesce=True,misfire_grace_time=3600)
         if self.settings.auto_snapshot:
             self.scheduler.add_job(self.run_snapshot,CronTrigger(hour=21,minute=0,timezone=self.settings.timezone),
                                    args=[app],id='daily-snapshot',max_instances=1,coalesce=True)
         self.scheduler.start()
         asyncio.create_task(self.startup(app))
+        asyncio.create_task(self.run_placements(app))
         log.info('Бот запущен; расписание в %s', self.settings.timezone)
 
     async def post_shutdown(self, app: Application) -> None:
         if self.scheduler.running:self.scheduler.shutdown(wait=False)
 
+    def _placement_scan_sync(self):
+        api=TInvest(self.settings.invest_token,self.settings.timezone)
+        return PlacementMonitor(self.placements,api,feed_url=self.settings.placements_feed_url,
+                                finam_enabled=self.settings.placements_finam_enabled).scan()
+
+    async def run_placements(self, app: Application) -> None:
+        try:
+            result=await asyncio.to_thread(self._placement_scan_sync)
+            if result.get('busy'):
+                return
+            await self.notify_placement_updates(app)
+        except Exception:
+            log.exception('Ошибка обновления будущих размещений')
+            try:
+                await app.bot.send_message(self.settings.telegram_chat_id,
+                    '⚠️ Проверка будущих размещений не выполнена. Посмотри логи или /checkbonds.')
+            except Exception: log.exception('Не удалось уведомить о проверке размещений')
+
+    def placements_keyboard(self, page: int = 0):
+        rows=self.placements.upcoming(datetime.now(self.settings.timezone).date())
+        size=8
+        total=max(1,(len(rows)+size-1)//size)
+        page=min(max(0,page),total-1)
+        window=rows[page*size:(page+1)*size]
+        buttons=[[InlineKeyboardButton(f"{p['placement_date'][5:]} · {p['name'][:37]}",
+            callback_data=f"p:open:{p['id']}")] for p in window]
+        controls=[]
+        if page>0:controls.append(InlineKeyboardButton('◀️',callback_data=f'p:list:{page-1}'))
+        controls.append(InlineKeyboardButton(f'{page+1}/{total}',callback_data='p:noop:0'))
+        if page+1<total:controls.append(InlineKeyboardButton('▶️',callback_data=f'p:list:{page+1}'))
+        buttons.append(controls)
+        return ((f'🛰️ Будущие размещения ({len(rows)})\n'
+                 'По дате размещения. Нажми на бумагу, чтобы посмотреть условия и создать черновик.'
+                 if rows else '🛰️ В базе пока нет будущих размещений. Проверь /checkbonds. У API может не быть всех выпусков.'),
+                InlineKeyboardMarkup(buttons))
+
+    async def newbonds(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if not await self.guard(update):return
+        text,keyboard=self.placements_keyboard()
+        await update.effective_message.reply_text(text,reply_markup=keyboard)
+
+    async def checkbonds(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if not await self.guard(update):return
+        result=await asyncio.to_thread(self._placement_scan_sync)
+        if result.get('busy'):
+            await update.effective_message.reply_text('Проверка уже выполняется.');return
+        summary='; '.join(f"{s['source']}: {s.get('count', 'ошибка')}" for s in result['sources'])
+        await update.effective_message.reply_text(f'🛰️ Проверка завершена: {summary}\n/newbonds')
+        # Manual scan also uses a notification round; prevents duplicate silent announcements.
+        await self.notify_placement_updates(context.application)
+
+    async def notify_placement_updates(self, app: Application):
+        pending=self.placements.pending()
+        if not pending:return
+        names=[f"{p['placement_date']} · {p['name']}" for p in pending[:8]]
+        suffix=f"\nИ ещё {len(pending)-8} выпусков." if len(pending)>8 else ''
+        await app.bot.send_message(self.settings.telegram_chat_id,
+            f"🛰️ Новые или изменённые размещения: {len(pending)}\n"+'\n'.join(names)+suffix,
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('🛰️ Открыть список',callback_data='p:list:0')]]))
+        self.placements.mark_notified([(p['id'],p['version']) for p in pending])
+
+    async def placement_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if not await self.guard(update):return
+        q=update.callback_query
+        await q.answer()
+        try:
+            _,action,raw=q.data.split(':')
+            value=int(raw)
+        except (ValueError,AttributeError):return
+        if action=='noop':return
+        if action=='list':
+            text,keyboard=self.placements_keyboard(value)
+            await q.edit_message_text(text,reply_markup=keyboard)
+            return
+        item=self.placements.get(value)
+        if not item:
+            await q.message.reply_text('Размещение уже прошло или исчезло из последней проверки.');return
+        if action=='open':
+            from .placements import render_draft
+            text=render_draft(item)
+            keyboard=InlineKeyboardMarkup([
+                [InlineKeyboardButton('📝 Создать черновик',callback_data=f'p:draft:{value}')],
+                [InlineKeyboardButton('↩️ К списку',callback_data='p:list:0')]])
+            await q.message.reply_text(text[:3900],reply_markup=keyboard)
+        elif action=='draft':
+            did=await asyncio.to_thread(self.placements.create_draft,value)
+            await q.message.reply_text(f'✅ Черновик #{did} добавлен в редакторскую очередь.')
+            if not self.store.get(did)['sent_at']:
+                await self.send_draft(context.application,did)
+            else:
+                await q.message.reply_text(f'Черновик #{did} уже был отправлен. /show {did}')
+
+    async def button_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if not await self.guard(update):return
+        if update.effective_message.text == '🛰️ Новые размещения':
+            await self.newbonds(update,context)
+
     async def whoami(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if await self.guard(update):await update.effective_message.reply_text(f'ID чата: {update.effective_chat.id}')
 
     async def help(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        if await self.guard(update):await update.effective_message.reply_text(HELP)
+        if await self.guard(update):
+            await update.effective_message.reply_text(HELP,
+                reply_markup=ReplyKeyboardMarkup([['🛰️ Новые размещения']],resize_keyboard=True))
 
     async def generate_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not await self.guard(update):return
@@ -350,9 +455,13 @@ class InvestBot:
              .post_init(self.post_init).post_shutdown(self.post_shutdown).build())
         app.add_handler(CommandHandler(('start','help'),self.help))
         app.add_handler(CommandHandler('whoami',self.whoami))
+        app.add_handler(CommandHandler('newbonds',self.newbonds))
+        app.add_handler(CommandHandler('checkbonds',self.checkbonds))
         for kind in RUBRICS:app.add_handler(CommandHandler(kind,self.generate_command))
         for name,handler in [('drafts',self.drafts),('show',self.show),('edit',self.edit),('done',self.done),('contentplan',self.contentplan),('queue',self.queue),('cancel',self.cancel)]:
             app.add_handler(CommandHandler(name,handler))
         app.add_handler(CallbackQueryHandler(self.callback,pattern=r'^d:(review|approve|reject|edit|schedule|publish|unschedule):\d+$'))
+        app.add_handler(CallbackQueryHandler(self.placement_callback,pattern=r'^p:(list|open|draft|noop):\d+$'))
+        app.add_handler(MessageHandler(filters.Regex(r'^🛰️ Новые размещения$') & filters.TEXT,self.button_menu))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND,self.reply_edit))
         app.run_polling(drop_pending_updates=False)

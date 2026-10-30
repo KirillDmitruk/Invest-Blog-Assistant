@@ -12,7 +12,7 @@ from datetime import date, datetime, timedelta
 from .posts import TERMS, current_week, previous_month, previous_workweek
 from .publication_schedule import LABELS, WEEKLY_RULES
 
-RUBRICS = ('weekly', 'monthly', 'plan', 'paper', 'glossary', 'purchase')
+RUBRICS = ('weekly', 'monthly', 'plan', 'paper', 'glossary', 'purchase', 'placement')
 
 
 
