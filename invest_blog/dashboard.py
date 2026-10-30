@@ -24,6 +24,7 @@ from .performance import summarize
 from .exporter import export_tables, export_zip, export_all_tables
 from .placements import PlacementStore
 from .tech_store import TechDraftStore
+from .tech_news import TechNewsStore, CATEGORY_LABELS
 
 HTML_PATH = Path(__file__).parent / 'web_static' / 'index.html'
 
@@ -31,11 +32,12 @@ HTML_PATH = Path(__file__).parent / 'web_static' / 'index.html'
 def create_app(db_path: Path, bond_target: float = 0.60, max_position: float = 0.15,
                timezone: ZoneInfo | None = None,
                times: dict[str, tuple[int, int]] | None = None) -> FastAPI:
-    app = FastAPI(title='Content Hub v2.0.0', docs_url=None, redoc_url=None, openapi_url=None)
+    app = FastAPI(title='Content Hub v2.0.1', docs_url=None, redoc_url=None, openapi_url=None)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=['127.0.0.1', 'localhost', 'testserver'])
     portfolio=PortfolioStore(db_path)
     drafts=DraftStore(db_path)
     tech_drafts=TechDraftStore(db_path)
+    tech_news=TechNewsStore(db_path)
     placements=PlacementStore(db_path)
     goals=GoalStore(portfolio)
     planner=ContentPlanner(portfolio,drafts)
@@ -59,8 +61,36 @@ def create_app(db_path: Path, bond_target: float = 0.60, max_position: float = 0
     def projects():
         return {'projects':[{'id':'invest','name':'Инвестиции','enabled':True},
                             {'id':'tech','name':'Tech & Gadgets','enabled':True}],
-                'tech':{'drafts':len(tech_drafts.list_recent()), 'news_collection':False,
+                'tech':{'drafts':len(tech_drafts.list_recent()), 'news_collection':True,
                         'ai_enabled':False,'publishing_enabled':False}}
+
+    @app.get('/api/tech/news')
+    def tech_news_list(category: str | None = None, status: str | None = None):
+        try: return {'items':tech_news.list_news(category=category,status=status),
+                     'stats':tech_news.stats(),'categories':CATEGORY_LABELS,'sources':tech_news.sources()}
+        except ValueError as exc: raise HTTPException(422,str(exc)) from exc
+
+    @app.post('/api/tech/news/{news_id}/action')
+    async def tech_news_action(news_id:int,request:Request):
+        require_editor(request)
+        payload=await request.json()
+        if not isinstance(payload,dict): raise HTTPException(422,'Ожидается объект')
+        item=tech_news.get(news_id)
+        if not item: raise HTTPException(404,'Новость не найдена')
+        action=payload.get('action')
+        if action=='draft':
+            # News descriptions are source metadata, not independently verified facts.
+            # No AI paraphrase or fabricated analysis; owner edits the result.
+            body=(f"{item['title']}\n\n"
+                  f"[Перескажи новость своими словами после проверки оригинала.]\n\n"
+                  f"Источник: {item['source']} — {item['url']}")
+            draft_id=tech_drafts.create(item['title'][:150],body,item['url'])
+            tech_news.mark(news_id,'saved')
+            return {'draft':tech_drafts.get(draft_id)}
+        if action in ('dismissed','new'):
+            tech_news.mark(news_id,action)
+            return {'status':action}
+        raise HTTPException(422,'Неизвестное действие')
 
     @app.get('/api/tech/drafts')
     def tech_list():

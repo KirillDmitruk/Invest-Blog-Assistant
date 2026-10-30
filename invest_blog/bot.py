@@ -21,6 +21,7 @@ from .storage import DraftStore
 from .sync import PortfolioSync
 from .tinvest import TInvest
 from .placements import PlacementStore, PlacementMonitor
+from .tech_news import TechNewsStore, TechNewsCollector
 
 log = logging.getLogger(__name__)
 # Avoid the token embedded in Telegram request URLs in INFO logs.
@@ -46,6 +47,7 @@ class InvestBot:
         self.portfolio_store = PortfolioStore(settings.db_path)
         self.planner = ContentPlanner(self.portfolio_store,self.store)
         self.placements = PlacementStore(settings.db_path)
+        self.tech_news = TechNewsStore(settings.db_path)
         self.scheduler = AsyncIOScheduler(timezone=settings.timezone)
 
     def _generate_sync(self, kind: str):
@@ -191,13 +193,24 @@ class InvestBot:
         self.scheduler.add_job(self.tick_scheduled,'interval',minutes=1,args=[app],id='publishing',max_instances=1,coalesce=True)
         self.scheduler.add_job(self.run_placements,'interval',hours=4,args=[app],id='placements',
                                max_instances=1,coalesce=True,misfire_grace_time=3600)
+        self.scheduler.add_job(self.run_tech_news,'interval',hours=2,args=[app],id='tech-rss',
+                               max_instances=1,coalesce=True,misfire_grace_time=3600)
         if self.settings.auto_snapshot:
             self.scheduler.add_job(self.run_snapshot,CronTrigger(hour=21,minute=0,timezone=self.settings.timezone),
                                    args=[app],id='daily-snapshot',max_instances=1,coalesce=True)
         self.scheduler.start()
         asyncio.create_task(self.startup(app))
         asyncio.create_task(self.run_placements(app))
+        asyncio.create_task(self.run_tech_news(app))
         log.info('Бот запущен; расписание в %s', self.settings.timezone)
+
+    async def run_tech_news(self, app: Application) -> None:
+        import asyncio
+        try:
+            report=await asyncio.to_thread(TechNewsCollector(self.tech_news).scan)
+            log.info('Tech RSS checked: %s',report)
+        except Exception:
+            log.exception('Ошибка автоматического сбора Tech RSS')
 
     async def post_shutdown(self, app: Application) -> None:
         if self.scheduler.running:self.scheduler.shutdown(wait=False)

@@ -14,7 +14,7 @@ from .model import money, fmt_money
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Invest Blog Assistant")
-    parser.add_argument("action", choices=("bot", "accounts", "preview", "diagnose", "sync", "web", "audit", "bonds", "backfill", "risk", "performance", "placements"))
+    parser.add_argument("action", choices=("bot", "accounts", "preview", "diagnose", "sync", "web", "audit", "bonds", "backfill", "risk", "performance", "placements", "tech-news"))
     parser.add_argument("kind", nargs="?", choices=("weekly", "monthly", "plan", "paper", "glossary", "purchase"))
     parser.add_argument("--date", dest="date_string", help="Локальная дата YYYY-MM-DD для preview (брокерские данные — актуальные)")
     parser.add_argument("--start", help="Начало периода YYYY-MM-DD (для diagnose)")
@@ -35,6 +35,13 @@ def main() -> None:
         print(f"Открой http://127.0.0.1:{args.port} (только локальный доступ)")
         uvicorn.run(create_app(settings.db_path, settings.bond_target,
                                settings.max_position_weight, settings.timezone, settings.times), host="127.0.0.1", port=args.port)
+        return
+    if args.action == "tech-news":
+        import json
+        from .tech_news import TechNewsStore, TechNewsCollector
+        store=TechNewsStore(settings.db_path)
+        report=TechNewsCollector(store).scan()
+        print(json.dumps({'scan':report,'stats':store.stats()},ensure_ascii=False,indent=2))
         return
     if args.action == "placements":
         import json
