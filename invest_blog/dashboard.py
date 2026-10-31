@@ -5,7 +5,7 @@ from pathlib import Path
 import secrets
 
 from fastapi import HTTPException, Request
-from datetime import date, datetime, timezone as dt_timezone
+from datetime import date, datetime, timedelta, timezone as dt_timezone
 from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI
@@ -24,6 +24,7 @@ from .publication_schedule import recurring_schedule
 from .performance import summarize
 from .exporter import export_tables, export_zip, export_all_tables
 from .placements import PlacementStore
+from .creator_studio import CreatorStore, PROJECTS, STATUSES
 from .tech_store import TechDraftStore
 from .tech_news import TechNewsStore, CATEGORY_LABELS
 from .posts import PostGenerator, previous_workweek
@@ -42,6 +43,7 @@ def create_app(db_path: Path, bond_target: float = 0.60, max_position: float = 0
     portfolio=PortfolioStore(db_path)
     drafts=DraftStore(db_path)
     tech_drafts=TechDraftStore(db_path)
+    creator=CreatorStore(db_path)
     tech_news=TechNewsStore(db_path)
     placements=PlacementStore(db_path)
     goals=GoalStore(portfolio)
@@ -69,6 +71,33 @@ def create_app(db_path: Path, bond_target: float = 0.60, max_position: float = 0
                             {'id':'tech','name':'Tech & Gadgets','enabled':True}],
                 'tech':{'drafts':len(tech_drafts.list_recent()), 'news_collection':True,
                         'ai_enabled':False,'publishing_enabled':False}}
+
+    @app.get('/api/creator/studio')
+    def creator_studio(start: str | None = None):
+        try:
+            anchor=date.fromisoformat(start) if start else datetime.now(timezone or ZoneInfo('Europe/Moscow')).date()
+        except ValueError as exc:
+            raise HTTPException(422,'Неверная дата') from exc
+        return {'projects': [{'id':key,'name':v[0],'subtitle':v[1],'description':v[2]} for key,v in PROJECTS.items()],
+                'statuses': list(STATUSES), 'posts':creator.list(anchor-timedelta(days=anchor.weekday()))}
+
+    @app.post('/api/creator/seed')
+    async def creator_seed(request: Request):
+        require_editor(request)
+        payload=await request.json()
+        try: anchor=date.fromisoformat(payload.get('start',date.today().isoformat()))
+        except (ValueError,TypeError,AttributeError) as exc: raise HTTPException(422,'Неверная дата') from exc
+        return {'created':creator.seed(anchor)}
+
+    @app.put('/api/creator/posts/{post_id}')
+    async def creator_update(post_id:int,request:Request):
+        require_editor(request)
+        data=await request.json()
+        if not isinstance(data,dict): raise HTTPException(422,'Ожидается объект')
+        try: result=creator.update(post_id,data)
+        except (ValueError,TypeError) as exc: raise HTTPException(422,str(exc)) from exc
+        if result is None: raise HTTPException(409,'План изменён или запись не найдена')
+        return result
 
     @app.get('/api/tech/news')
     def tech_news_list(category: str | None = None, status: str | None = None):

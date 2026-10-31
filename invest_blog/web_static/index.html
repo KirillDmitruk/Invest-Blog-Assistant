@@ -41,6 +41,13 @@
 
 .nav-label{font-size:10px;letter-spacing:1.3px;color:#617f9b;padding:11px 12px 2px}
 .hub-welcome{margin-bottom:22px}.hub-projects{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-bottom:24px}.hub-project{cursor:pointer;text-align:left;border:1px solid #2a4b65;background:linear-gradient(140deg,#162b3e,#101b2b);border-radius:18px;padding:29px 22px;min-height:190px;display:flex;flex-direction:column;align-items:flex-start;gap:14px;color:var(--text);font:inherit}.hub-project:hover{border-color:#74bcfa;background:#1a354d}.hub-project strong{font-size:22px}.hub-project span{font-size:14px;color:#9ab4c9;line-height:1.5}.hub-project em{font-style:normal;color:#7dbdec;margin-top:auto}.tech-entry{border-bottom:1px solid #253f55;padding:12px 0}.tech-entry button{margin-right:7px}@media(max-width:700px){.hub-projects{grid-template-columns:1fr}}
+
+.creator-projects{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.creator-project{border:1px solid #32536e;border-radius:13px;background:#132a40;padding:17px;min-width:0}
+.creator-project strong{display:block;font-size:16px;margin-bottom:8px}.creator-project p{color:#99b4ca;font-size:12px;line-height:1.5}
+.creator-entry{border:1px solid #2c4962;border-radius:12px;padding:12px;background:#11263a;display:flex;justify-content:space-between;gap:12px;align-items:center;margin:8px 0}
+.creator-entry button{background:#1b425e;color:#e3f4ff;border:1px solid #3b708f;border-radius:9px;padding:8px 11px;cursor:pointer}
+@media(max-width:760px){.creator-projects{grid-template-columns:1fr}.creator-entry{align-items:flex-start;flex-direction:column}}
 </style>
 </head>
 <body>
@@ -62,6 +69,7 @@
  <button data-page="performance"><span>↗</span>Доходность</button>
  <div class="nav-label">TECH & GADGETS</div>
  <button data-page="tech"><span>⚙</span>Обзор и редактор</button>
+ <button data-page="creator"><span>🎬</span>Creator Studio</button>
  </nav>
  <div class="sidebar-foot">Локальный read-only дашборд.<br>Никаких торговых поручений.</div>
 </aside>
@@ -74,7 +82,7 @@
   <button class="hub-project" type="button" data-target="overview"><strong>◈ Инвестиции</strong><span>Портфель, доходность, новые облигации и публикации</span><em>Перейти к аналитике →</em></button>
   <button class="hub-project" type="button" data-target="tech"><strong>⚙ Tech &amp; Gadgets</strong><span>Технологический блог, собственные проекты и отдельная редакторская очередь</span><em>Открыть редактор →</em></button>
  </div>
- <div class="note">v2.0.1 — Tech RSS-лента подключена. AI-редактор и отправка в VK появятся в следующих этапах.</div>
+ <div class="note">v2.0.1 — Tech RSS-лента и Creator Studio подключены. AI-редактор и отправка в VK появятся в следующих этапах.</div>
 </section>
 <section class="section" id="page-tech">
  <div class="grid">
@@ -95,6 +103,15 @@
     </form><div id="techFeedback"></div>
   </div>
   <div class="card half"><h2>Редакторская очередь</h2><div id="techDrafts"></div></div>
+ </div>
+</section>
+<section class="section" id="page-creator">
+ <div class="grid">
+  <div class="card full"><h2>Kir in Tech · Creator Studio</h2><p class="hint">Instagram + TikTok · 3 публикации в неделю: Пн — процесс создания, Ср — образовательная карусель, Пт — лёгкий атмосферный ролик. Публикуешь вручную.</p></div>
+  <div class="card full"><h2>Мои проекты</h2><div class="creator-projects" id="creatorProjects"></div></div>
+  <div class="card full"><div class="toolbar"><h2>Контент-план на четыре недели</h2><button type="button" id="creatorSeed">Подготовить 12 идей</button></div><p class="hint">Кнопка заполнит только пустые даты — твои изменения не перезапишутся. Расписание привязано к понедельнику текущей недели.</p><div id="creatorFeedback"></div><div id="creatorCalendar"></div></div>
+  <div class="card half"><h2>Редактор публикации</h2><form id="creatorForm"><input type="hidden" id="creatorId"><label class="editor-label">Название<input class="editor-input" id="creatorTitle" maxlength="160" required></label><label class="editor-label">Проект<select class="editor-input" id="creatorProject"><option value="nova">NOVA</option><option value="helmet">Шлем Железного человека</option><option value="spider">Робо-паук</option></select></label><label class="editor-label">Этап<select class="editor-input" id="creatorStatus"><option value="idea">Идея</option><option value="script">Сценарий</option><option value="shooting">Съёмка</option><option value="editing">Монтаж</option><option value="ready">Готово</option><option value="published">Опубликовано</option></select></label><label class="editor-label">Заметки / кадры / слайды<textarea class="editor-input" id="creatorNotes" maxlength="6000" placeholder="Что показать, какие кадры снять, какие слайды подготовить..."></textarea></label><div class="editor-buttons"><button type="submit">Сохранить</button></div></form></div>
+  <div class="card half"><h2>План недели</h2><div id="creatorWeek"></div><p class="hint">Пятничный ролик может быть просто атмосферой: смотришь сериал, собираешь шлем, программируешь NOVA — без обязательного обучающего сюжета.</p></div>
  </div>
 </section>
 <section class="section" id="page-allocation">
@@ -294,7 +311,7 @@ const state={overview:null,bonds:null,risk:null,goals:null,editorToken:null,edit
 function table(id,heads,rows){let holder=el(id);let t=document.createElement('table');let h=document.createElement('tr');heads.forEach(x=>h.append(txt('th',x)));t.append(h);if(!rows.length){holder.replaceChildren(txt('p','Нет данных для таблицы.'));return;}rows.forEach(row=>{const tr=document.createElement('tr');row.forEach(value=>tr.append(txt('td',value)));t.append(tr)});holder.replaceChildren(t)}
 function alertNode(message,kind='info'){let d=txt('div',message);d.className='alert'+(kind==='attention'||kind==='warning'?' warning':'');return d}
 function currencyMap(obj){return Object.entries(obj||{}).map(([c,v])=>c==='RUB'?rub(v):num(v)+' '+c).join(' · ')||'—'}
-function showPage(page){state.page=page;if(page==='placements'&&state.placements)refreshPlacements();document.querySelectorAll('.section').forEach(s=>s.classList.toggle('active',s.id==='page-'+page));document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));let names={overview:'Обзор портфеля',bonds:'Облигации',calendar:'Купонный календарь',income:'Фактические доходы',risk:'Здоровье портфеля',goals:'Финансовые цели',allocation:'Распределение средств',content:'Контент-план',performance:'Доходность и экспорт',placements:'Будущие размещения',home:'Content Hub',tech:'Tech & Gadgets'};el('pageTitle').textContent=names[page]||'Content Hub';el('pageDesc').textContent=page==='calendar'?'Ожидаемые купоны по текущему количеству бумаг':page==='income'?'Исполненные выплаты, погашения и пополнения':page==='performance'?'Сравнение доходности по подтверждённым снимкам брокера':page==='placements'?'Новые выпуски, сроки размещения и подготовка черновиков':page==='bonds'?'Состав и характеристики облигационной части':'Долгосрочная структура, денежные потоки и редакторская очередь';requestAnimationFrame(()=>{renderCharts(page);if(page==='performance')renderPerformanceCharts()});}
+function showPage(page){state.page=page;if(page==='placements'&&state.placements)refreshPlacements();if(page==='creator')refreshCreator();document.querySelectorAll('.section').forEach(s=>s.classList.toggle('active',s.id==='page-'+page));document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));let names={overview:'Обзор портфеля',bonds:'Облигации',calendar:'Купонный календарь',income:'Фактические доходы',risk:'Здоровье портфеля',goals:'Финансовые цели',allocation:'Распределение средств',content:'Контент-план',performance:'Доходность и экспорт',placements:'Будущие размещения',home:'Content Hub',tech:'Tech & Gadgets',creator:'Creator Studio'};el('pageTitle').textContent=names[page]||'Content Hub';el('pageDesc').textContent=page==='calendar'?'Ожидаемые купоны по текущему количеству бумаг':page==='income'?'Исполненные выплаты, погашения и пополнения':page==='performance'?'Сравнение доходности по подтверждённым снимкам брокера':page==='placements'?'Новые выпуски, сроки размещения и подготовка черновиков':page==='bonds'?'Состав и характеристики облигационной части':'Долгосрочная структура, денежные потоки и редакторская очередь';requestAnimationFrame(()=>{renderCharts(page);if(page==='performance')renderPerformanceCharts()});}
 document.querySelectorAll('.nav button').forEach(btn=>btn.addEventListener('click',()=>showPage(btn.dataset.page)));
 document.querySelectorAll('.hub-project').forEach(btn=>btn.addEventListener('click',()=>showPage(btn.dataset.target)));
 
@@ -934,6 +951,29 @@ function renderPlacements(){
 el('placementRefresh').addEventListener('click',refreshPlacements);
 el('placementSearch').addEventListener('input',renderPlacements);
 async function getJson(url){let response=await fetch(url,{cache:'no-store'});if(!response.ok)throw Error(url+': HTTP '+response.status);return response.json()}
+
+
+// Creator Studio is a manual planning tool, isolated from RSS/news and investment drafts.
+const creatorLabels={idea:'Идея',script:'Сценарий',shooting:'Съёмка',editing:'Монтаж',ready:'Готово',published:'Опубликовано'};
+const creatorDays=['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
+let creatorData=null,creatorSelected=null;
+const creatorDate=d=>new Date(d+'T12:00:00');
+async function refreshCreator(){
+ try{
+  creatorData=await getJson('/api/creator/studio');
+  const projects=el('creatorProjects');projects.replaceChildren();
+  for(const p of creatorData.projects){const card=document.createElement('div');card.className='creator-project';card.append(txt('strong',p.name),txt('p',p.subtitle),txt('p',p.description));projects.append(card)}
+  const host=el('creatorCalendar');host.replaceChildren();
+  const rows=creatorData.posts;
+  if(!rows.length)host.append(txt('p','Пока нет плана. Нажми «Подготовить 12 идей».'));
+  for(const row of rows){const card=document.createElement('div');card.className='creator-entry';const info=document.createElement('div');const day=creatorDate(row.publish_date);const project=creatorData.projects.find(p=>p.id===row.project);info.append(txt('strong',row.title),txt('p',`${creatorDays[day.getDay()]} · ${row.publish_date} · ${project?.name||row.project} · ${row.format==='carousel'?'Карусель':row.format==='maker_vibe'?'Лёгкое видео':'Процесс разработки'} · ${creatorLabels[row.status]}`));const button=txt('button','Открыть');button.type='button';button.addEventListener('click',()=>openCreator(row));card.append(info,button);host.append(card)}
+  const week=el('creatorWeek');week.replaceChildren();const weekRows=rows.slice(0,3);
+  for(const row of weekRows){const d=creatorDate(row.publish_date);const item=document.createElement('div');item.className='creator-entry';item.append(txt('strong',`${creatorDays[d.getDay()]} — ${row.title}`),txt('span',creatorLabels[row.status]));week.append(item)}
+ }catch(e){el('creatorFeedback').replaceChildren(alertNode('Creator Studio: '+e.message,'warning'))}
+}
+function openCreator(post){creatorSelected=post;el('creatorId').value=post.id;el('creatorTitle').value=post.title;el('creatorProject').value=post.project;el('creatorStatus').value=post.status;el('creatorNotes').value=post.notes;el('creatorForm').scrollIntoView({behavior:'smooth',block:'center'})}
+el('creatorSeed').addEventListener('click',async()=>{try{const result=await editorRequest('/api/creator/seed','POST',{start:new Date().toLocaleDateString('en-CA')});el('creatorFeedback').replaceChildren(alertNode(`Добавлено публикаций: ${result.created}. Уже существующие идеи сохранены.`));await refreshCreator()}catch(e){el('creatorFeedback').replaceChildren(alertNode(e.message,'warning'))}});
+el('creatorForm').addEventListener('submit',async event=>{event.preventDefault();if(!creatorSelected)return alert('Выбери запись в календаре');try{const payload={revision:creatorSelected.revision,title:el('creatorTitle').value,project:el('creatorProject').value,status:el('creatorStatus').value,notes:el('creatorNotes').value};const result=await editorRequest('/api/creator/posts/'+creatorSelected.id,'PUT',payload);creatorSelected=result;el('creatorFeedback').replaceChildren(alertNode('Публикация сохранена'));await refreshCreator()}catch(e){el('creatorFeedback').replaceChildren(alertNode(e.message,'warning'))}});
 
 async function refreshTechNews(){
  const host=el('techNewsList');const sources=el('techNewsSources');
