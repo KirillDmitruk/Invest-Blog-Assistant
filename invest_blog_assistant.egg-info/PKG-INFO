@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: invest-blog-assistant
-Version: 2.0.1
+Version: 2.4
 Summary: Read-only T-Invest portfolio analytics and Telegram editorial drafts
 Requires-Python: >=3.11
 Requires-Dist: requests<3,>=2.31

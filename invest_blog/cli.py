@@ -14,7 +14,7 @@ from .model import money, fmt_money
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Invest Blog Assistant")
-    parser.add_argument("action", choices=("bot", "accounts", "preview", "diagnose", "sync", "web", "audit", "bonds", "backfill", "risk", "performance", "placements", "tech-news"))
+    parser.add_argument("action", choices=("bot", "accounts", "preview", "diagnose", "sync", "web", "audit", "bonds", "backfill", "risk", "performance", "placements", "tech-news", "vk-test"))
     parser.add_argument("kind", nargs="?", choices=("weekly", "monthly", "plan", "paper", "glossary", "purchase"))
     parser.add_argument("--date", dest="date_string", help="Локальная дата YYYY-MM-DD для preview (брокерские данные — актуальные)")
     parser.add_argument("--start", help="Начало периода YYYY-MM-DD (для diagnose)")
@@ -22,9 +22,24 @@ def main() -> None:
     parser.add_argument("--days", type=int, default=365, help="Для sync: глубина импорта исполненных операций")
     parser.add_argument("--port", type=int, default=8000, help="Для web: порт localhost")
     parser.add_argument("--partial", action="store_true", help="Для backfill: восстановить только подтверждённую часть истории")
+    parser.add_argument("--publish", action="store_true", help="Для vk-test: действительно отправить тестовый пост")
+    parser.add_argument("--confirm", default="", help="Для vk-test: подтверждение словом PUBLISH")
     args = parser.parse_args()
     settings = Settings.load()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    if args.action == "vk-test":
+        from .vk_publisher import VKConfig, VKPublisher
+        cfg = VKConfig.from_env()
+        message = "Тестовая публикация Content Hub — проверка подключения Kir in Tech News."
+        if not args.publish:
+            print("VK: тестовый режим. Отправки нет.\n" + message)
+            print("Для отправки: uv run python -m invest_blog.cli vk-test --publish --confirm PUBLISH")
+            return
+        if args.confirm != "PUBLISH":
+            parser.error("Для тестовой отправки требуется --confirm PUBLISH")
+        url = VKPublisher(cfg).publish(message, guid="content-hub-vk-connectivity-test-v1")
+        print("Опубликовано:", url)
+        return
     if args.action == "bot":
         from .bot import InvestBot
         InvestBot(settings).run()
