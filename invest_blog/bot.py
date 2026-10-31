@@ -219,6 +219,12 @@ class InvestBot:
                                args=[app],id='radar-daily',max_instances=1,coalesce=True)
         self.scheduler.add_job(self.run_placements,'interval',hours=4,args=[app],id='placements',
                                max_instances=1,coalesce=True,misfire_grace_time=3600)
+        import os
+        if os.getenv('VK_AUTO_PUBLISH','false').lower() in ('1','true','yes'):
+            for i,slot in enumerate(os.getenv('VK_NEWS_TIMES','10:00,13:00,16:00,19:00').split(',')):
+                h,m=map(int,slot.strip().split(':'))
+                self.scheduler.add_job(self.run_vk_news,CronTrigger(hour=h,minute=m,timezone=self.settings.timezone),
+                                       id=f'vk-news-{i}',max_instances=1,coalesce=True,misfire_grace_time=600)
         self.scheduler.add_job(self.run_tech_news,'interval',hours=2,args=[app],id='tech-rss',
                                max_instances=1,coalesce=True,misfire_grace_time=3600)
         if self.settings.auto_snapshot:
@@ -237,6 +243,14 @@ class InvestBot:
             log.info('Tech RSS checked: %s',report)
         except Exception:
             log.exception('Ошибка автоматического сбора Tech RSS')
+
+    async def run_vk_news(self) -> None:
+        from .vk_news import run
+        try:
+            result=await asyncio.to_thread(run,self.settings.db_path,self.settings.timezone,publish=True,limit=1)
+            log.info('VK news publish result: %s',result)
+        except Exception:
+            log.exception('VK news publish failed')
 
     async def post_shutdown(self, app: Application) -> None:
         if self.scheduler.running:self.scheduler.shutdown(wait=False)

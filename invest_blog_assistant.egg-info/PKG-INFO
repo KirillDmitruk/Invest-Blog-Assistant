@@ -9,5 +9,6 @@ Requires-Dist: APScheduler<4,>=3.10
 Requires-Dist: python-dotenv<2,>=1
 Requires-Dist: fastapi<1,>=0.115
 Requires-Dist: uvicorn<1,>=0.30
+Requires-Dist: argostranslate>=1.11.0
 Provides-Extra: dev
 Requires-Dist: pytest<10,>=8; extra == "dev"

@@ -14,7 +14,7 @@ from .model import money, fmt_money
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Invest Blog Assistant")
-    parser.add_argument("action", choices=("bot", "accounts", "preview", "diagnose", "sync", "web", "audit", "bonds", "backfill", "risk", "performance", "placements", "tech-news", "vk-test"))
+    parser.add_argument("action", choices=("bot", "accounts", "preview", "diagnose", "sync", "web", "audit", "bonds", "backfill", "risk", "performance", "placements", "tech-news", "vk-test", "vk-news"))
     parser.add_argument("kind", nargs="?", choices=("weekly", "monthly", "plan", "paper", "glossary", "purchase"))
     parser.add_argument("--date", dest="date_string", help="Локальная дата YYYY-MM-DD для preview (брокерские данные — актуальные)")
     parser.add_argument("--start", help="Начало периода YYYY-MM-DD (для diagnose)")
@@ -24,9 +24,17 @@ def main() -> None:
     parser.add_argument("--partial", action="store_true", help="Для backfill: восстановить только подтверждённую часть истории")
     parser.add_argument("--publish", action="store_true", help="Для vk-test: действительно отправить тестовый пост")
     parser.add_argument("--confirm", default="", help="Для vk-test: подтверждение словом PUBLISH")
+    parser.add_argument("--limit", type=int, default=1, help="vk-news: от 1 до 4")
     args = parser.parse_args()
     settings = Settings.load()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    if args.action == "vk-news":
+        from .vk_news import run
+        import json
+        if args.publish and args.confirm != "PUBLISH":
+            parser.error("Нужно --confirm PUBLISH")
+        print(json.dumps(run(settings.db_path,settings.timezone,publish=args.publish,limit=args.limit),ensure_ascii=False,indent=2))
+        return
     if args.action == "vk-test":
         from .vk_publisher import VKConfig, VKPublisher
         cfg = VKConfig.from_env()

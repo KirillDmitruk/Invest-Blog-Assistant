@@ -26,6 +26,7 @@ invest_blog/sync.py
 invest_blog/tech_news.py
 invest_blog/tech_store.py
 invest_blog/tinvest.py
+invest_blog/vk_news.py
 invest_blog/vk_publisher.py
 invest_blog/web_static/index.html
 invest_blog_assistant.egg-info/PKG-INFO
@@ -57,4 +58,5 @@ tests/test_v151.py
 tests/test_v152.py
 tests/test_v200.py
 tests/test_v201.py
+tests/test_vk_news.py
 tests/test_vk_publisher.py
