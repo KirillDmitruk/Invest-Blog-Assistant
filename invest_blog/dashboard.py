@@ -18,13 +18,18 @@ from .storage import DraftStore
 from .bond_analytics import get_bond_analytics
 from .risk import analyze_portfolio
 from .goals import GoalStore, evaluate_goals
-from .editorial import ContentPlanner, RUBRICS
+from .editorial import ContentPlanner, RUBRICS, period_for
+from .editorial_workflow import EditorialWorkflow
 from .publication_schedule import recurring_schedule
 from .performance import summarize
 from .exporter import export_tables, export_zip, export_all_tables
 from .placements import PlacementStore
 from .tech_store import TechDraftStore
 from .tech_news import TechNewsStore, CATEGORY_LABELS
+from .posts import PostGenerator, previous_workweek
+from .tinvest import TInvest
+from .config import Settings
+from .model import Draft
 
 HTML_PATH = Path(__file__).parent / 'web_static' / 'index.html'
 
@@ -41,6 +46,7 @@ def create_app(db_path: Path, bond_target: float = 0.60, max_position: float = 0
     placements=PlacementStore(db_path)
     goals=GoalStore(portfolio)
     planner=ContentPlanner(portfolio,drafts)
+    workflow=EditorialWorkflow(db_path)
     csrf_nonce=secrets.token_urlsafe(32)
 
     def require_editor(request: Request):
@@ -221,7 +227,102 @@ def create_app(db_path: Path, bond_target: float = 0.60, max_position: float = 0
     @app.get('/api/content-plan')
     def content_plan():
         now = datetime.now(timezone).date() if timezone else date.today()
-        return planner.overview(now)
+        result=planner.overview(now)
+        # Radar is event-driven, not a weekly slot. Do not offer old securities or stale listings.
+        issues=placements.upcoming(now,limit=100)
+        ranked=[]
+        with drafts._connect() as db:
+            ids={r['placement_id']:r['draft_id'] for r in db.execute(
+                "SELECT p.placement_id,p.draft_id FROM placement_drafts p JOIN drafts d ON d.id=p.draft_id WHERE d.state!='deleted'")}
+        seen=set()
+        for issue in issues:
+            key=(issue.get('isin') or issue.get('name') or '').strip().upper()
+            if not key or key in seen:continue
+            seen.add(key)
+            ranked.append({'id':issue['id'],'name':issue['name'],'isin':issue.get('isin'),
+                  'placement_date':issue['placement_date'],'source_label':issue.get('source','источник'),
+                  'draft_id':ids.get(issue['id'])})
+            if len(ranked)>=8:break
+        result['radar_suggestions']=ranked
+        result['paper_candidates']=[]  # Old technical "recent buy/coupon" tips are intentionally hidden.
+        return result
+
+    @app.post('/api/editor/calendar-draft', status_code=200)
+    async def calendar_draft(request: Request):
+        """Open or generate a calendar item, preserving existing edited posts."""
+        require_editor(request)
+        payload = await request.json()
+        if not isinstance(payload, dict) or not isinstance(payload.get('day'), str) or not isinstance(payload.get('kind'), str):
+            raise HTTPException(422, detail='Нужны дата и рубрика')
+        try:
+            target = date.fromisoformat(payload['day'])
+        except ValueError as exc:
+            raise HTTPException(422, detail='Неверная дата') from exc
+        kind = payload['kind']
+        now = datetime.now(timezone).date() if timezone else date.today()
+        if (target - now).days not in range(35):
+            raise HTTPException(422, detail='Выбери запись из календаря на ближайшие 35 дней')
+        if not any(x['day'] == target.isoformat() and x['kind'] == kind for x in planner.calendar(now)):
+            raise HTTPException(422, detail='Такой рубрики в календаре нет')
+        if workflow.states().get((target.isoformat(),kind))=='done':
+            raise HTTPException(409,detail='Пост отмечен как написанный')
+        period = period_for(kind, target)
+        periods = [period]
+        if kind == 'weekly':
+            start, end = previous_workweek(target)
+            periods.append(f'{start.isoformat()}_{end.isoformat()}')
+        with drafts._connect() as db:
+            row = db.execute("SELECT * FROM drafts WHERE kind=? AND period IN ("+','.join('?' for _ in periods)+") AND state!='deleted' ORDER BY id DESC LIMIT 1",(kind,*periods)).fetchone()
+        if row:
+            return {'draft':dict(row),'created':False}
+        settings = Settings.load()
+        if kind != 'glossary' and (not settings.invest_token or not settings.account_ids):
+            raise HTTPException(503, detail='Для генерации этой рубрики нужны TINVEST_TOKEN и TINVEST_ACCOUNT_IDS')
+        try:
+            generator = PostGenerator(TInvest(settings.invest_token, settings.timezone),
+                                      settings.account_ids or ('glossary-only',), settings.cbr_path)
+            if kind=='glossary' and workflow.selection(target):
+                from .lessons import TERMS
+                topic=workflow.selection(target)
+                known=dict(TERMS)
+                body=known.get(topic, f"Тема: {topic}\n\n[Объяснить простыми словами.]\n\n[Привести пример.]\n\n[Объяснить, почему это важно.]\n\n[Указать распространённую ошибку и вывод.]")
+                generated=Draft('glossary',period,f"Ликбез за 2 минуты: {topic}\n\n{body}")
+            else:
+                generated = generator.generate(kind,target)
+            if not generated.body.strip():
+                raise ValueError('Генератор вернул пустой текст')
+        except Exception as exc:
+            # Do not save an empty or partially generated draft.
+            raise HTTPException(503, detail='Не удалось сформировать пост: '+str(exc)[:240]) from exc
+        did, created = drafts.insert(Draft(kind,period,generated.body),scheduled=True)
+        result = drafts.get(did)
+        if result['state']=='deleted':
+            raise HTTPException(409, detail='Публикация удалена из очереди; создай новый черновик вручную')
+        return {'draft':dict(result),'created':created}
+
+    @app.post('/api/editor/calendar-status')
+    async def calendar_status(request: Request):
+        require_editor(request)
+        payload=await request.json()
+        if not isinstance(payload,dict):raise HTTPException(422,'Ожидается объект')
+        try:
+            day=date.fromisoformat(payload.get('day',''))
+            now=datetime.now(timezone).date() if timezone else date.today()
+            if not -35 <= (day-now).days <= 35:raise ValueError('Дата вне календаря')
+            state=workflow.progress(day.isoformat(),payload.get('kind'),payload.get('status'),payload.get('revision'))
+        except (ValueError,TypeError) as exc:raise HTTPException(409,detail=str(exc)) from exc
+        return {'status':state}
+
+    @app.post('/api/editor/glossary-select')
+    async def glossary_select(request: Request):
+        require_editor(request)
+        payload=await request.json()
+        if not isinstance(payload,dict):raise HTTPException(422,'Ожидается объект')
+        now=datetime.now(timezone).date() if timezone else date.today()
+        workflow.refresh_ideas(now)
+        try:workflow.select(payload.get('topic'),now)
+        except (ValueError,TypeError) as exc:raise HTTPException(409,detail=str(exc)) from exc
+        return {'selected':workflow.selection(now),'remaining':workflow.ideas()}
 
     @app.get('/api/editor/drafts/{draft_id}')
     def editor_get(draft_id: int):

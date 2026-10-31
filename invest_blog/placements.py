@@ -338,72 +338,55 @@ def _formatted(value, currency='') -> str:
 
 
 def render_draft(item: dict) -> str:
-    """Short, neutral editorial draft. Never invent credit ratings or issuer facts."""
+    """Extended radar template; unknown facts remain explicit editor placeholders."""
     def field(key: str, currency_key: str = '') -> str:
         return _formatted(item.get(key), item.get(currency_key) if currency_key else '')
 
     name = str(item.get('name') or 'Новый выпуск').strip()
-    code = item.get('ticker') or item.get('isin') or 'пока не указан'
-    coupon_frequency = item.get('coupon_frequency')
-    frequency = 'уточнить'
-    if isinstance(coupon_frequency, int) and not isinstance(coupon_frequency, bool) and coupon_frequency > 0:
-        n = coupon_frequency
-        word = ('раз' if n % 10 == 1 and n % 100 != 11 else
-                'раза' if n % 10 in (2, 3, 4) and n % 100 not in (12, 13, 14) else 'раз')
-        frequency = f'{n} {word} в год'
-    elif coupon_frequency is not None:
-        frequency = f'{_formatted(coupon_frequency)} раз в год'
-
-    # Ratings must come with an agency, rating date and HTTPS source document.
-    # Otherwise the author needs to check the agency's official publication.
-    rating = ('[проверить рейтинг, агентство и дату]')
-    if (item.get('credit_rating') and item.get('rating_agency') and
-            _date(item.get('rating_date')) and item.get('rating_source_url') and
-            urlsplit(str(item['rating_source_url'])).scheme == 'https' and
-            urlsplit(str(item['rating_source_url'])).hostname):
-        rating = (f"{item['credit_rating']} — {item['rating_agency']} "
-                  f"(на {item['rating_date']})")
-
-    source = {'tinvest': 'T-Invest API', 'finam': 'Финам',
-              'feed': 'дополнительный календарь'}.get(item.get('source'), 'календарь')
+    code = str(item.get('ticker') or item.get('isin') or 'уточнить')
+    frequency = item.get('coupon_frequency')
+    frequency_text = (f"{frequency} {'раз' if frequency % 10 == 1 and frequency % 100 != 11 else 'раза' if frequency % 10 in (2,3,4) and frequency % 100 not in (12,13,14) else 'раз'} в год" if isinstance(frequency, int) and frequency > 0
+                      else 'уточнить')
+    rating = '[рейтинг, агентство и дата — проверить]'
+    if (item.get('credit_rating') and item.get('rating_agency') and _date(item.get('rating_date'))
+            and isinstance(item.get('rating_source_url'), str)
+            and urlsplit(item['rating_source_url']).scheme == 'https'
+            and urlsplit(item['rating_source_url']).hostname):
+        rating = f"{item['credit_rating']} ({item['rating_agency']}, {item['rating_date']})"
     lines = [
-        f'🛰 На радаре: {name}',
-        '', 'Условия нового выпуска',
-        f'• Тикер / ISIN: {code}',
-        f"• Номинал: {field('nominal', 'nominal_currency')}",
-        f"• Цена размещения: {field('placement_price', 'price_currency')}",
-        f"• Тип купона: {item.get('coupon_type') or 'уточнить'}",
-        f'• Выплаты: {frequency}',
+        f'🛰️ На радаре — {name}', '',
+        f"{item.get('placement_date') or '[дата]'} размещается новый выпуск облигаций. Посмотрим, что предлагают инвесторам.",
+        '', '💰 Основные условия', '',
+        f'Тикер / ISIN: {code}',
+        f"Номинал: {field('nominal', 'nominal_currency')}",
+        f"Цена размещения: {field('placement_price', 'price_currency')}",
+        f"Тип купона: {item.get('coupon_type') or 'уточнить'}",
+        'Ставка: [проверить формулу и окончательные условия купона]',
+        f"Купон: {field('coupon_amount', 'coupon_currency')}",
+        f'Выплаты: {frequency_text}',
+        f'Кредитный рейтинг: {rating}',
+        f"Размещение: {item.get('placement_date') or 'уточнить'}",
+        f"Погашение: {item.get('maturity_date') or 'уточнить'}",
+        f"Оферта: {item.get('offer_date') or 'уточнить'}",
+        '', '🏭 Коротко о компании', '',
+        '[2–3 предложения о деятельности эмитента и финансовом положении. Проверить по официальным источникам. Не придумывать поручителей.]',
+        '', '🔎 На что обратить внимание?', '',
+        '[Главный плюс выпуска: подтвердить условия и наличие рейтинга.]',
+        '[Основной риск: кредитный риск, изменение ставки, оферта, ликвидность — по фактам.]',
+        '', '🤔 Мой взгляд', '',
+        '[Твоя личная оценка: подходит ли выпуск под стратегию с преимущественно облигациями. Заполнить вручную.]',
+        '', 'А вы рассматриваете эту бумагу? 👇',
+        '', '#НаРадаре #Облигации #Инвестиции',
     ]
-    if item.get('coupon_amount') is not None:
-        lines.append(f"• Купон за выплату: {field('coupon_amount', 'coupon_currency')}")
-    lines.extend([
-        f'• Кредитный рейтинг: {rating}',
-        f"• Размещение: {item.get('placement_date') or 'уточнить'}",
-        f"• Погашение: {item.get('maturity_date') or 'уточнить'}",
-        f"• Оферта: {item.get('offer_date') or 'уточнить'}",
-        '', 'Коротко о компании',
-        '[1–2 предложения: чем занимается эмитент и на чём зарабатывает.]',
-        '', 'На что обратить внимание',
-        '[Одна интересная особенность выпуска и один конкретный риск.]',
-        '', 'Мой взгляд',
-        '[Короткий личный вывод после проверки условий.]',
-        '', f'Источник обнаружения: {source}',
-    ])
-    url = item.get('source_url')
-    if item.get('source') in ('feed', 'finam') and isinstance(url, str) and \
-            urlsplit(url).scheme == 'https' and urlsplit(url).hostname:
-        lines.append(f'Ссылка: {url}')
-    if rating != '[проверить рейтинг, агентство и дату]':
+    source_url=item.get('source_url')
+    if isinstance(source_url,str) and source_url.startswith('https://'):
+        lines.extend(['',f'Источник: {source_url}'])
+    if rating != '[рейтинг, агентство и дата — проверить]':
         lines.append(f"Источник рейтинга: {item['rating_source_url']}")
-    lines.extend([
-        'Условия предварительные — проверьте документы выпуска перед публикацией.',
-        'Не индивидуальная инвестиционная рекомендация.',
-    ])
-    text = '\n'.join(lines)
-    if len(text) > 4000:
-        raise ValueError('Превышен лимит шаблона')
-    return text
+    lines.append('Условия могут измениться. Перед публикацией проверь документы выпуска.')
+    body='\n'.join(lines)
+    if len(body)>4000:raise ValueError('Превышен лимит 4000 символов')
+    return body
 
 
 class PlacementMonitor:

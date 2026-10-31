@@ -267,8 +267,8 @@
    <div id="monthlyRoutine" class="routine-monthly"></div>
    <p class="hint" id="routineNote">Время подготовки черновиков; публикацию ты подтверждаешь отдельно.</p>
  </div>
- <div class="card half"><h2>📅 Календарь публикаций</h2><div class="scroll" id="editorSchedule"></div><p class="hint">Публикации по расписанию формирует работающий Telegram-бот. В этом разделе видно, что уже создано.</p></div>
- <div class="card half"><h2>💡 Подсказки для следующих постов</h2><div id="editorSuggestions"></div><p class="hint">Выбор тем — по истории публикаций, позициям и недавним покупкам. Это не AI-прогноз и не инвестиционная рекомендация.</p></div>
+ <div class="card half"><h2>📅 Календарь публикаций</h2><div class="scroll" id="editorSchedule"></div><p class="hint">Нажми на публикацию: готовый текст откроется ниже в редакторе. Повторное нажатие откроет тот же черновик.</p></div>
+ <div class="card half"><h2>💡 Подсказки для следующих постов</h2><div id="editorSuggestions"></div><p class="hint">«На радаре» — новые облигации по доступным источникам; «Ликбез» — три темы на выбор. Финансовые данные и рейтинг проверяй перед публикацией.</p></div>
  <div class="card side"><div class="editor-toolbar"><h2>Редакторская очередь</h2><button id="editorNew" class="editor-btn" type="button">+ Новый</button></div><div id="editorQueue" class="editor-list"></div></div>
  <div class="card wide"><div class="editor-toolbar"><h2 id="editorTitle">Новый черновик</h2><span class="badge" id="editorStatus">—</span></div>
    <form id="editorForm"><div class="editor-fields">
@@ -699,7 +699,7 @@ async function deleteGoal(g){if(!confirm('Удалить цель «'+g.name+'»
  catch(e){el('goalFeedback').replaceChildren(alertNode('Ошибка: '+e.message,'attention'))}
 }
 function editorNode(tag,label,css=''){const n=txt(tag,label);if(css)n.className=css;return n}
-const editorialStatuses={new:'Новый',draft:'Черновик',review:'На проверке',approved:'Одобрен',scheduled:'Запланирован',published:'Опубликован',rejected:'Отклонён',publishing:'Отправляется',deleted:'Удалён из очереди'};
+const editorialStatuses={in_progress:'В процессе',done:'Написан',new:'Новый',draft:'Черновик',review:'На проверке',approved:'Одобрен',scheduled:'Запланирован',published:'Опубликован',rejected:'Отклонён',publishing:'Отправляется',deleted:'Удалён из очереди'};
 const editorialLabels={weekly:'Отчёт за неделю',monthly:'Отчёт за месяц',plan:'План на неделю',paper:'Бумага недели',glossary:'Ликбез',purchase:'Покупка',placement:'На радаре'};
 function renderWeeklyRoutine(){
  const data=state.routine, container=el('weeklyRoutine');container.replaceChildren();
@@ -722,24 +722,63 @@ function renderWeeklyRoutine(){
 function renderContent(){
  renderWeeklyRoutine();
  const cal=state.contentPlan;
- table('editorSchedule',['Дата','Рубрика','Статус'],(cal?.schedule||[]).map(x=>[x.day,x.label,x.state==='planned'?'План':(editorialStatuses[x.state]||x.state)]));
+ const calendar=el('editorSchedule');calendar.replaceChildren();
+ const ct=document.createElement('table');ct.className='data-table';
+ const header=document.createElement('thead'),hr=document.createElement('tr');
+ for(const label of ['Дата','Рубрика','Статус','Действия']){const th=document.createElement('th');th.textContent=label;hr.append(th)}
+ header.append(hr);ct.append(header);
+ const tbody=document.createElement('tbody');
+ for(const item of cal?.schedule||[]){
+   const tr=document.createElement('tr'),dateCell=document.createElement('td'),nameCell=document.createElement('td'),statusCell=document.createElement('td');
+   dateCell.textContent=item.day;
+   const btn=editorNode('button',item.label,'editor-btn');btn.type='button';btn.title='Открыть готовый черновик';
+   btn.addEventListener('click',()=>openCalendarDraft(item,btn));nameCell.append(btn);
+   statusCell.textContent=item.state==='planned'?'Запланирован':(editorialStatuses[item.state]||item.state);
+   const actions=document.createElement('td');
+   const prog=editorNode('button','✎ В процессе','editor-btn');prog.type='button';prog.addEventListener('click',()=>markCalendar(item,'in_progress'));
+   const done=editorNode('button','✓ Написан','editor-btn');done.type='button';done.addEventListener('click',()=>markCalendar(item,'done'));
+   actions.append(prog,done);
+   tr.append(dateCell,nameCell,statusCell,actions);tbody.append(tr);
+ }
+ ct.append(tbody);calendar.append(ct);
  table('topics',['Рубрика','Тема / UID','Дата'],state.topics.map(x=>[x.kind,x.topic_key,x.created_at.slice(0,10)]));
  const sug=el('editorSuggestions');sug.replaceChildren();
  if(!cal){sug.append(txt('p','Контент-план пока не загружен'));return}
- for(const p of (cal.paper_candidates||[]).slice(0,3)){
+ // «Бумага недели» не выводит технические причины выбора из брокерской истории.
+ // Отдельная новостная рубрика «На радаре» наполняется из проверяемых размещений.
+ const radar=cal.radar_suggestions||[];
+ const radartitle=editorNode('div','🛰 На радаре · новые выпуски (без фиксированного дня)','hint');
+ sug.append(radartitle);
+ if(!radar.length)sug.append(editorNode('p','Новых выпусков по подключённым источникам пока нет. Проверь статус источников в разделе «Размещения».','hint'));
+ for(const p of radar){
    const wrap=editorNode('div','','editor-suggestion'),details=document.createElement('div');
-   details.append(editorNode('strong',p.name+' · '+p.ticker));details.append(editorNode('small',p.reason));
-   const btn=editorNode('button','Черновик','editor-btn');btn.type='button';btn.addEventListener('click',()=>newDraft('paper','📊 Бумага недели\n\n'+p.name+' ('+p.ticker+')\n\nЧто это за бумага: [проверить факты]\nПлюсы: [твоё мнение]\nРиски: [твоё мнение]\nПочему в портфеле / почему нет: [твоё мнение]\n\nНе инвестиционная рекомендация.'));
+   details.append(editorNode('strong',p.name+(p.isin?' · '+p.isin:'')));
+   details.append(editorNode('small','Размещение: '+p.placement_date+' · '+p.source_label));
+   const btn=editorNode('button',p.draft_id?'Открыть черновик':'✎ В процессе','editor-btn');btn.type='button';
+   btn.addEventListener('click',async()=>{
+     btn.disabled=true;
+     try{
+       const draft=await editorRequest('/api/placements/'+p.id+'/draft','POST',{});
+       await refreshEditorial(draft.id);
+       el('editorForm').scrollIntoView({behavior:'smooth',block:'center'});
+       el('editorFeedback').replaceChildren(alertNode('Черновик «На радаре» открыт. Проверь купон, рейтинг и данные эмитента по первоисточнику.'));
+     }catch(e){el('editorFeedback').replaceChildren(alertNode('Не удалось создать черновик: '+e.message,'warning'))}
+     finally{btn.disabled=false}
+   });
    wrap.append(details,btn);sug.append(wrap);
  }
- for(const p of (cal.glossary_suggestions||[]).slice(0,2)){
+ const chosen=cal.glossary_selected;
+ if(chosen)sug.append(editorNode('p','Тема ликбеза этой недели: '+chosen));
+ for(const p of (cal.glossary_suggestions||[]).slice(0,3)){
    const wrap=editorNode('div','','editor-suggestion'),details=document.createElement('div');
-   details.append(editorNode('strong','📚 '+p.title));details.append(editorNode('small',p.recently_used?'Недавно использовалась':'Можно разобрать для аудитории'));
-   const btn=editorNode('button','Черновик','editor-btn');btn.type='button';btn.addEventListener('click',()=>newDraft('glossary','📚 Ликбез за 2 минуты\n\n'+p.title+'\n\n[Пояснить простыми словами]\n[Пример]\n[Ограничения и риски]'));
+   details.append(editorNode('strong','Ликбез: '+p.topic));
+   details.append(editorNode('small','Резервная тема · '+(p.source_url?'Найдена при еженедельном мониторинге':'Из редакционного каталога')));
+   const btn=editorNode('button',chosen?'В запасе':'Выбрать на неделю','editor-btn');btn.type='button';btn.disabled=!!chosen;
+   btn.addEventListener('click',async()=>{try{await editorRequest('/api/editor/glossary-select','POST',{topic:p.topic});await refreshEditorial()}catch(e){alert(e.message)}});
    wrap.append(details,btn);sug.append(wrap);
  }
  const queue=el('editorQueue');queue.replaceChildren();
- const filt=state.editorFilter||'all';const drafts=state.drafts.filter(d=>filt==='all'||d.state===filt);
+ const filt=state.editorFilter||'all';const drafts=state.drafts.filter(d=>(filt==='all'||d.state===filt)&&d.state!=='published');
  const sel=document.createElement('select');sel.className='editor-input';
  for(const [key,value] of [['all','Все'],['new','Новые'],['review','На проверке'],['approved','Одобрены'],['scheduled','Запланированы'],['published','Опубликованы']]){const op=document.createElement('option');op.value=key;op.textContent=value;sel.append(op)}
  sel.value=filt;sel.addEventListener('change',()=>{state.editorFilter=sel.value;renderContent()});queue.append(sel);
@@ -747,7 +786,8 @@ function renderContent(){
    const wrapper=document.createElement('div');wrapper.className='editor-row-wrap';
    const btn=editorNode('button',`#${d.id} · ${editorialLabels[d.kind]||d.kind}`,'editor-row');btn.type='button';
    if(state.editorDraft?.id===d.id)btn.classList.add('active');
-   const meta=editorNode('small',`${d.period} · ${d.queued?'Ожидает отправки':(editorialStatuses[d.state]||d.state)}`);
+   const calendarItem=state.contentPlan?.schedule?.find(x=>x.draft_id===d.id);
+   const meta=editorNode('small',`${calendarItem?draftWeekday(calendarItem.day)+' '+calendarItem.day:d.period} · ${calendarItem?.state==='in_progress'?'В процессе':(d.queued?'Ожидает отправки':(editorialStatuses[d.state]||d.state))}`);
    btn.append(meta);btn.addEventListener('click',()=>openDraft(d.id));wrapper.append(btn);
    if(!['published','publishing'].includes(d.state)){
      const remove=editorNode('button','🗑','editor-delete');remove.type='button';
@@ -755,10 +795,38 @@ function renderContent(){
      remove.title='Удалить из редакторской очереди';
      remove.addEventListener('click',()=>deleteEditorDraft(d));wrapper.append(remove);
    }
+   const p=state.contentPlan?.schedule?.find(x=>x.draft_id===d.id);
+   if(p){const inProgress=editorNode('button','✎ В процессе','editor-btn');inProgress.type='button';inProgress.addEventListener('click',()=>markCalendar(p,'in_progress'));
+     const done=editorNode('button','✓ Написан','editor-btn');done.type='button';done.addEventListener('click',()=>markCalendar(p,'done'));
+     wrapper.append(inProgress,done);
+   }
    queue.append(wrapper);
  }
  if(drafts.length===0)queue.append(editorNode('p','Очередь пуста.','empty'));
  renderEditorActions();
+}
+function draftWeekday(period){const day=period.slice(0,10);const d=new Date(day+'T12:00:00Z');return Number.isNaN(d.getTime())?'Дата не задана':['Вс','Пн','Вт','Ср','Чт','Пт','Сб'][d.getUTCDay()]}
+async function markCalendar(item,status){
+ if(status==='done'&&!confirm('Отметить пост как написанный? Черновик будет полностью удалён из SQLite и исчезнет из очереди.'))return;
+ try{
+   if(status==='in_progress' && !item.draft_id){await editorRequest('/api/editor/calendar-draft','POST',{day:item.day,kind:item.kind});}
+   await editorRequest('/api/editor/calendar-status','POST',{day:item.day,kind:item.kind,status});
+   if(status==='done'&&state.editorDraft?.id===item.draft_id)newDraft();
+   await refreshEditorial();
+ }catch(e){el('editorFeedback').replaceChildren(alertNode(e.message,'warning'))}
+}
+async function openCalendarDraft(item,button){
+ if(button.disabled)return;
+ button.disabled=true;
+ el('editorFeedback').replaceChildren(alertNode('Загружаем черновик…'));
+ try{
+   const result=await editorRequest('/api/editor/calendar-draft','POST',{day:item.day,kind:item.kind});
+   await refreshEditorial(result.draft.id);
+   el('editorFeedback').replaceChildren(alertNode(result.created?'Готовый черновик создан. Проверь и отредактируй текст.':'Открыт существующий черновик.'));
+   el('editorForm').scrollIntoView({behavior:'smooth',block:'center'});
+ }catch(e){
+   el('editorFeedback').replaceChildren(alertNode('Ошибка календаря: '+e.message,'warning'));
+ }finally{button.disabled=false}
 }
 function newDraft(kind='paper',body=''){
  state.editorDraft=null;el('editorTitle').textContent='Новый черновик';el('editorStatus').textContent='Новый';

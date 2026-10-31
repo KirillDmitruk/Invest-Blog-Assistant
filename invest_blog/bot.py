@@ -14,6 +14,7 @@ from telegram.ext import (Application, ApplicationBuilder, CallbackQueryHandler,
 
 from .config import Settings
 from .portfolio_store import PortfolioStore
+from .editorial_workflow import EditorialWorkflow
 from .posts import PostGenerator
 from .editorial import ContentPlanner
 from .publication_schedule import WEEKLY_RULES
@@ -46,6 +47,7 @@ class InvestBot:
         self.store = DraftStore(settings.db_path)
         self.portfolio_store = PortfolioStore(settings.db_path)
         self.planner = ContentPlanner(self.portfolio_store,self.store)
+        self.editorial_workflow = EditorialWorkflow(settings.db_path)
         self.placements = PlacementStore(settings.db_path)
         self.tech_news = TechNewsStore(settings.db_path)
         self.scheduler = AsyncIOScheduler(timezone=settings.timezone)
@@ -55,7 +57,16 @@ class InvestBot:
         gen=PostGenerator(api, self.settings.account_ids, self.settings.cbr_path,
                           recent_papers=tuple(self.portfolio_store.recent_topics('paper')),
                           recent_glossary=tuple(self.portfolio_store.recent_topics('glossary')))
-        draft=gen.generate(kind, datetime.now(self.settings.timezone).date())
+        today=datetime.now(self.settings.timezone).date()
+        if kind=='glossary' and self.editorial_workflow.selection(today):
+            from .lessons import TERMS
+            from .model import Draft
+            from .posts import current_week
+            topic=self.editorial_workflow.selection(today)
+            body=dict(TERMS).get(topic, f"Тема: {topic}\n\n[Объясни понятие простыми словами.]\n[Приведи пример и практический вывод.]")
+            draft=Draft('glossary',current_week(today)[0].isoformat(),f"Ликбез за 2 минуты: {topic}\n\n{body}")
+            return draft,topic
+        draft=gen.generate(kind, today)
         return draft, (gen.selected_paper_uid if kind=='paper' else gen.selected_glossary_topic if kind=='glossary' else None)
 
     def _sync(self):
@@ -157,6 +168,9 @@ class InvestBot:
                 f'⚠️ Снимок портфеля не сохранён: {type(exc).__name__}')
 
     async def run_scheduled(self, kind: str, app: Application) -> None:
+        now=datetime.now(self.settings.timezone).date()
+        if self.editorial_workflow.states().get((now.isoformat(),kind))=='done':
+            return
         try:
             draft,topic=await asyncio.to_thread(self._generate_sync,kind)
             did,fresh=self.store.insert(draft,scheduled=True)
@@ -182,7 +196,16 @@ class InvestBot:
             if (now.hour,now.minute)>=self.settings.times[kind]:
                 await self.run_scheduled(kind,app)
 
+    async def refresh_editorial_ideas(self) -> None:
+        try:
+            await asyncio.to_thread(self.editorial_workflow.refresh_ideas,datetime.now(self.settings.timezone).date())
+        except Exception:
+            log.exception('Не удалось обновить темы ликбеза')
+
     async def post_init(self, app: Application) -> None:
+        self.scheduler.add_job(self.refresh_editorial_ideas,CronTrigger(day_of_week='mon',hour=9,minute=0,timezone=self.settings.timezone),
+                               id='editorial-ideas',max_instances=1,coalesce=True)
+        asyncio.create_task(self.refresh_editorial_ideas())
         for kind, _, weekday in WEEKLY_RULES:
             h,m=self.settings.times[kind]
             self.scheduler.add_job(self.run_scheduled,CronTrigger(day_of_week=weekday,hour=h,minute=m,timezone=self.settings.timezone),
@@ -191,6 +214,9 @@ class InvestBot:
         self.scheduler.add_job(self.run_scheduled,CronTrigger(day=1,hour=h,minute=m,timezone=self.settings.timezone),
                                args=['monthly',app],id='monthly',max_instances=1,misfire_grace_time=3600,coalesce=True)
         self.scheduler.add_job(self.tick_scheduled,'interval',minutes=1,args=[app],id='publishing',max_instances=1,coalesce=True)
+        # Daily radar check; the existing 4-hour placement monitor stays in place too.
+        self.scheduler.add_job(self.run_placements,CronTrigger(hour=8,minute=30,timezone=self.settings.timezone),
+                               args=[app],id='radar-daily',max_instances=1,coalesce=True)
         self.scheduler.add_job(self.run_placements,'interval',hours=4,args=[app],id='placements',
                                max_instances=1,coalesce=True,misfire_grace_time=3600)
         self.scheduler.add_job(self.run_tech_news,'interval',hours=2,args=[app],id='tech-rss',

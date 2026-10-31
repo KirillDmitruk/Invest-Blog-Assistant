@@ -119,6 +119,8 @@ class ContentPlanner:
             raise ValueError('Период контент-плана: 1–93 дня')
         first = today
         end = first + timedelta(days=days - 1)
+        from .editorial_workflow import EditorialWorkflow
+        markers=EditorialWorkflow(self.drafts.path).states()
         with self.drafts._connect() as db:
             existing = [dict(r) for r in db.execute('SELECT id,kind,period,state FROM drafts ORDER BY id DESC LIMIT 1500')]
         by_key = {}
@@ -133,19 +135,27 @@ class ContentPlanner:
             for kind in kinds:
                 period = period_for(kind,cur)
                 match = by_key.get((kind,period))
+                if not match and kind == 'weekly':
+                    start, finish = previous_workweek(cur)
+                    match = by_key.get((kind,f'{start.isoformat()}_{finish.isoformat()}'))
+                if markers.get((cur.isoformat(),kind))=='done':
+                    continue
                 items.append({'day':cur.isoformat(),'kind':kind,'label':LABELS[kind],
                               'period':period,'draft_id':match['id'] if match else None,
-                              'state':match['state'] if match else 'planned'})
+                              'state':markers.get((cur.isoformat(),kind)) or (match['state'] if match else 'planned')})
             cur+=timedelta(days=1)
         return items
 
     def overview(self, today: date | None = None) -> dict:
         paper = self.paper_candidates()
-        glossary = self.glossary_suggestions()
+        from .editorial_workflow import EditorialWorkflow
+        workflow=EditorialWorkflow(self.drafts.path)
+        glossary = workflow.refresh_ideas(today or date.today())
         return {
             'schedule':self.calendar(today),
             'paper_candidates':paper,
             'glossary_suggestions':glossary,
+            'glossary_selected':workflow.selection(today or date.today()),
             'suggested_paper':paper[0] if paper else None,
             'suggested_term':glossary[0] if glossary else None,
             'notice':'Предложения построены на снимке позиций, истории покупок и тем. Они не являются оценкой доходности или инвестиционными рекомендациями.'
