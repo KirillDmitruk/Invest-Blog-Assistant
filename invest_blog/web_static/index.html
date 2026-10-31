@@ -82,11 +82,17 @@
   <button class="hub-project" type="button" data-target="overview"><strong>◈ Инвестиции</strong><span>Портфель, доходность, новые облигации и публикации</span><em>Перейти к аналитике →</em></button>
   <button class="hub-project" type="button" data-target="tech"><strong>⚙ Tech &amp; Gadgets</strong><span>Технологический блог, собственные проекты и отдельная редакторская очередь</span><em>Открыть редактор →</em></button>
  </div>
- <div class="note">v2.0.1 — Tech RSS-лента и Creator Studio подключены. AI-редактор и отправка в VK появятся в следующих этапах.</div>
+ <div class="note">v2.0.1 — Tech RSS-лента и Creator Studio подключены. Доступны RSS, Creator Studio и публикация Tech News в VK/Telegram.</div>
 </section>
 <section class="section" id="page-tech">
  <div class="grid">
-  <div class="card full"><h2>Tech &amp; Gadgets · редакция</h2><p class="hint">Отдельная очередь постов о робототехнике, гаджетах, AI и собственных проектах. Новости собираются каждые 2 часа при запущенном боте. Публикация и AI пока отключены.</p></div>
+  <div class="card full"><h2>Tech &amp; Gadgets · редакция</h2><p class="hint">Отдельная очередь постов о робототехнике, гаджетах, AI и собственных проектах. Новости собираются каждые 2 часа при запущенном боте. Публикации в VK и Telegram управляются отдельно. AI-редактор пока отключён.</p></div>
+  <div class="card full"><div class="toolbar"><h2>Kir in Tech News · автопубликация</h2><button type="button" id="techPublishRefresh">Обновить статусы</button></div>
+   <p class="hint">Расписание работает только при запущенном боте. Переключатели настраиваются в .env и требуют перезапуска бота.</p>
+   <div id="techPublishStatus" class="hint">Загрузка статуса...</div>
+   <div class="goal-actions"><button type="button" id="techPublishNow">Опубликовать сейчас (1 новость)</button></div>
+   <div id="techPublishFeedback"></div><h3>История отправок и проблем</h3><div id="techPublishHistory"></div>
+  </div>
   <div class="card full"><h2>Лента технологических новостей</h2>
    <p class="hint">Новости из RSS-источников. Выбор категории и создание черновика для ручной проверки.</p>
    <label>Категория <select id="techNewsCategory"><option value="">Все категории</option><option value="tech">Технологии</option><option value="ai">AI</option><option value="market">Рынок и IPO</option><option value="robotics">Робототехника</option><option value="gadgets">Гаджеты и прототипы</option><option value="diy">DIY и электроника</option><option value="printing">3D-печать</option><option value="space">Космос</option></select></label>
@@ -975,6 +981,21 @@ function openCreator(post){creatorSelected=post;el('creatorId').value=post.id;el
 el('creatorSeed').addEventListener('click',async()=>{try{const result=await editorRequest('/api/creator/seed','POST',{start:new Date().toLocaleDateString('en-CA')});el('creatorFeedback').replaceChildren(alertNode(`Добавлено публикаций: ${result.created}. Уже существующие идеи сохранены.`));await refreshCreator()}catch(e){el('creatorFeedback').replaceChildren(alertNode(e.message,'warning'))}});
 el('creatorForm').addEventListener('submit',async event=>{event.preventDefault();if(!creatorSelected)return alert('Выбери запись в календаре');try{const payload={revision:creatorSelected.revision,title:el('creatorTitle').value,project:el('creatorProject').value,status:el('creatorStatus').value,notes:el('creatorNotes').value};const result=await editorRequest('/api/creator/posts/'+creatorSelected.id,'PUT',payload);creatorSelected=result;el('creatorFeedback').replaceChildren(alertNode('Публикация сохранена'));await refreshCreator()}catch(e){el('creatorFeedback').replaceChildren(alertNode(e.message,'warning'))}});
 
+async function refreshTechPublishing(){
+ const status=el('techPublishStatus'),history=el('techPublishHistory');
+ try{
+  const data=await getJson('/api/tech/publishing');
+  status.textContent=`VK: ${data.vk_enabled?'включён':'выключен'} · Telegram: ${data.telegram_enabled?'включён':'выключен'}${!data.telegram_configured?' (канал не настроен)':''} · Сегодня VK: ${data.today.vk}/4, TG: ${data.today.telegram} · Занято слотов VK: ${data.vk_daily_reserved}/4 · Ожидают TG: ${data.tg_pending} · Следующая: ${data.next_at?new Date(data.next_at).toLocaleString('ru-RU'):'не запланирована'} · Часовой пояс: ${data.timezone}`;
+  history.replaceChildren();if(!data.history.length){history.append(txt('p','Публикаций пока нет.'));return}
+  for(const item of data.history){const row=document.createElement('div');row.className='creator-entry';const info=document.createElement('div');info.append(txt('strong',`${item.platform} · ${item.status} · ${item.title||'#'+item.news_id}`),txt('p',item.updated_at));if(item.status==='uncertain')info.append(txt('p','Результат не подтверждён — проверь площадку вручную перед повтором.'));row.append(info);if(item.url&&item.url.startsWith('https://')){const a=document.createElement('a');a.textContent='Открыть';a.href=item.url;a.target='_blank';a.rel='noopener noreferrer';row.append(a)}history.append(row)}
+ }catch(err){status.textContent='Ошибка загрузки: '+err.message}
+}
+el('techPublishRefresh').addEventListener('click',refreshTechPublishing);
+el('techPublishNow').addEventListener('click',async()=>{
+ if(!confirm('Сейчас будет опубликована одна новость в VK и, если включён Telegram, отправлена туда же. Продолжить?'))return;
+ try{el('techPublishNow').disabled=true;const result=await editorRequest('/api/tech/publishing/now','POST',{confirm:'PUBLISH'});el('techPublishFeedback').replaceChildren(alertNode('Результат: '+JSON.stringify(result)));await refreshTechPublishing()}catch(err){el('techPublishFeedback').replaceChildren(alertNode(err.message,'warning'))}finally{el('techPublishNow').disabled=false}
+});
+
 async function refreshTechNews(){
  const host=el('techNewsList');const sources=el('techNewsSources');
  try {const cat=el('techNewsCategory').value;const data=await getJson('/api/tech/news'+(cat?'?category='+encodeURIComponent(cat):''));host.replaceChildren();sources.replaceChildren();
@@ -1016,7 +1037,7 @@ async function load(){try{
  state.overview=a;state.bonds=b;state.risk=risk;state.goals=goals;state.editorToken=editor.token;state.drafts=drafts;state.topics=topics;state.contentPlan=contentPlan;state.routine=routine;state.performance=performance;state.placements=placements;
  if(a.has_data)el('status').textContent='Снимок '+a.as_of+' · '+(a.sync?.status||'нет статуса');
  if(a.has_data&&b.has_data){renderOverview();renderBonds();renderCalendar();renderIncome();renderRisk();renderGoals();renderPerformance();}
- renderContent();renderPlacements();await refreshTech();await refreshTechNews();showPage(state.page);
+ renderContent();renderPlacements();await refreshTech();await refreshTechNews();await refreshTechPublishing();showPage(state.page);
  }catch(err){el('fatal').style.display='block';el('fatal').textContent='Не удалось загрузить дашборд: '+err.message;el('status').textContent='Ошибка загрузки';}}
 window.addEventListener('load',load);
 setInterval(()=>{if(state.page==='placements')refreshPlacements()},60000);

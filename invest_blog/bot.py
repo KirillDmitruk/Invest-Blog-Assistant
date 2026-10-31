@@ -245,12 +245,10 @@ class InvestBot:
             log.exception('Ошибка автоматического сбора Tech RSS')
 
     async def run_vk_news(self) -> None:
-        from .vk_news import run
-        try:
-            result=await asyncio.to_thread(run,self.settings.db_path,self.settings.timezone,publish=True,limit=1)
-            log.info('VK news publish result: %s',result)
-        except Exception:
-            log.exception('VK news publish failed')
+        from .tech_publish_dashboard import dispatch
+        import os
+        result=await asyncio.to_thread(dispatch,self.settings.db_path,self.settings.timezone,limit=1)
+        log.info('Tech publishing result: %s',result)
 
     async def post_shutdown(self, app: Application) -> None:
         if self.scheduler.running:self.scheduler.shutdown(wait=False)

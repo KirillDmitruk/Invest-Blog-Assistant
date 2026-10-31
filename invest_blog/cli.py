@@ -14,7 +14,7 @@ from .model import money, fmt_money
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Invest Blog Assistant")
-    parser.add_argument("action", choices=("bot", "accounts", "preview", "diagnose", "sync", "web", "audit", "bonds", "backfill", "risk", "performance", "placements", "tech-news", "vk-test", "vk-news"))
+    parser.add_argument("action", choices=("bot", "accounts", "preview", "diagnose", "sync", "web", "audit", "bonds", "backfill", "risk", "performance", "placements", "tech-news", "vk-test", "vk-news", "tg-news", "tg-test"))
     parser.add_argument("kind", nargs="?", choices=("weekly", "monthly", "plan", "paper", "glossary", "purchase"))
     parser.add_argument("--date", dest="date_string", help="Локальная дата YYYY-MM-DD для preview (брокерские данные — актуальные)")
     parser.add_argument("--start", help="Начало периода YYYY-MM-DD (для diagnose)")
@@ -28,12 +28,39 @@ def main() -> None:
     args = parser.parse_args()
     settings = Settings.load()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    if args.action == "tg-test":
+        import os
+        from .tech_telegram import TechTelegramPublisher
+        token = os.getenv('TELEGRAM_BOT_TOKEN', '').strip()
+        channel = os.getenv('TECH_TELEGRAM_CHANNEL_ID', '').strip()
+        if not token or not channel:
+            parser.error('Укажи TELEGRAM_BOT_TOKEN и TECH_TELEGRAM_CHANNEL_ID в .env')
+        if not args.publish:
+            print(f'Telegram: проверка для {channel}. Отправка отключена.')
+            print('Для реального теста: uv run python -m invest_blog.cli tg-test --publish --confirm PUBLISH')
+            return
+        if args.confirm != 'PUBLISH':
+            parser.error('Для отправки требуется --confirm PUBLISH')
+        print('Опубликовано:',TechTelegramPublisher(token, channel).send('Тестовая публикация Content Hub — Kir in Tech News.'))
+        return
+    if args.action == "tg-news":
+        from .tech_telegram import sync
+        import json
+        if args.publish and args.confirm != "PUBLISH":
+            parser.error("Нужно --confirm PUBLISH")
+        print(json.dumps(sync(settings.db_path, publish=args.publish, limit=args.limit), ensure_ascii=False, indent=2))
+        return
     if args.action == "vk-news":
         from .vk_news import run
         import json
         if args.publish and args.confirm != "PUBLISH":
             parser.error("Нужно --confirm PUBLISH")
-        print(json.dumps(run(settings.db_path,settings.timezone,publish=args.publish,limit=args.limit),ensure_ascii=False,indent=2))
+        result = run(settings.db_path,settings.timezone,publish=args.publish,limit=args.limit)
+        if args.publish:
+            from .tech_telegram import sync
+            if __import__('os').getenv('TECH_TG_AUTO_PUBLISH','false').lower() in ('true','1','yes'):
+                result['telegram'] = sync(settings.db_path, publish=True, limit=args.limit)
+        print(json.dumps(result,ensure_ascii=False,indent=2))
         return
     if args.action == "vk-test":
         from .vk_publisher import VKConfig, VKPublisher

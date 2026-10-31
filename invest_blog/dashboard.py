@@ -99,6 +99,23 @@ def create_app(db_path: Path, bond_target: float = 0.60, max_position: float = 0
         if result is None: raise HTTPException(409,'План изменён или запись не найдена')
         return result
 
+    @app.get('/api/tech/publishing')
+    def tech_publishing():
+        from .tech_publish_dashboard import overview
+        return overview(db_path, timezone)
+
+    @app.post('/api/tech/publishing/now')
+    async def tech_publish_now(request: Request):
+        require_editor(request)
+        data = await request.json()
+        if not isinstance(data, dict) or data.get('confirm') != 'PUBLISH':
+            raise HTTPException(422, 'Подтверди публикацию словом PUBLISH')
+        from .tech_publish_dashboard import dispatch
+        try:
+            return dispatch(db_path, timezone, limit=1)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+
     @app.get('/api/tech/news')
     def tech_news_list(category: str | None = None, status: str | None = None):
         try: return {'items':tech_news.list_news(category=category,status=status),
