@@ -121,6 +121,22 @@
  </div>
 </section>
 <section class="section" id="page-allocation">
+<div class="card full" style="margin-bottom:16px"><h2>Месячный инвестиционный план</h2>
+<p class="hint">Добавляй поступления по мере получения денег → формируй план на следующий месяц из накопленной суммы → отмечай покупки. Сохранённый план и галочки хранятся в SQLite. Курс USD/RUB — официальный курс Банка России на дату формирования плана, не курс фактической покупки USD.</p>
+<div class="goal-form" style="margin-top:12px">
+<label>Месяц<input type="month" id="monthlyMonth"></label>
+<label>Накоплено для плана, ₽<input type="number" readonly value="0" id="monthlyAmount"></label>
+<label>Финансовая подушка<select id="monthlyCushion"><option value="building">Коплю — 40%</option><option value="funded">Накоплена — 10%</option></select></label>
+</div>
+<div class="card" style="margin:14px 0;padding:14px"><h3>Копилка на выбранный месяц</h3>
+<p class="hint">Любые поступления в разные дни. Рекомендуем выбирать следующий месяц: накопленные средства распределятся при закрытии месяца. После формирования плана история блокируется.</p>
+<div class="goal-form"><label>Получено, ₽<input id="contribAmount" type="number" min="0.01" step="0.01" placeholder="Например, 5000"></label><label>Дата поступления<input id="contribDate" type="date"></label><label>Комментарий (необязательно)<input id="contribNote" maxlength="200" placeholder="Зарплата, подработка..."></label></div>
+<div class="goal-actions"><button type="button" id="contribAdd">Добавить поступление</button></div>
+<div id="contribSummary"></div><div id="contribItems"></div></div>
+<p class="hint" id="monthlyFx">Курс Банка России загружается...</p>
+<div class="goal-actions"><button type="button" id="monthlySave">Сформировать план из накоплений</button><button type="button" id="monthlyRefresh">Обновить план</button></div>
+<div id="monthlyMessage"></div><div id="monthlySummary" style="margin-top:14px"></div><div id="monthlyPurchases"></div>
+</div>
 <div class="grid">
  <div class="card full"><h2>Калькулятор распределения</h2><p class="hint">Планирование новых средств, не фактическая структура портфеля. Покупки и переводы автоматически не выполняются.</p>
   <div class="goal-form" style="margin-top:16px">
@@ -320,6 +336,84 @@ function currencyMap(obj){return Object.entries(obj||{}).map(([c,v])=>c==='RUB'?
 function showPage(page){state.page=page;if(page==='placements'&&state.placements)refreshPlacements();if(page==='creator')refreshCreator();document.querySelectorAll('.section').forEach(s=>s.classList.toggle('active',s.id==='page-'+page));document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));let names={overview:'Обзор портфеля',bonds:'Облигации',calendar:'Купонный календарь',income:'Фактические доходы',risk:'Здоровье портфеля',goals:'Финансовые цели',allocation:'Распределение средств',content:'Контент-план',performance:'Доходность и экспорт',placements:'Будущие размещения',home:'Content Hub',tech:'Tech & Gadgets',creator:'Creator Studio'};el('pageTitle').textContent=names[page]||'Content Hub';el('pageDesc').textContent=page==='calendar'?'Ожидаемые купоны по текущему количеству бумаг':page==='income'?'Исполненные выплаты, погашения и пополнения':page==='performance'?'Сравнение доходности по подтверждённым снимкам брокера':page==='placements'?'Новые выпуски, сроки размещения и подготовка черновиков':page==='bonds'?'Состав и характеристики облигационной части':'Долгосрочная структура, денежные потоки и редакторская очередь';requestAnimationFrame(()=>{renderCharts(page);if(page==='performance')renderPerformanceCharts()});}
 document.querySelectorAll('.nav button').forEach(btn=>btn.addEventListener('click',()=>showPage(btn.dataset.page)));
 document.querySelectorAll('.hub-project').forEach(btn=>btn.addEventListener('click',()=>showPage(btn.dataset.target)));
+
+
+// Persistent monthly plan: immutable saved budget, independently persisted purchase checkmarks.
+let monthlySaved=null;
+const monthlyRUB=c=>rub(c/100);
+const monthlyUSD=c=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(c/100);
+async function monthlyRequest(url, method='GET', payload=null){
+ const opts={method,headers:{}};
+opts.headers['X-CSRF-Token'] = state.editorToken;
+
+if (payload !== null && payload !== undefined) {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(payload);
+} const r=await fetch(url,opts);const data=await r.json();if(!r.ok)throw Error(data.detail||'Ошибка запроса');return data;
+}
+function monthlyMessage(message,warning=false){el('monthlyMessage').replaceChildren(alertNode(message,warning?'warning':'info'))}
+function monthlyRender(plan){
+ monthlySaved=plan;el('monthlySummary').replaceChildren();el('monthlyPurchases').replaceChildren();
+ el('monthlySave').disabled=!!plan;el('monthlyCushion').disabled=!!plan;
+ if(!plan){monthlyMessage('Добавляй поступления в копилку; затем сформируй план из накопленной суммы.');return}
+ el('monthlyAmount').value=(plan.amount_cents/100).toFixed(2);el('monthlyCushion').value=plan.cushion;
+ const summary=el('monthlySummary');
+ const rows=[['Подушка',monthlyRUB(plan.reserve_cents)],['В инвестиции',monthlyRUB(plan.invest_cents)],['На брокерский счёт РФ',monthlyRUB(plan.sectors[0].rub_cents)],['Пополнение Telegram Wallet',monthlyUSD(plan.wallet_usd_cents)+' (≈ '+monthlyRUB(plan.wallet_rub_cents)+')'],...plan.sectors.map(r=>[r.name,monthlyRUB(r.rub_cents)])];
+ const tableEl=document.createElement('table');rows.forEach(([name,value])=>{let tr=document.createElement('tr');tr.append(txt('td',name),txt('td',value));tableEl.append(tr)});summary.append(tableEl);
+ const note=txt('p','Зафиксированный курс ЦБ: '+plan.fx_rate+' ₽/$ · дата курса: '+plan.fx_date+'. Изменение курса не меняет сохранённый план.');note.className='hint';summary.append(note);
+ const done=plan.schedule.filter(p=>p.done).length;const h=txt('h3','Покупки: выполнено '+done+' из '+plan.schedule.length);el('monthlyPurchases').append(h);
+ const groups=new Map();plan.schedule.forEach(p=>{if(!groups.has(p.date))groups.set(p.date,[]);groups.get(p.date).push(p)});
+ groups.forEach((items,day)=>{
+  const section=document.createElement('div');section.className='check-item';section.style.marginTop='12px';
+  section.append(txt('strong',new Date(day+'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'long',weekday:'long'})));
+  items.forEach(p=>{
+   const label=document.createElement('label');label.style.cssText='display:flex;gap:10px;align-items:center;margin-top:8px;cursor:pointer';
+   const input=document.createElement('input');input.type='checkbox';input.checked=p.done;
+   input.addEventListener('change',async()=>{input.disabled=true;try{let result=await monthlyRequest('/api/investment-plan/'+plan.month+'/purchase','POST',{id:p.id,done:input.checked});monthlyRender(result.plan);monthlyMessage('Выполнение покупки сохранено в SQLite.')}catch(err){monthlyMessage(err.message,true);input.disabled=false;input.checked=p.done}});
+   label.append(input,txt('span',p.asset+' · '+monthlyUSD(p.usd_cents)+' (≈ '+monthlyRUB(p.rub_cents)+')'));section.append(label)
+  });el('monthlyPurchases').append(section)
+ });
+}
+async function monthlyLoad(){
+ const m=el('monthlyMonth').value;if(!/^\d{4}-\d{2}$/.test(m))return;
+ try{let v=await monthlyRequest('/api/investment-plan/'+m);monthlyRender(v.plan);await contribLoad()}catch(err){monthlyMessage(err.message,true)}
+}
+async function monthlyFx(){try{let v=await monthlyRequest('/api/investment-plan/fx');el('monthlyFx').textContent='ЦБ: '+v.rate+' ₽/$ · '+v.date}catch(err){el('monthlyFx').textContent='Курс ЦБ недоступен: '+err.message}}
+const nextMonth=new Date();nextMonth.setDate(1);nextMonth.setMonth(nextMonth.getMonth()+1);el('monthlyMonth').value=nextMonth.getFullYear()+'-'+String(nextMonth.getMonth()+1).padStart(2,'0');el('contribDate').value=new Date().toLocaleDateString('en-CA');
+el('monthlyMonth').addEventListener('change',monthlyLoad);
+el('monthlyRefresh').addEventListener('click',()=>{monthlyLoad();monthlyFx()});
+el('monthlySave').addEventListener('click',async()=>{
+ if(!state.editorToken){monthlyMessage('Токен редактора не загружен. Обнови страницу.',true);return}
+ const month=el('monthlyMonth').value,cushion=el('monthlyCushion').value;
+ if(!month){monthlyMessage('Выбери месяц.',true);return}
+ if(!confirm('Сформировать окончательный план из всех поступлений? После этого менять поступления нельзя.'))return;
+ el('monthlySave').disabled=true;
+ try{let v=await monthlyRequest('/api/investment-contributions/'+month+'/close','POST',{cushion});monthlyRender(v.plan);await contribLoad();monthlyMessage('План закрыт и сохранён в SQLite.')}catch(err){el('monthlySave').disabled=false;monthlyMessage(err.message,true)}
+});
+async function contribLoad(){
+ const month=el('monthlyMonth').value;
+ const data=await monthlyRequest('/api/investment-contributions/'+month);
+ el('monthlyAmount').value=(data.total_cents/100).toFixed(2);
+ el('contribAdd').disabled=data.locked;
+ for(const id of ['contribAmount','contribDate','contribNote'])el(id).disabled=data.locked;
+ el('contribSummary').replaceChildren(txt('p',(data.locked?'План закрыт · ':'Накоплено · ')+monthlyRUB(data.total_cents)+' · '+data.items.length+' поступлений'));
+ const list=el('contribItems');list.replaceChildren();
+ for(const item of data.items){
+  const row=document.createElement('div');row.className='goal-actions';
+  row.append(txt('span',item.received_on+' · '+monthlyRUB(item.amount_cents)+(item.note?' · '+item.note:'')));
+  if(!data.locked){const del=document.createElement('button');del.type='button';del.textContent='Удалить';del.addEventListener('click',async()=>{
+   if(!confirm('Удалить это поступление?'))return;
+   try{await monthlyRequest('/api/investment-contributions/'+month+'/'+item.id,'DELETE');await contribLoad()}catch(e){monthlyMessage(e.message,true)}
+  });row.append(del)}list.append(row);
+ }
+}
+el('contribAdd').addEventListener('click',async()=>{
+ const amount=el('contribAmount').value,received_on=el('contribDate').value,note=el('contribNote').value;
+ if(!amount||Number(amount)<=0||!received_on){monthlyMessage('Укажи сумму и дату поступления.',true);return}
+ el('contribAdd').disabled=true;
+ try{await monthlyRequest('/api/investment-contributions/'+el('monthlyMonth').value,'POST',{amount,received_on,note});el('contribAmount').value='';el('contribNote').value='';await contribLoad();monthlyMessage('Поступление сохранено.')}catch(e){monthlyMessage(e.message,true)}finally{if(!monthlySaved)el('contribAdd').disabled=false}
+});
+monthlyLoad();monthlyFx();
 
 // Allocation calculator is deliberately read-only and does not touch portfolio/SQLite.
 const allocationGroups = [

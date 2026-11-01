@@ -31,6 +31,7 @@ from .posts import PostGenerator, previous_workweek
 from .tinvest import TInvest
 from .config import Settings
 from .model import Draft
+from .monthly_investments import MonthlyPlans, fetch_cbr_usd
 
 HTML_PATH = Path(__file__).parent / 'web_static' / 'index.html'
 
@@ -50,6 +51,7 @@ def create_app(db_path: Path, bond_target: float = 0.60, max_position: float = 0
     planner=ContentPlanner(portfolio,drafts)
     workflow=EditorialWorkflow(db_path)
     csrf_nonce=secrets.token_urlsafe(32)
+    monthly_plans=MonthlyPlans(db_path)
 
     def require_editor(request: Request):
         # No automatic CORS grants. Custom header requires same-origin JS to
@@ -64,6 +66,62 @@ def create_app(db_path: Path, bond_target: float = 0.60, max_position: float = 0
     @app.get('/', response_class=HTMLResponse)
     def index():
         return HTML_PATH.read_text(encoding='utf-8')
+
+    @app.get('/api/investment-plan/fx')
+    def investment_fx():
+        try: return fetch_cbr_usd()
+        except Exception as exc: raise HTTPException(503, 'Курс ЦБ недоступен: '+str(exc)) from exc
+
+    @app.get('/api/investment-contributions/{month}')
+    def contributions_get(month: str):
+        try: return monthly_plans.contributions(month)
+        except ValueError as exc: raise HTTPException(422,str(exc)) from exc
+
+    @app.post('/api/investment-contributions/{month}')
+    async def contributions_add(month: str, request: Request):
+        require_editor(request)
+        data=await request.json()
+        try: return monthly_plans.add_contribution(month,data['amount'],data['received_on'],data.get('note',''))
+        except (ValueError,KeyError,TypeError) as exc: raise HTTPException(422,str(exc)) from exc
+
+    @app.delete('/api/investment-contributions/{month}/{contribution_id}')
+    async def contributions_delete(month: str, contribution_id: int, request: Request):
+        require_editor(request)
+        try: return monthly_plans.delete_contribution(month,contribution_id)
+        except ValueError as exc: raise HTTPException(422,str(exc)) from exc
+
+    @app.post('/api/investment-contributions/{month}/close')
+    async def contributions_close(month: str, request: Request):
+        require_editor(request)
+        data=await request.json()
+        try:
+            fx=fetch_cbr_usd()
+            return {'plan':monthly_plans.close_contributions(month,data['cushion'],fx)}
+        except (ValueError,KeyError,TypeError) as exc: raise HTTPException(422,str(exc)) from exc
+        except Exception as exc: raise HTTPException(503,'Курс ЦБ недоступен: '+str(exc)) from exc
+
+    @app.get('/api/investment-plan/{month}')
+    def investment_plan(month: str):
+        try: return {'plan': monthly_plans.get(month)}
+        except ValueError as exc: raise HTTPException(422,str(exc)) from exc
+
+    @app.post('/api/investment-plan/{month}')
+    async def investment_plan_create(month: str, request: Request):
+        require_editor(request)
+        payload=await request.json()
+        try:
+            fx=fetch_cbr_usd()
+            return {'plan':monthly_plans.save(month,payload['amount'],payload['cushion'],fx)}
+        except (ValueError,KeyError,TypeError) as exc:raise HTTPException(422,str(exc)) from exc
+        except Exception as exc:raise HTTPException(503,'Курс ЦБ недоступен: '+str(exc)) from exc
+
+    @app.post('/api/investment-plan/{month}/purchase')
+    async def investment_plan_purchase(month: str, request: Request):
+        require_editor(request)
+        payload=await request.json()
+        if type(payload.get('done')) is not bool: raise HTTPException(422,'Нужен булев done')
+        try:return {'plan':monthly_plans.mark(month,payload['id'],payload['done'])}
+        except (ValueError,KeyError,TypeError) as exc:raise HTTPException(422,str(exc)) from exc
 
     @app.get('/api/projects')
     def projects():
