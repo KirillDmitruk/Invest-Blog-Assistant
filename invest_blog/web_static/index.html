@@ -61,6 +61,7 @@
  <button data-page="bonds"><span>▤</span>Облигации</button>
  <button data-page="calendar"><span>▦</span>Купонный календарь</button>
  <button data-page="income"><span>▥</span>Доходы</button>
+ <button type="button" id="iisReviewLink"><span>◈</span>Разбор ИИС</button>
  <button data-page="risk"><span>◈</span>Риски</button>
  <button data-page="goals"><span>◎</span>Цели</button>
  <button data-page="allocation"><span>◉</span>Распределение средств</button>
@@ -334,7 +335,8 @@ function table(id,heads,rows){let holder=el(id);let t=document.createElement('ta
 function alertNode(message,kind='info'){let d=txt('div',message);d.className='alert'+(kind==='attention'||kind==='warning'?' warning':'');return d}
 function currencyMap(obj){return Object.entries(obj||{}).map(([c,v])=>c==='RUB'?rub(v):num(v)+' '+c).join(' · ')||'—'}
 function showPage(page){state.page=page;if(page==='placements'&&state.placements)refreshPlacements();if(page==='creator')refreshCreator();document.querySelectorAll('.section').forEach(s=>s.classList.toggle('active',s.id==='page-'+page));document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));let names={overview:'Обзор портфеля',bonds:'Облигации',calendar:'Купонный календарь',income:'Фактические доходы',risk:'Здоровье портфеля',goals:'Финансовые цели',allocation:'Распределение средств',content:'Контент-план',performance:'Доходность и экспорт',placements:'Будущие размещения',home:'Content Hub',tech:'Tech & Gadgets',creator:'Creator Studio'};el('pageTitle').textContent=names[page]||'Content Hub';el('pageDesc').textContent=page==='calendar'?'Ожидаемые купоны по текущему количеству бумаг':page==='income'?'Исполненные выплаты, погашения и пополнения':page==='performance'?'Сравнение доходности по подтверждённым снимкам брокера':page==='placements'?'Новые выпуски, сроки размещения и подготовка черновиков':page==='bonds'?'Состав и характеристики облигационной части':'Долгосрочная структура, денежные потоки и редакторская очередь';requestAnimationFrame(()=>{renderCharts(page);if(page==='performance')renderPerformanceCharts()});}
-document.querySelectorAll('.nav button').forEach(btn=>btn.addEventListener('click',()=>showPage(btn.dataset.page)));
+document.querySelectorAll('.nav button[data-page]').forEach(btn=>btn.addEventListener('click',()=>showPage(btn.dataset.page)));
+el('iisReviewLink').addEventListener('click',()=>{window.location.href='/iis'});
 document.querySelectorAll('.hub-project').forEach(btn=>btn.addEventListener('click',()=>showPage(btn.dataset.target)));
 
 
@@ -1136,3 +1138,4 @@ async function load(){try{
 window.addEventListener('load',load);
 setInterval(()=>{if(state.page==='placements')refreshPlacements()},60000);
 </script></body></html>
+

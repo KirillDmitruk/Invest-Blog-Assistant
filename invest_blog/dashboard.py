@@ -62,6 +62,9 @@ def create_app(db_path: Path, bond_target: float = 0.60, max_position: float = 0
         if origin and origin.rstrip('/') != str(request.base_url).rstrip('/'):
             raise HTTPException(status_code=403, detail='Запрос не со страницы приложения')
 
+    from .iis_routes import register_iis_routes
+    register_iis_routes(app, db_path, require_editor)
+
 
     @app.get('/', response_class=HTMLResponse)
     def index():
@@ -536,3 +539,4 @@ def create_app(db_path: Path, bond_target: float = 0.60, max_position: float = 0
         return {'status':'ok', 'latest_snapshot':portfolio.latest_day()}
 
     return app
+

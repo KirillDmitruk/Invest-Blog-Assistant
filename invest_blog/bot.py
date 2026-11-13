@@ -203,6 +203,10 @@ class InvestBot:
             log.exception('Не удалось обновить темы ликбеза')
 
     async def post_init(self, app: Application) -> None:
+        if self.settings.iis_review_enabled:
+            self.scheduler.add_job(self.run_iis_review, 'interval', hours=6, args=[app],
+                                   id='iis-review', max_instances=1, coalesce=True)
+            asyncio.create_task(self.run_iis_review(app))
         self.scheduler.add_job(self.refresh_editorial_ideas,CronTrigger(day_of_week='mon',hour=9,minute=0,timezone=self.settings.timezone),
                                id='editorial-ideas',max_instances=1,coalesce=True)
         asyncio.create_task(self.refresh_editorial_ideas())
@@ -243,6 +247,19 @@ class InvestBot:
             log.info('Tech RSS checked: %s',report)
         except Exception:
             log.exception('Ошибка автоматического сбора Tech RSS')
+
+    async def run_iis_review(self, app: Application) -> None:
+        from .iis_review import run_review
+        try:
+            report = await asyncio.to_thread(run_review, self.settings, force=False)
+            if report.get('has_data'):
+                summary = report['summary']
+                await app.bot.send_message(self.settings.telegram_chat_id,
+                    f"📋 Разбор портфеля готов: облигаций {summary['bond_count']}, "
+                    f"пересмотреть {summary['review_count']}, без оценки риска {summary['unknown_count']}.\n"
+                    "Результат: Content Hub → Разбор ИИС. Сделки не выполнялись.")
+        except Exception as exc:
+            log.warning('Разбор ИИС не завершён: %s', type(exc).__name__)
 
     async def run_vk_news(self) -> None:
         from .tech_publish_dashboard import dispatch
@@ -525,3 +542,4 @@ class InvestBot:
         app.add_handler(MessageHandler(filters.Regex(r'^(🛰️ Новые размещения|◈ Инвестиции|⚙ Tech & Gadgets)$') & filters.TEXT,self.button_menu))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND,self.reply_edit))
         app.run_polling(drop_pending_updates=False)
+
