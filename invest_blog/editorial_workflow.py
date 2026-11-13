@@ -42,6 +42,10 @@ class EditorialWorkflow:
             CREATE TABLE IF NOT EXISTS editorial_idea_refresh (
                 week TEXT PRIMARY KEY, fetched_at TEXT NOT NULL, source_status TEXT NOT NULL);
             ''')
+            # Migration for existing installations: preserve the user's idea history.
+            columns = {row[1] for row in db.execute('PRAGMA table_info(editorial_glossary_ideas)')}
+            if 'draft_id' not in columns:
+                db.execute('ALTER TABLE editorial_glossary_ideas ADD COLUMN draft_id INTEGER')
 
     def connect(self):
         db = sqlite3.connect(self.path,timeout=20)
@@ -130,7 +134,66 @@ class EditorialWorkflow:
 
     def ideas(self):
         with self.connect() as db:
-            return [dict(r) for r in db.execute("SELECT topic,status,week,source_url FROM editorial_glossary_ideas WHERE status='reserve' ORDER BY rowid LIMIT 3")]
+            return [dict(r) for r in db.execute("""
+                SELECT topic,status,week,source_url,draft_id
+                FROM editorial_glossary_ideas
+                WHERE status IN ('reserve','in_progress')
+                ORDER BY CASE WHEN status='in_progress' THEN 0 ELSE 1 END, rowid
+                LIMIT 8""")]
+
+    def glossary_draft(self, topic: str, today: date | None = None) -> int:
+        """Create once, or reopen the linked editable draft, even after restart."""
+        import uuid
+        from .editorial import period_for
+        from .lessons import TERMS
+
+        if not isinstance(topic, str) or not topic.strip() or len(topic) > 250:
+            raise ValueError('Укажи тему ликбеза')
+        today = today or date.today()
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            idea = db.execute('SELECT status,draft_id FROM editorial_glossary_ideas WHERE topic=?',
+                              (topic,)).fetchone()
+            if not idea or idea['status'] == 'done':
+                raise ValueError('Тема недоступна или уже отмечена как написанная')
+            if idea['draft_id'] is not None:
+                existing = db.execute('SELECT id,state FROM drafts WHERE id=?',
+                                      (idea['draft_id'],)).fetchone()
+                if existing and existing['state'] != 'deleted':
+                    return existing['id']
+
+            description = dict(TERMS).get(topic)
+            if not description:
+                description = ('[Объяснить простыми словами.]\n\n'
+                               '[Привести понятный пример.]\n\n'
+                               '[Почему это важно инвестору?]\n\n'
+                               '[Ключевой вывод.]')
+            body = f'📚 Ликбез за 2 минуты: {topic}\n\n{description}'
+            now = datetime.now(timezone.utc).isoformat()
+            cursor = db.execute('''
+                INSERT INTO drafts(dedup_key,kind,period,body,state,created_at)
+                VALUES(?,?,?,?,?,?)''',
+                ('glossary-idea:' + uuid.uuid4().hex, 'glossary',
+                 period_for('glossary', today), body, 'new', now))
+            draft_id = cursor.lastrowid
+            db.execute("""
+                UPDATE editorial_glossary_ideas
+                SET status='in_progress',draft_id=?
+                WHERE topic=?""", (draft_id, topic))
+            return draft_id
+
+    def glossary_done(self, topic: str) -> None:
+        """Hide the suggestion permanently; never delete or alter its draft."""
+        if not isinstance(topic, str) or not topic.strip():
+            raise ValueError('Укажи тему ликбеза')
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            result = db.execute("""
+                UPDATE editorial_glossary_ideas SET status='done'
+                WHERE topic=?""", (topic,))
+            if result.rowcount == 0:
+                raise ValueError('Тема не найдена')
+
 
     def select(self,topic,today=None):
         today=today or date.today();week=self.week(today)
