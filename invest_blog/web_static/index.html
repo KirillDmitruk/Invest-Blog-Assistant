@@ -884,7 +884,14 @@ function renderContent(){
      }catch(e){el('editorFeedback').replaceChildren(alertNode('Не удалось создать черновик: '+e.message,'warning'))}
      finally{btn.disabled=false}
    });
-   wrap.append(details,btn);sug.append(wrap);
+   const done=editorNode('button','✓ Написан','editor-btn');done.type='button';
+   done.addEventListener('click',async()=>{
+     if(!confirm('Отметить выпуск как написанный и убрать из подсказок? Черновик останется в редакторе.'))return;
+     done.disabled=true;
+     try{await editorRequest('/api/placements/'+p.id+'/done','POST',{});await refreshEditorial()}
+     catch(e){el('editorFeedback').replaceChildren(alertNode(e.message,'warning'));done.disabled=false}
+   });
+   wrap.append(details,btn,done);sug.append(wrap);
  }
  const chosen=cal.glossary_selected;
  if(chosen)sug.append(editorNode('p','Тема ликбеза этой недели: '+chosen));
@@ -892,9 +899,27 @@ function renderContent(){
    const wrap=editorNode('div','','editor-suggestion'),details=document.createElement('div');
    details.append(editorNode('strong','Ликбез: '+p.topic));
    details.append(editorNode('small','Резервная тема · '+(p.source_url?'Найдена при еженедельном мониторинге':'Из редакционного каталога')));
-   const btn=editorNode('button',chosen?'В запасе':'Выбрать на неделю','editor-btn');btn.type='button';btn.disabled=!!chosen;
-   btn.addEventListener('click',async()=>{try{await editorRequest('/api/editor/glossary-select','POST',{topic:p.topic});await refreshEditorial()}catch(e){alert(e.message)}});
-   wrap.append(details,btn);sug.append(wrap);
+   const btn=editorNode('button',chosen?'В запасе':'Выбрать на неделю','editor-btn');btn.type='button';btn.disabled=!!chosen||p.status!=='reserve';
+   btn.addEventListener('click',async()=>{try{await editorRequest('/api/editor/glossary-select','POST',{topic:p.topic});await refreshEditorial()}catch(e){el('editorFeedback').replaceChildren(alertNode(e.message,'warning'))}});
+   const progress=editorNode('button',p.draft_id?'Открыть черновик':'✎ В процессе','editor-btn');progress.type='button';
+   progress.addEventListener('click',async()=>{
+     progress.disabled=true;
+     try{
+       const draft=await editorRequest('/api/editor/glossary-draft','POST',{topic:p.topic});
+       await refreshEditorial(draft.id);
+       el('editorForm').scrollIntoView({behavior:'smooth',block:'center'});
+       el('editorFeedback').replaceChildren(alertNode('Черновик ликбеза открыт. Можно редактировать текст.'));
+     }catch(e){el('editorFeedback').replaceChildren(alertNode(e.message,'warning'))}
+     finally{progress.disabled=false}
+   });
+   const done=editorNode('button','✓ Написан','editor-btn');done.type='button';
+   done.addEventListener('click',async()=>{
+     if(!confirm('Убрать тему из подсказок как написанную? Черновик останется в редакторе.'))return;
+     done.disabled=true;
+     try{await editorRequest('/api/editor/glossary-done','POST',{topic:p.topic});await refreshEditorial()}
+     catch(e){el('editorFeedback').replaceChildren(alertNode(e.message,'warning'));done.disabled=false}
+   });
+   wrap.append(details,btn,progress,done);sug.append(wrap);
  }
  const queue=el('editorQueue');queue.replaceChildren();
  const filt=state.editorFilter||'all';const drafts=state.drafts.filter(d=>(filt==='all'||d.state===filt)&&d.state!=='published');
