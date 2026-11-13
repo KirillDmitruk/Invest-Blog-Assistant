@@ -342,7 +342,9 @@ def create_app(db_path: Path, bond_target: float = 0.60, max_position: float = 0
             ids={r['placement_id']:r['draft_id'] for r in db.execute(
                 "SELECT p.placement_id,p.draft_id FROM placement_drafts p JOIN drafts d ON d.id=p.draft_id WHERE d.state!='deleted'")}
         seen=set()
+        completed=placements.done_ids()
         for issue in issues:
+            if issue['id'] in completed:continue
             key=(issue.get('isin') or issue.get('name') or '').strip().upper()
             if not key or key in seen:continue
             seen.add(key)
@@ -430,6 +432,31 @@ def create_app(db_path: Path, bond_target: float = 0.60, max_position: float = 0
         try:workflow.select(payload.get('topic'),now)
         except (ValueError,TypeError) as exc:raise HTTPException(409,detail=str(exc)) from exc
         return {'selected':workflow.selection(now),'remaining':workflow.ideas()}
+
+    @app.post('/api/editor/glossary-draft', status_code=201)
+    async def glossary_idea_draft(request: Request):
+        require_editor(request)
+        payload = await request.json()
+        if not isinstance(payload, dict):
+            raise HTTPException(422, detail='Ожидается объект')
+        now = datetime.now(timezone).date() if timezone else date.today()
+        try:
+            did = workflow.glossary_draft(payload.get('topic'), now)
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(409, detail=str(exc)) from exc
+        return dict(drafts.get(did))
+
+    @app.post('/api/editor/glossary-done')
+    async def glossary_idea_done(request: Request):
+        require_editor(request)
+        payload = await request.json()
+        if not isinstance(payload, dict):
+            raise HTTPException(422, detail='Ожидается объект')
+        try:
+            workflow.glossary_done(payload.get('topic'))
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(409, detail=str(exc)) from exc
+        return {'status': 'done'}
 
     @app.get('/api/editor/drafts/{draft_id}')
     def editor_get(draft_id: int):
@@ -527,6 +554,15 @@ def create_app(db_path: Path, bond_target: float = 0.60, max_position: float = 0
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         return dict(drafts.get(did))
+
+    @app.post('/api/placements/{placement_id}/done')
+    def placement_idea_done(placement_id: int, request: Request):
+        require_editor(request)
+        try:
+            placements.mark_done(placement_id)
+        except ValueError as exc:
+            raise HTTPException(404, detail=str(exc)) from exc
+        return {'status': 'done'}
 
     @app.get('/api/topics')
     def topics():
