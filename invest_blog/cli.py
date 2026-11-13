@@ -1,5 +1,23 @@
-from __future__ import annotations
+"""CLI for Invest Blog Assistant."""
 
+from __future__ import annotations
+import sys
+
+if sys.platform == "win32":
+    import truststore
+
+    truststore.inject_into_ssl()
+
+import argparse
+import logging
+from collections import Counter, defaultdict
+from decimal import Decimal
+from datetime import date, datetime
+
+from .config import Settings
+from .posts import PostGenerator, operation_type, previous_month
+from .tinvest import TInvest
+from .model import money, fmt_money
 import argparse
 import logging
 from collections import Counter, defaultdict
