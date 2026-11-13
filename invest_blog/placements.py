@@ -79,6 +79,12 @@ def from_tinvest(raw: dict, today: date) -> dict | None:
         'qualified': raw.get('forQualInvestorFlag') if isinstance(raw.get('forQualInvestorFlag'), bool) else None,
         'source_url': 'https://developer.tbank.ru/invest/api/instruments-service-bonds',
         'uid': raw.get('uid') or raw.get('instrumentUid') or None,
+        'issuer_uid': raw.get('issuerUid') or None,
+        'for_iis': raw.get('forIisFlag'),
+        'risk_level': raw.get('riskLevel'),
+        'ratings': raw.get('ratings') if isinstance(raw.get('ratings'), list) else [],
+        'subordinated': raw.get('subordinatedFlag'),
+        'perpetual': raw.get('perpetualFlag'),
     }
 
 
@@ -473,3 +479,4 @@ class PlacementMonitor:
             return {'busy':False,'sources':outcomes}
         finally:
             self._lock.release()
+

@@ -32,7 +32,7 @@ from .model import money, fmt_money
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Invest Blog Assistant")
-    parser.add_argument("action", choices=("bot", "accounts", "preview", "diagnose", "sync", "web", "audit", "bonds", "backfill", "risk", "performance", "placements", "tech-news", "vk-test", "vk-news", "tg-news", "tg-test"))
+    parser.add_argument("action", choices=("bot", "accounts", "preview", "diagnose", "sync", "web", "audit", "bonds", "backfill", "risk", "performance", "placements", "tech-news", "vk-test", "vk-news", "tg-news", "tg-test", "iis-review"))
     parser.add_argument("kind", nargs="?", choices=("weekly", "monthly", "plan", "paper", "glossary", "purchase"))
     parser.add_argument("--date", dest="date_string", help="Локальная дата YYYY-MM-DD для preview (брокерские данные — актуальные)")
     parser.add_argument("--start", help="Начало периода YYYY-MM-DD (для diagnose)")
@@ -46,6 +46,11 @@ def main() -> None:
     args = parser.parse_args()
     settings = Settings.load()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    if args.action == 'iis-review':
+        import json
+        from .iis_review import run_review
+        print(json.dumps(run_review(settings), ensure_ascii=False, indent=2))
+        return
     if args.action == "tg-test":
         import os
         from .tech_telegram import TechTelegramPublisher
@@ -218,3 +223,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

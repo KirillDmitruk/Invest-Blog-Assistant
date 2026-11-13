@@ -17,7 +17,7 @@ class PortfolioSync:
             raise ValueError('Не указаны счета')
         self.api, self.accounts, self.store = api, accounts, store
 
-    def run(self, day: date, days: int = 90) -> dict:
+    def run(self, day: date, days: int = 90, *, force_metadata: bool = False) -> dict:
         if days < 1 or days > 3650:
             raise ValueError('days должен быть от 1 до 3650')
         notes=[]
@@ -98,7 +98,7 @@ class PortfolioSync:
             horizon_end=to_exclusive-timedelta(days=1)
             for stored_id, instrument_uid in bond_identifiers.items():
                 metadata_fresh, coupons_fresh=self.store.bond_cache(stored_id, day)
-                if not metadata_fresh:
+                if force_metadata or not metadata_fresh:
                     if not instrument_uid:
                         notes.append(f'Нет instrumentUid для метаданных облигации {stored_id[-8:]}')
                     else:
@@ -131,3 +131,4 @@ class PortfolioSync:
         return {'day':day.isoformat(),'accounts':len(accounts), 'positions':sum(len(a['positions']) for a in accounts),
                 'operations':len(operations), 'bond_profiles_updated':len(profiles),
                 'coupon_calendars_updated':len(schedules), 'warnings':notes}
+

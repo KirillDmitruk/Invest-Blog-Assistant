@@ -39,11 +39,17 @@ class Settings:
     max_position_weight: float = .15
     placements_feed_url: str = ""
     placements_finam_enabled: bool = True
+    iis_review_enabled: bool = True
+    iis_review_interval_days: int = 3
+    iis_review_account_id: str = ""
 
     @classmethod
     def load(cls) -> Settings:
         load_dotenv()
         chat = getenv("TELEGRAM_CHAT_ID", "").strip()
+        review_days = int(getenv('IIS_REVIEW_INTERVAL_DAYS', '3'))
+        if not 1 <= review_days <= 30:
+            raise ValueError('IIS_REVIEW_INTERVAL_DAYS должен быть от 1 до 30')
         return cls(
             invest_token=getenv("TINVEST_TOKEN", "").strip(),
             account_ids=tuple(x.strip() for x in getenv("TINVEST_ACCOUNT_IDS", "").split(",") if x.strip()),
@@ -59,6 +65,9 @@ class Settings:
             max_position_weight=float(getenv("MAX_POSITION_WEIGHT", ".15")),
             placements_feed_url=getenv("PLACEMENTS_FEED_URL", "").strip(),
             placements_finam_enabled=getenv("PLACEMENTS_FINAM_ENABLED", "true").lower() in ("1", "true", "yes"),
+            iis_review_enabled=getenv('IIS_REVIEW_ENABLED', 'true').lower() in ('1', 'true', 'yes'),
+            iis_review_interval_days=review_days,
+            iis_review_account_id=getenv('IIS_REVIEW_ACCOUNT_ID', '').strip(),
             times={kind: _time(f'{kind.upper()}_TIME', f'{h:02d}:{m:02d}')
                    for kind, (h, m) in DEFAULT_TIMES.items()},
         )
@@ -75,3 +84,4 @@ class Settings:
             raise ValueError("Укажи TELEGRAM_BOT_TOKEN в .env")
         if self.telegram_chat_id is None:
             raise ValueError("Укажи TELEGRAM_CHAT_ID. Напиши /whoami своему боту")
+
