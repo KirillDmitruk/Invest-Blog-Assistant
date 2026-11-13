@@ -239,6 +239,10 @@ class PlacementStore:
                     placement_id INTEGER PRIMARY KEY,
                     draft_id INTEGER NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS placement_idea_status (
+                    placement_id INTEGER PRIMARY KEY,
+                    status TEXT NOT NULL CHECK(status IN ('done'))
+                );
             ''')
 
     def _connect(self):
@@ -315,8 +319,29 @@ class PlacementStore:
                 db.execute('UPDATE placement_issues SET notified_version=? WHERE id=? AND notified_version<?',
                            (version,issue_id,version))
 
+    def done_ids(self) -> set[int]:
+        with self._connect() as db:
+            return {row['placement_id'] for row in db.execute(
+                "SELECT placement_id FROM placement_idea_status WHERE status='done'")}
+
+    def mark_done(self, issue_id: int) -> None:
+        """Hide a radar suggestion without deleting its source or linked draft."""
+        with self._connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            exists = db.execute('SELECT 1 FROM placement_issues WHERE id=?',
+                                (issue_id,)).fetchone()
+            if not exists:
+                raise ValueError('Размещение не найдено')
+            db.execute("""
+                INSERT INTO placement_idea_status(placement_id,status)
+                VALUES(?,'done')
+                ON CONFLICT(placement_id) DO UPDATE SET status='done'
+            """, (issue_id,))
+
     def create_draft(self, issue_id: int) -> int:
         """Idempotent selection; atomically link to standard editorial workflow."""
+        if issue_id in self.done_ids():
+            raise ValueError('Размещение уже отмечено как написанное')
         item = self.get(issue_id)
         if not item:
             raise ValueError('Размещение уже прошло или отсутствует в последней выгрузке')
