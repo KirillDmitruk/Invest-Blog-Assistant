@@ -971,12 +971,17 @@ function renderContent(){
 }
 function draftWeekday(period){const day=period.slice(0,10);const d=new Date(day+'T12:00:00Z');return Number.isNaN(d.getTime())?'Дата не задана':['Вс','Пн','Вт','Ср','Чт','Пт','Сб'][d.getUTCDay()]}
 async function markCalendar(item,status){
+ const editingThis=state.editorDraft?.id===item.draft_id;
+ if(status==='done'&&editingThis&&el('editorBody').value!==state.editorDraft.body){
+   el('editorFeedback').replaceChildren(alertNode('Сначала сохрани изменения в открытом черновике.','warning'));
+   return;
+ }
  if(status==='done'&&!confirm('Отметить пост как написанный? Черновик сохранится, а запланированная или ожидающая отправка будет отменена.'))return;
  try{
    if(status==='in_progress' && !item.draft_id){await editorRequest('/api/editor/calendar-draft','POST',{day:item.day,kind:item.kind});}
    await editorRequest('/api/editor/calendar-status','POST',{day:item.day,kind:item.kind,status});
-   if(status==='done'&&state.editorDraft?.id===item.draft_id)newDraft();
-   await refreshEditorial();
+   await refreshEditorial(editingThis?item.draft_id:undefined);
+   if(status==='done')el('editorFeedback').replaceChildren(alertNode('Пост отмечен как написанный. Черновик сохранён.'));
  }catch(e){el('editorFeedback').replaceChildren(alertNode(e.message,'warning'))}
 }
 async function openCalendarDraft(item,button){
