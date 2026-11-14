@@ -882,7 +882,8 @@ function renderContent(){
  ct.append(tbody);calendar.append(ct);
  table('topics',['Рубрика','Тема / UID','Дата'],state.topics.map(x=>[x.kind,x.topic_key,x.created_at.slice(0,10)]));
  const sug=el('editorSuggestions');sug.replaceChildren();
- if(!cal){sug.append(txt('p','Контент-план пока не загружен'));return}
+ if(!cal){sug.append(txt('p','Контент-план пока не загружен'));}
+ else {
  // «Бумага недели» не выводит технические причины выбора из брокерской истории.
  // Отдельная новостная рубрика «На радаре» наполняется из проверяемых размещений.
  const radar=cal.radar_suggestions||[];
@@ -940,6 +941,7 @@ function renderContent(){
      catch(e){el('editorFeedback').replaceChildren(alertNode(e.message,'warning'));done.disabled=false}
    });
    wrap.append(details,btn,progress,done);sug.append(wrap);
+ }
  }
  const queue=el('editorQueue');queue.replaceChildren();
  const filt=state.editorFilter||'all';const drafts=state.drafts.filter(d=>filt==='all'?d.state!=='published':d.state===filt);
