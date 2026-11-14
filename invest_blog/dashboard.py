@@ -68,6 +68,8 @@ def create_app(db_path: Path, bond_target: float = 0.60, max_position: float = 0
     register_iis_routes(app, db_path, require_editor)
     from .editor_tools import register_editor_tools
     register_editor_tools(app, require_editor)
+    from .walt_routes import register_walt_routes
+    register_walt_routes(app, db_path, require_editor)
     app.mount('/static', StaticFiles(directory=HTML_PATH.parent), name='static')
 
 

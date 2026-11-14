@@ -1,0 +1,55 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const {chromium}=require(process.env.CONTENT_HUB_PLAYWRIGHT_PATH||'playwright');
+(async()=>{
+ const browser=await chromium.launch({executablePath:process.env.CONTENT_HUB_BROWSER,headless:true});
+ try{
+  const page=await browser.newPage({viewport:{width:1440,height:1000}});const errors=[];
+  page.on('pageerror',e=>errors.push(e.message));await page.route('https://cdn.jsdelivr.net/**',r=>r.abort());
+  let accept=false;page.on('dialog',d=>accept?d.accept():d.dismiss());
+  await page.goto(process.env.CONTENT_HUB_URL||'http://127.0.0.1:8766/#assets');
+  await page.locator('#assetsBroker').filter({hasText:'10'}).waitFor();
+  const overview=()=>page.evaluate(()=>fetch('/api/assets/overview').then(r=>r.json()));
+  assert.equal((await overview()).combined.total_rub,null);
+  await page.locator('#assetsOpenWalt').click();
+  await page.locator('#waltSymbol').fill('BTC');await page.locator('#waltName').fill('Bitcoin · демонстрационные данные');
+  await page.locator('#waltQuantity').fill('0,1');await page.locator('#waltPrice').fill('60000');
+  await page.locator('#waltSave').click();await page.locator('#waltPositions .goal-item').filter({hasText:'BTC'}).waitFor();
+  assert.equal((await overview()).walt.total_usd,'6000.00');
+  await page.locator('#waltOverview').click();await page.locator('#assetsFxRate').fill('100');
+  await page.locator('#assetsFxForm button[type=submit]').click();
+  await page.locator('#assetsFeedback').filter({hasText:'Курс сохранён'}).waitFor();
+  assert.equal((await overview()).combined.total_rub,'610000.00');
+  await page.locator('#assetsOpenWalt').click();
+  await page.locator('#waltPositions .goal-item button').filter({hasText:'Изменить'}).first().click();
+  await page.locator('#waltQuantity').fill('0.2');await page.locator('#waltReset').click();
+  assert.equal(await page.locator('#waltQuantity').inputValue(),'0.2');
+  // Accept an explicit reset, then add an unpriced token: the total must become incomplete.
+  accept=true;await page.locator('#waltReset').click();accept=false;
+  await page.locator('#waltSymbol').fill('SPYx');await page.locator('#waltName').fill('Токен SPYx · демонстрация');
+  await page.locator('#waltKind').selectOption('tokenized_etf');await page.locator('#waltQuantity').fill('0.25');
+  await page.locator('#waltSave').click();await page.locator('#waltPositions .goal-item').filter({hasText:'SPYx'}).waitFor();
+  assert.equal((await overview()).combined.complete,false);
+  await page.locator('#waltPositions .goal-item').filter({hasText:'SPYx'}).getByRole('button',{name:'Изменить'}).click();
+  await page.locator('#waltPrice').fill('600');await page.locator('#waltSave').click();
+  await page.locator('#waltPositions .goal-item').filter({hasText:'SPYx'}).filter({hasText:/150/}).waitFor();
+  assert.equal((await overview()).combined.total_rub,'625000.00');
+  fs.mkdirSync('docs/previews',{recursive:true});
+  await page.screenshot({path:'docs/previews/walt-demo.png',fullPage:true});
+  await page.locator('#waltOverview').click();await page.locator('#assetsFxCbr').click();
+  await page.locator('#assetsFeedback').filter({hasText:'Получен официальный курс'}).waitFor();
+  assert.equal((await overview()).fx.source,'cbr');
+  assert.equal((await overview()).combined.total_rub,'597325.00');
+  await page.locator('#assetsSnapshot').click();await page.locator('#assetsFeedback').filter({hasText:'Снимок сохранён'}).waitFor();
+  await page.locator('#assetsFilter').selectOption('walt');assert.match(await page.locator('#assetsTotalUsd').innerText(),/6.*150/);
+  await page.locator('#assetsFilter').selectOption('tinvest');assert.match(await page.locator('#assetsTotalRub').innerText(),/10.*000/);
+  await page.locator('#assetsFilter').selectOption('all');
+  await page.screenshot({path:'docs/previews/all-assets-demo.png',fullPage:true});
+  await page.reload();await page.locator('#assetsWalt').filter({hasText:'2'}).waitFor();
+  assert.equal((await overview()).positions.length,2);
+  await page.setViewportSize({width:390,height:844});await page.screenshot({path:'docs/previews/assets-mobile-demo.png',fullPage:true});
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+  assert.deepEqual(errors,[]);
+  console.log('Walt browser checks passed: create/edit, comma decimals, missing prices, FX, snapshots, filters, reload and mobile.');
+ } finally {await browser.close()}
+})().catch(e=>{console.error(e);process.exit(1)});
