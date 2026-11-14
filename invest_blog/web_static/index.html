@@ -942,7 +942,7 @@ function renderContent(){
    wrap.append(details,btn,progress,done);sug.append(wrap);
  }
  const queue=el('editorQueue');queue.replaceChildren();
- const filt=state.editorFilter||'all';const drafts=state.drafts.filter(d=>(filt==='all'||d.state===filt)&&d.state!=='published');
+ const filt=state.editorFilter||'all';const drafts=state.drafts.filter(d=>filt==='all'?d.state!=='published':d.state===filt);
  const sel=document.createElement('select');sel.className='editor-input';
  for(const [key,value] of [['all','Все'],['new','Новые'],['review','На проверке'],['approved','Одобрены'],['scheduled','Запланированы'],['published','Опубликованы']]){const op=document.createElement('option');op.value=key;op.textContent=value;sel.append(op)}
  sel.value=filt;sel.addEventListener('change',()=>{state.editorFilter=sel.value;renderContent()});queue.append(sel);
@@ -971,7 +971,7 @@ function renderContent(){
 }
 function draftWeekday(period){const day=period.slice(0,10);const d=new Date(day+'T12:00:00Z');return Number.isNaN(d.getTime())?'Дата не задана':['Вс','Пн','Вт','Ср','Чт','Пт','Сб'][d.getUTCDay()]}
 async function markCalendar(item,status){
- if(status==='done'&&!confirm('Отметить пост как написанный? Черновик будет полностью удалён из SQLite и исчезнет из очереди.'))return;
+ if(status==='done'&&!confirm('Отметить пост как написанный? Черновик сохранится, а запланированная или ожидающая отправка будет отменена.'))return;
  try{
    if(status==='in_progress' && !item.draft_id){await editorRequest('/api/editor/calendar-draft','POST',{day:item.day,kind:item.kind});}
    await editorRequest('/api/editor/calendar-status','POST',{day:item.day,kind:item.kind,status});
@@ -1239,14 +1239,46 @@ el('techForm').addEventListener('submit',async ev=>{ev.preventDefault();try{
 
 async function load(){try{
   blogReportDefaultDates();
-  await loadBlogReportAccounts();
- const [a,b,risk,goals,editor,drafts,topics,contentPlan,routine,performance,placements]=await Promise.all([getJson('/api/overview'),getJson('/api/bonds'),getJson('/api/risk'),getJson('/api/goals'),getJson('/api/editor-token'),getJson('/api/drafts'),getJson('/api/topics'),getJson('/api/content-plan'),getJson('/api/publication-routine'),getJson('/api/performance'),getJson('/api/placements')]);
- if(!a.has_data||!b.has_data){el('status').textContent='Данные портфеля ещё не загружены';}
- state.overview=a;state.bonds=b;state.risk=risk;state.goals=goals;state.editorToken=editor.token;state.drafts=drafts;state.topics=topics;state.contentPlan=contentPlan;state.routine=routine;state.performance=performance;state.placements=placements;
- if(a.has_data)el('status').textContent='Снимок '+a.as_of+' · '+(a.sync?.status||'нет статуса');
- if(a.has_data&&b.has_data){renderOverview();renderBonds();renderCalendar();renderIncome();renderRisk();renderGoals();renderPerformance();}
- renderContent();renderPlacements();await refreshTech();await refreshTechNews();await refreshTechPublishing();showPage(state.page);
- }catch(err){el('fatal').style.display='block';el('fatal').textContent='Не удалось загрузить дашборд: '+err.message;el('status').textContent='Ошибка загрузки';}}
+  // One unavailable endpoint must not hide unrelated sections.
+  const endpoints=[
+    ['overview','/api/overview'],['bonds','/api/bonds'],['risk','/api/risk'],
+    ['goals','/api/goals'],['editorToken','/api/editor-token'],
+    ['drafts','/api/drafts'],['topics','/api/topics'],
+    ['contentPlan','/api/content-plan'],['routine','/api/publication-routine'],
+    ['performance','/api/performance'],['placements','/api/placements']
+  ];
+  const responses=await Promise.allSettled(endpoints.map(([,url])=>getJson(url)));
+  const failed=[];
+  responses.forEach((result,i)=>{
+    const [key,url]=endpoints[i];
+    if(result.status==='rejected'){failed.push(url);return}
+    state[key]=key==='editorToken'?result.value.token:result.value;
+  });
+  const a=state.overview,b=state.bonds;
+  if(a?.has_data&&b?.has_data)renderOverview();
+  if(b?.has_data){renderBonds();renderCalendar();renderIncome();}
+  if(state.risk)renderRisk();
+  if(state.goals)renderGoals();
+  if(state.performance)renderPerformance();
+  renderContent();renderPlacements();
+  // These functions display their own local errors and can load independently.
+  await Promise.allSettled([loadBlogReportAccounts(),refreshTech(),refreshTechNews(),refreshTechPublishing()]);
+  showPage(state.page);
+  el('status').textContent=a?.has_data
+    ?'Снимок '+a.as_of+' · '+(a.sync?.status||'нет статуса')+(failed.length?' · часть данных недоступна':'')
+    :(failed.length?'Часть данных недоступна':'Данные портфеля ещё не загружены');
+  const warning=el('fatal');
+  if(failed.length){
+    warning.replaceChildren(txt('span','Не удалось загрузить: '+failed.join(', ')+'. Остальные разделы доступны. '));
+    const retry=txt('button','Повторить загрузку');retry.type='button';
+    retry.addEventListener('click',load);warning.append(retry);
+    warning.style.display='block';
+  }else{warning.replaceChildren();warning.style.display='none'}
+  }catch(err){
+    el('fatal').style.display='block';
+    el('fatal').textContent='Ошибка отображения дашборда: '+err.message;
+    el('status').textContent='Ошибка загрузки';
+  }}
 window.addEventListener('load',load);
 setInterval(()=>{if(state.page==='placements')refreshPlacements()},60000);
 </script></body></html>
