@@ -30,7 +30,7 @@
 
 - Сбор **RSS/Atom** из The Verge, Ars Technica, TechCrunch, Engadget, IEEE Spectrum, MIT Technology Review и NASA; сохранение заголовка, даты, краткого описания и URL в SQLite.
 - Категории: технологии, AI, рынок/IPO, робототехника, гаджеты, DIY/электроника, 3D-печать, космос.
-- Фильтрация и исключение повторов по нормализованной ссылке; ручное создание tech-черновика из новости. В действующей версии **нет AI-пересказа полного текста** и **нет автоматической публикации tech-новостей в VK**.
+- Фильтрация и исключение повторов по нормализованной ссылке; ручное создание tech-черновика из новости. Полного AI-пересказа статей нет. Отдельный механизм публикации RSS-новостей в VK/Telegram поддерживает локальный перевод, расписание и журнал доставки; он требует явной настройки (см. [VK_AUTO_SETUP.md](VK_AUTO_SETUP.md)).
 - **Creator Studio — Kir in Tech**: проекты **NOVA**, **шлем Железного человека**, **робо-паук**; план 3 публикации в неделю (пн — процесс разработки, ср — карусель, пт — атмосферное видео); генерация 12 идей на 4 недели, даты, заметки и статусы `idea → script → shooting → editing → ready → published`. Это планирование, не загрузка роликов в Instagram/TikTok.
 
 ### Telegram
@@ -39,16 +39,55 @@
 - Список новых облигаций с пагинацией, создание черновиков.
 - Запланированные задания работают **только пока бот запущен**. Расписание и фактическая отправка зависят от настроек и подтверждения владельца.
 
-## Быстрый запуск (Ubuntu, Python 3.11+, uv)
+## Быстрый запуск на Windows
 
-```bash
-cd ~/Projects/invest_blog_assistant
-uv sync --extra dev
-cp -n .env.example .env
-nano .env
+### Если проект уже установлен
+
+В PowerShell из папки проекта:
+
+```powershell
+cd C:\Projects\Invest-Blog-Assistant
+.\hub web
 ```
 
-Минимальные настройки в `.env`:
+Открой [http://127.0.0.1:8000](http://127.0.0.1:8000). В **отдельной вкладке терминала**, из той же папки, запусти бота:
+
+```powershell
+.\hub bot
+```
+
+Веб и бот работают, пока открыты их терминалы. **Ctrl+C** останавливает соответствующий процесс. Веб-интерфейс доступен только локально. Для фоновых заданий и публикаций по расписанию нужен работающий бот.
+
+`hub.cmd` запускает команды через uv и сам выбирает папку проекта: активировать `.venv`, устанавливать Make или менять постоянные настройки PowerShell не требуется. В PowerShell нужен префикс `.\`; в обычной командной строке Windows можно писать `hub web`. Пути с пробелами заключай в кавычки.
+
+### Первая установка
+
+Нужны Git и uv. Если uv ещё не установлен, установи его через WinGet:
+
+```powershell
+winget install --id=astral-sh.uv -e
+```
+
+Затем открой новый терминал. Другие способы доступны в [официальной инструкции uv](https://docs.astral.sh/uv/getting-started/installation/).
+
+Если репозитория ещё нет на компьютере:
+
+```powershell
+git clone https://github.com/KirillDmitruk/Invest-Blog-Assistant.git C:\Projects\Invest-Blog-Assistant
+```
+
+Перейди в папку и установи зависимости. Python при необходимости загрузит uv:
+
+```powershell
+cd C:\Projects\Invest-Blog-Assistant
+.\hub install
+if (!(Test-Path .env)) { Copy-Item .env.example .env }
+notepad .env
+```
+
+Если папка проекта уже существует, используй её; повторно клонировать проект и заменять `.env` не нужно.
+
+Минимальный пример `.env`:
 
 ```dotenv
 TINVEST_TOKEN=READ_ONLY_TOKEN
@@ -60,55 +99,87 @@ TIMEZONE=Europe/Moscow
 DB_PATH=./data/drafts.sqlite3
 ```
 
-Токен для T-Invest должен быть **только на чтение**. Для первого запуска веб-интерфейса без брокерской синхронизации часть инвестиционных виджетов будет пустой. Не публикуй `.env`, токены, SQLite и экспорты с личными данными в Git.
+Для брокера нужен токен **только на чтение**. Команда `.\hub accounts` покажет ID счетов — добавь нужный в `TINVEST_ACCOUNT_IDS`. Для бота также нужны Telegram-токен, ID управляющего чата и ID счёта; для отправки в канал укажи `TELEGRAM_CHANNEL_ID` и предоставь боту необходимые права. SQLite, `.env` и личные экспорты в Git не добавлять.
 
-**Веб-интерфейс**, первый терминал:
+Первые данные и запуск:
 
-```bash
-uv run python -m invest_blog.cli web --port 8000
+```powershell
+.\hub accounts
+.\hub sync --days 365
+.\hub tech-news
+.\hub web
 ```
 
-Открой `http://127.0.0.1:8000` (сервер слушает `127.0.0.1`, то есть доступен только локально).
+`accounts`, `sync`, `placements` требуют корректного T-Invest токена; `sync` также требует ID счёта. `tech-news` собирает RSS без брокерского токена. До синхронизации инвестиционные виджеты могут быть пустыми.
 
-**Telegram и планировщик**, второй терминал:
+### Короткие команды
 
-```bash
-uv run python -m invest_blog.cli bot
+| Команда PowerShell | Действие |
+| --- | --- |
+| `.\hub` или `.\hub help` | Справка по коротким командам |
+| `.\hub install` | Установить зависимости приложения и тестов |
+| `.\hub web` | Веб-интерфейс на порту 8000 |
+| `.\hub web --port 8080` | Веб-интерфейс на другом порту |
+| `.\hub bot` | Telegram-бот и планировщик |
+| `.\hub accounts` | Список брокерских счетов |
+| `.\hub sync --days 30` | Синхронизация за 30 дней |
+| `.\hub tech-news` | Обновление технологических RSS-новостей |
+| `.\hub placements` | Проверка новых размещений облигаций |
+| `.\hub weekly` / `.\hub monthly` | Предпросмотр недельного / месячного поста |
+| `.\hub plan` / `.\hub paper` / `.\hub glossary` / `.\hub purchase` | Предпросмотр других рубрик |
+| `.\hub preview weekly --date 2026-11-13` | Предпросмотр на выбранную дату |
+| `.\hub bonds` / `.\hub risk` / `.\hub performance` | Аналитика |
+| `.\hub iis-review` | Однократный разбор ИИС |
+| `.\hub diagnose --start 2026-11-01 --end 2026-11-13` | Диагностика выбранного периода |
+| `.\hub audit` | Аудит сохранённых данных |
+| `.\hub backfill --days 365 --partial` | Восстановление подтверждённой части истории |
+| `.\hub backup` | Согласованная резервная копия SQLite в `data/backups` |
+| `.\hub backup --db "C:\My Data\drafts.sqlite3"` | Копия конкретной базы |
+| `.\hub test` | Все автоматические тесты |
+| `.\hub test -k editorial` | Только тесты, подходящие по имени |
+| `.\hub web --help` | Полная справка существующего CLI |
+
+Остальные действия CLI (`vk-news`, `vk-test`, `tg-news`, `tg-test`) и параметры также передаются через `.\hub` без изменений. Например, `.\hub vk-news --limit 1` выполняет предварительную проверку; реальная отправка остаётся отдельным действием с `--publish --confirm PUBLISH`. Настройка каналов и перевода описана в [VK_AUTO_SETUP.md](VK_AUTO_SETUP.md) и [VK_SETUP.md](VK_SETUP.md).
+
+Для **необязательного локального перевода** нужна совместимая версия Python и модель en-ru. Например, зависимости переводчика можно установить с Python 3.13:
+
+```powershell
+.\hub --translation install --python 3.13
+.\hub --translation web
 ```
 
-Первые данные:
+Для бота с переводчиком используй `.\hub --translation bot`; флаг `--translation` ставится **перед действием**. Саму модель en-ru необходимо установить отдельно по инструкции переводчика. Основное приложение работает без Argos; обычный `.\hub install` его не устанавливает. Останови веб и бота перед сменой версии Python в окружении.
 
-```bash
-uv run python -m invest_blog.cli accounts
-uv run python -m invest_blog.cli sync --days 365
-uv run python -m invest_blog.cli tech-news
-uv run python -m invest_blog.cli placements
+### Обновление и возможные проблемы
+
+После обновления кода выполни `.\hub install` и перезапусти веб/бота. Если используешь переводчик, устанавливай и запускай с `--translation`. Перед работой с базой сделай `.\hub backup`.
+
+- **Команда uv не найдена:** установи uv и заново открой терминал; проверь `uv --version`.
+- **Команда hub не найдена:** перейди в корень проекта и пиши `.\hub`, а не просто `hub` в PowerShell.
+- **Порт занят:** останови предыдущий веб-сервер через Ctrl+C либо используй `.\hub web --port 8080`.
+- **Несовместимые зависимости перевода:** выбери Python 3.13 командой выше; наличие подходящей модели проверяется отдельно.
+- **Тестам мешают системные плагины (например, ROS 2):** временно отключи их автозагрузку:
+
+```powershell
+$env:PYTEST_DISABLE_PLUGIN_AUTOLOAD = "1"
+.\hub test
+Remove-Item Env:PYTEST_DISABLE_PLUGIN_AUTOLOAD
 ```
 
-`accounts`, `sync`, `placements` требуют корректного T-Invest токена (для `sync` также ID счёта). `tech-news` проверяет RSS и не требует брокерского токена. Включить купонные и финансовые разделы помогает регулярная синхронизация.
+### Linux / Ubuntu и прямой запуск
 
-### Частые команды
-
-```bash
-uv run python -m invest_blog.cli preview weekly
-uv run python -m invest_blog.cli preview monthly
-uv run python -m invest_blog.cli preview plan
-uv run python -m invest_blog.cli preview paper
-uv run python -m invest_blog.cli preview glossary
-uv run python -m invest_blog.cli bonds
-uv run python -m invest_blog.cli risk
-uv run python -m invest_blog.cli performance
-uv run python -m invest_blog.cli audit
-uv run python -m invest_blog.cli backfill --days 365 --partial
-```
-
-**Тесты**: в окружении с ROS 2 системный `launch_testing` может мешать `pytest`, поэтому используйте:
+В Linux остаются существующие Make-команды (`make web`, `make bot`, `make test`, `make install`). Без Make можно использовать установленную точку входа `invest-blog`:
 
 ```bash
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest -q
+uv sync --extra dev
+cp -n .env.example .env
+# Заполни .env своим редактором.
+uv run invest-blog web
+# В другом терминале:
+uv run invest-blog bot
 ```
 
-Если собственный `Makefile` уже создан, можно использовать `make web`, `make bot`, `make test`, но официальные CLI-команды выше работают без него.
+Полная форма `uv run python -m invest_blog.cli web` также продолжает работать на обеих системах. Короткий Windows-запускатель только передаёт действия и параметры существующим командам приложения.
 
 ## Архитектура
 
@@ -144,7 +215,8 @@ Storage → SQLite (несколько логических таблиц, оди
 | `placements.py` | Поиск размещений, хранение, шаблон «На радаре» |
 | `tech_news.py`, `tech_store.py` | RSS-новости и отдельная очередь Tech |
 | `creator_studio.py` | Три maker-проекта и производственный календарь |
-| `dashboard.py`, `web_static/index.html` | FastAPI и интерактивный локальный интерфейс |
+| `dashboard.py`, `web_static/index.html`, `web_static/workspace.js` | FastAPI, навигация и единая редакция |
+| `hub.cmd`, `tools/hub.ps1` | Короткие команды для Windows |
 | `bot.py` | Telegram и фоновые задания (при работающем боте) |
 | `tests/` | Автоматические тесты |
 
@@ -181,8 +253,8 @@ IIS_REVIEW_ACCOUNT_ID=
 
 Однократный запуск из терминала:
 
-```bash
-uv run python -m invest_blog.cli iis-review
+```powershell
+.\hub iis-review
 ```
 
 Стартовые лимиты в интерфейсе: 15% на эмитента и 20% повышенного риска; максимальный возраст рейтинга — 365 дней. Это изменяемые ориентиры пользователя. Классификация AA− и выше / A–BBB / BB и ниже — внутренняя группировка российских национальных рейтингов, не вероятность дефолта и не сопоставление с международной шкалой. Нераспознанные, будущие и устаревшие рейтинги остаются неподтверждёнными.
@@ -191,20 +263,13 @@ uv run python -m invest_blog.cli iis-review
 
 База по умолчанию: `data/drafts.sqlite3`. Финансовую историю и публикации не удалять при очистке временных данных. Пример **безопасного резервного копирования** (работает и с активной SQLite):
 
-```bash
-mkdir -p backups
-uv run python - <<'PY'
-import sqlite3
-from datetime import datetime
-from pathlib import Path
-from invest_blog.config import Settings
-source = Settings.load().db_path.expanduser()
-target = Path('backups') / f'content_hub_{datetime.now():%Y%m%d_%H%M%S}.sqlite3'
-with sqlite3.connect(source) as db, sqlite3.connect(target) as backup:
-    db.backup(backup)
-print(target)
-PY
+```powershell
+.\hub backup
+# Свой путь к базе и каталогу резервных копий:
+.\hub backup --db "C:\My Data\drafts.sqlite3" --out-dir "C:\My Backups"
 ```
+
+В Linux: `uv run python tools/backup_db.py`. Утилита проверяет целостность копии и сохраняет исходную базу.
 
 Тестовые и ручные очистки сначала проводить на копии БД. Автоматической политики удаления старых RSS-записей в этом релизе нет; **не** запускать `VACUUM` во время активной записи без необходимости.
 
@@ -213,7 +278,7 @@ PY
 - Локальный веб-сервер не предназначен для прямой публикации в интернете. Для VPS потребуется аутентификация, HTTPS и контроль доступа.
 - Сохраняйте исходные ссылки, проверяйте кредитные рейтинги, даты, купоны и условия оферты перед публикацией: отдельные API-поля могут отсутствовать.
 - Публикации требуют ручной редакторской проверки; автогенерация не заменяет достоверные источники.
-- AI-редактор, полноценная отправка Tech в VK, автоматический постинг в Instagram/TikTok и импорт зарубежного/криптокошелька пока **не реализованы**.
+- AI-редактор, публикация произвольного Tech-черновика в VK из редактора, автоматический постинг в Instagram/TikTok и импорт зарубежного/криптокошелька пока **не реализованы**.
 
 См. [ROADMAP.md](ROADMAP.md) для следующего этапа и [TEMPLATES.md](TEMPLATES.md) для редакционных шаблонов.
 
