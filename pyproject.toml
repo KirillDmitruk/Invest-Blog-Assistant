@@ -14,12 +14,13 @@ dependencies = [
   "python-dotenv>=1,<2",
   "fastapi>=0.115,<1",
   "uvicorn>=0.30,<1",
-  "argostranslate>=1.11.0",
   "truststore ; sys_platform == 'win32'",
+  "tzdata>=2024.1 ; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8,<10"]
+dev = ["pytest>=8,<10", "httpx>=0.27,<1"]
+translation = ["argostranslate>=1.11.0"]
 
 [project.scripts]
 invest-blog = "invest_blog.cli:main"
@@ -31,4 +32,4 @@ include = ["invest_blog*"]
 testpaths = ["tests"]
 
 [tool.setuptools.package-data]
-invest_blog = ["web_static/*.html"]
+invest_blog = ["web_static/*.html", "web_static/*.js", "web_static/*.css"]

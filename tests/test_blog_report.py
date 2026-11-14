@@ -1,5 +1,6 @@
 """Activity report uses executed T-Invest cash movements without inventing returns."""
 from datetime import date
+from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from invest_blog.blog_report import build_blog_report
@@ -35,13 +36,13 @@ def test_two_week_report_groups_real_payments_without_double_counting():
 
     report = build_blog_report(operations, date(2026, 11, 2), date(2026, 11, 13),
                                ZoneInfo("Europe/Moscow"), describe)
-    assert report["totals"]["coupons"]["RUB"] == "123.45"
-    assert report["totals"]["dividends"]["RUB"] == "10.0"
-    assert report["payout_totals"]["RUB"] == "133.45"
-    assert report["totals"]["deposits"]["RUB"] == "10000"
-    assert report["totals"]["buys"]["RUB"] == "3456.78"
-    assert report["totals"]["repayments"]["RUB"] == "1000"
-    assert report["totals"]["taxes"]["RUB"] == "3"
+    assert Decimal(report["totals"]["coupons"]["RUB"]) == Decimal("123.45")
+    assert Decimal(report["totals"]["dividends"]["RUB"]) == Decimal("10.0")
+    assert Decimal(report["payout_totals"]["RUB"]) == Decimal("133.45")
+    assert Decimal(report["totals"]["deposits"]["RUB"]) == Decimal("10000")
+    assert Decimal(report["totals"]["buys"]["RUB"]) == Decimal("3456.78")
+    assert Decimal(report["totals"]["repayments"]["RUB"]) == Decimal("1000")
+    assert Decimal(report["totals"]["taxes"]["RUB"]) == Decimal("3")
     assert report["counts"]["coupons"] == 1
     assert "3 шт." in report["text"]
     assert "Облигация А" in report["text"]
@@ -59,7 +60,7 @@ def test_currencies_stay_separate_and_missing_lookup_does_not_fail():
 
     report = build_blog_report(operations, date(2026, 11, 2), date(2026, 11, 13),
                                ZoneInfo("Europe/Moscow"), broken)
-    assert report["payout_totals"] == {"RUB": "100", "USD": "5"}
+    assert {currency: Decimal(value) for currency, value in report["payout_totals"].items()} == {"RUB": Decimal("100"), "USD": Decimal("5")}
     assert "100,00 ₽" in report["text"]
     assert "$5,00" in report["text"]
 

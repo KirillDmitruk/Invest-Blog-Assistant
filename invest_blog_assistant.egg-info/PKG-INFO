@@ -9,7 +9,10 @@ Requires-Dist: APScheduler<4,>=3.10
 Requires-Dist: python-dotenv<2,>=1
 Requires-Dist: fastapi<1,>=0.115
 Requires-Dist: uvicorn<1,>=0.30
-Requires-Dist: argostranslate>=1.11.0
 Requires-Dist: truststore; sys_platform == "win32"
+Requires-Dist: tzdata>=2024.1; sys_platform == "win32"
 Provides-Extra: dev
 Requires-Dist: pytest<10,>=8; extra == "dev"
+Requires-Dist: httpx<1,>=0.27; extra == "dev"
+Provides-Extra: translation
+Requires-Dist: argostranslate>=1.11.0; extra == "translation"

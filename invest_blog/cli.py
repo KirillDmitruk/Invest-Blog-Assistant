@@ -18,16 +18,6 @@ from .config import Settings
 from .posts import PostGenerator, operation_type, previous_month
 from .tinvest import TInvest
 from .model import money, fmt_money
-import argparse
-import logging
-from collections import Counter, defaultdict
-from decimal import Decimal
-from datetime import date, datetime
-
-from .config import Settings
-from .posts import PostGenerator, operation_type, previous_month
-from .tinvest import TInvest
-from .model import money, fmt_money
 
 
 def main() -> None:
