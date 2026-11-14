@@ -85,19 +85,21 @@ def build_blog_report(operations: list[dict], start: date, end: date, tz: ZoneIn
         # Broker cash movements: buys/fees/taxes are generally negative.
         # Display their debit magnitude; do not mix currencies or treat
         # repayments of principal as investment income.
-        displayed = abs(amount) if group in OUTFLOWS or group == "sells" else amount
+        displayed = (-amount if group in ("fees", "taxes") else
+                     abs(amount) if group in ("buys", "withdrawals", "sells") else amount)
         identity = str(op.get("instrumentUid") or op.get("figi") or "")
         name = str(op.get("name") or "").strip()
+        cache_key = identity or name or str(op.get("description") or "")
         if group in ("coupons", "dividends", "repayments", "buys", "sells"):
-            if identity not in cache:
+            if cache_key not in cache:
                 resolved = None
                 if describe and identity:
                     try:
                         resolved = describe(op)
                     except Exception:
                         pass
-                cache[identity] = str(resolved or name or op.get("description") or identity or "Бумага")[:180]
-            name = cache[identity]
+                cache[cache_key] = str(resolved or name or op.get("description") or identity or "Бумага")[:180]
+            name = cache[cache_key]
         else:
             name = ""
         categories[group].append({
