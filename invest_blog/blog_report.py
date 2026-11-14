@@ -114,7 +114,11 @@ def build_blog_report(operations: list[dict], start: date, end: date, tz: ZoneIn
         for currency, amount in totals[group].items():
             payout_totals[currency] += amount
 
-    lines = [f"📈 Инвестиционные итоги: {start:%d.%m.%Y}–{end:%d.%m.%Y}", ""]
+    lines = [
+        "Всем привет! ✌️", "",
+        f"Подвожу инвестиционные итоги за {start:%d.%m.%Y}–{end:%d.%m.%Y} 🫡",
+        "", "Посмотрим, какие выплаты пришли на счёт и что удалось купить.", "",
+    ]
     for key in ("coupons", "dividends", "repayments", "deposits", "buys", "sells", "withdrawals", "fees", "taxes"):
         rows = categories[key]
         if key in ("repayments", "sells", "withdrawals", "fees", "taxes") and not rows:
@@ -143,9 +147,7 @@ def build_blog_report(operations: list[dict], start: date, end: date, tz: ZoneIn
         if categories[key]:
             lines.append(f"• {label}: {_display(totals[key])}")
     lines.extend([
-        "", "Все суммы — по исполненным операциям T-Invest за выбранный период.",
-        "Погашения — возврат номинала, не купонный доход. Комиссии и налоги показаны отдельно.",
-        "Суммы в разных валютах не складываются. Покупки не обязательно оплачены именно полученными выплатами.",
+        "", "А как прошёл ваш инвестиционный период? Что покупали и продавали? Делитесь в комментариях! 📈",
     ])
     return {
         "start": start.isoformat(), "end": end.isoformat(),
