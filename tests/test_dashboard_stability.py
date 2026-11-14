@@ -39,4 +39,5 @@ def test_dashboard_boot_keeps_independent_sections_on_api_failure():
     assert "if(state.goals)renderGoals()" in html
     assert "if(state.performance)renderPerformance()" in html
     assert "Повторить загрузку" in html
+    assert "Контент-план пока не загружен'));return}" not in html
     assert "Черновик будет полностью удалён" not in html
