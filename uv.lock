@@ -648,33 +648,39 @@ version = "2.4"
 source = { editable = "." }
 dependencies = [
     { name = "apscheduler" },
-    { name = "argostranslate" },
     { name = "fastapi" },
     { name = "python-dotenv" },
     { name = "python-telegram-bot" },
     { name = "requests" },
     { name = "truststore", marker = "sys_platform == 'win32'" },
+    { name = "tzdata", marker = "sys_platform == 'win32'" },
     { name = "uvicorn" },
 ]
 
 [package.optional-dependencies]
 dev = [
+    { name = "httpx" },
     { name = "pytest" },
+]
+translation = [
+    { name = "argostranslate" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "apscheduler", specifier = ">=3.10,<4" },
-    { name = "argostranslate", specifier = ">=1.11.0" },
+    { name = "argostranslate", marker = "extra == 'translation'", specifier = ">=1.11.0" },
     { name = "fastapi", specifier = ">=0.115,<1" },
+    { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27,<1" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8,<10" },
     { name = "python-dotenv", specifier = ">=1,<2" },
     { name = "python-telegram-bot", specifier = ">=21.0,<23" },
     { name = "requests", specifier = ">=2.31,<3" },
     { name = "truststore", marker = "sys_platform == 'win32'" },
+    { name = "tzdata", marker = "sys_platform == 'win32'", specifier = ">=2024.1" },
     { name = "uvicorn", specifier = ">=0.30,<1" },
 ]
-provides-extras = ["dev"]
+provides-extras = ["dev", "translation"]
 
 [[package]]
 name = "jinja2"

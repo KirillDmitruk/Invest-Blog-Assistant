@@ -67,7 +67,7 @@ class EditorialWorkflow:
         if kind not in ('weekly','monthly','plan','paper','glossary'):raise ValueError('Неизвестная рубрика')
         with self.connect() as db:
             db.execute('BEGIN IMMEDIATE')
-            # Avoid stale requests; never remove published or publishing posts.
+            # Calendar completion is not deletion: keep draft text and history.
             from .editorial import period_for
             from .posts import previous_workweek
             period=period_for(kind,date.fromisoformat(day))
@@ -78,15 +78,21 @@ class EditorialWorkflow:
             q=','.join('?'*len(periods))
             rows=db.execute(f"SELECT * FROM drafts WHERE kind=? AND period IN ({q}) AND state!='deleted'",(kind,*periods)).fetchall()
             if status=='done':
-                if any(r['state'] in ('published','publishing') for r in rows):
-                    raise ValueError('Опубликованные или отправляющиеся посты удалять нельзя')
+                if any(r['state']=='publishing' for r in rows):
+                    raise ValueError('Пост отправляется: дождись результата перед завершением')
+                if revision is not None and any(r['revision']!=revision for r in rows):
+                    raise ValueError('Черновик изменился; обнови страницу')
                 for r in rows:
-                    if revision is not None and r['revision']!=revision:
-                        raise ValueError('Черновик изменился; обнови страницу')
+                    # A completed calendar item must not trigger a queued send.
                     db.execute('DELETE FROM editorial_publish_requests WHERE draft_id=?',(r['id'],))
-                    db.execute('DELETE FROM telegram_messages WHERE draft_id=?',(r['id'],))
-                    db.execute('DELETE FROM editorial_topics WHERE draft_id=?',(r['id'],)) if self._has_column(db,'editorial_topics','draft_id') else None
-                    db.execute('DELETE FROM drafts WHERE id=?',(r['id'],))
+                    if r['state']=='scheduled':
+                        db.execute("""
+                            UPDATE drafts SET state='review',scheduled_at=NULL,
+                                revision=revision+1
+                            WHERE id=? AND state='scheduled'
+                        """,(r['id'],))
+                    # Preserve draft, topic history and sent-message associations.
+                    # Published drafts are immutable and can be marked complete.
             db.execute('''INSERT INTO editorial_calendar_state(day,kind,status,updated_at) VALUES(?,?,?,?)
                 ON CONFLICT(day,kind) DO UPDATE SET status=excluded.status,updated_at=excluded.updated_at''',
                 (day,kind,status,datetime.now(timezone.utc).isoformat()))

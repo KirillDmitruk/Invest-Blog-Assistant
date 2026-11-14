@@ -1,5 +1,5 @@
 """v1.5.1: discovery sources, persistence, safe drafting, local endpoints."""
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -12,6 +12,29 @@ from invest_blog.placements import (PlacementMonitor, PlacementStore, finam_cale
 from invest_blog.storage import DraftStore
 
 DAY=date(2026,10,30)
+
+
+@pytest.fixture(autouse=True)
+def fixed_placement_clock(monkeypatch):
+    # These fixtures describe October 2026; expiry rules must use the same clock.
+    import invest_blog.placements as placements
+    import invest_blog.dashboard as dashboard
+    import invest_blog.bot as bot
+
+    class FixedDate(date):
+        @classmethod
+        def today(cls):
+            return DAY
+
+    class FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 10, 30, 12, tzinfo=tz)
+
+    monkeypatch.setattr(placements, 'date', FixedDate)
+    monkeypatch.setattr(dashboard, 'datetime', FixedDateTime)
+    monkeypatch.setattr(bot, 'datetime', FixedDateTime)
+
 
 
 def bond(day='2026-11-05T00:00:00Z', name='Тест 001Р', isin='RU000000TEST'):

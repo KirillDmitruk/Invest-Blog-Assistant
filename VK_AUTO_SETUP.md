@@ -2,8 +2,10 @@
 
 ## Переводчик без LLM API
 
+Перевод — необязательная зависимость. Для Argos используй Python 3.11–3.14 с доступными пакетами onnxruntime; базовое приложение запускается без переводчика.
+
 ```bash
-uv add argostranslate
+uv sync --extra translation
 uv run python - <<'PY'
 import argostranslate.package
 packages = argostranslate.package.get_available_packages()

@@ -2,7 +2,8 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><title>Invest Blog · Analytics v1.5.0</title>
+<meta name="robots" content="noindex,nofollow"><title>Content Hub · Редакция и аналитика</title>
+<link rel="stylesheet" href="/static/workspace.css">
 <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <style>
 :root{color-scheme:dark;--bg:#090f1c;--panel:#111d2e;--sub:#17273a;--line:#263950;--txt:#e7f1ff;--muted:#8fa4b9;--cyan:#64b9f6;--green:#57ceb2;--orange:#e6b16b;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
@@ -53,7 +54,7 @@
 <body>
 <div class="shell">
 <aside class="sidebar">
- <div class="brand"><span class="emblem">◈</span>Content <b>Hub</b><small>MULTI-PROJECT / v2.0.1</small></div>
+ <div class="brand"><span class="emblem">◈</span>Content <b>Hub</b><small>MULTI-PROJECT / v2.4</small></div>
  <nav class="nav" aria-label="Разделы">
  <button data-page="home" class="active"><span>⌂</span>Главная</button>
  <div class="nav-label">ИНВЕСТИЦИИ</div>
@@ -83,7 +84,7 @@
   <button class="hub-project" type="button" data-target="overview"><strong>◈ Инвестиции</strong><span>Портфель, доходность, новые облигации и публикации</span><em>Перейти к аналитике →</em></button>
   <button class="hub-project" type="button" data-target="tech"><strong>⚙ Tech &amp; Gadgets</strong><span>Технологический блог, собственные проекты и отдельная редакторская очередь</span><em>Открыть редактор →</em></button>
  </div>
- <div class="note">v2.0.1 — Tech RSS-лента и Creator Studio подключены. Доступны RSS, Creator Studio и публикация Tech News в VK/Telegram.</div>
+ <div class="note">Аналитика, новости и единая редакционная очередь. Создавай материалы, проверяй текст и управляй публикацией из одного пространства.</div>
 </section>
 <section class="section" id="page-tech">
  <div class="grid">
@@ -342,7 +343,7 @@
  </div>
  <div class="card full"><h2>История выбранных тем</h2><div class="scroll" id="topics"></div></div>
 </div></section>
-<footer>Invest Blog Assistant v1.5.1 · Данные T-Invest API · Только локальный доступ. Даты и прогнозные купоны могут изменяться; оценки не являются гарантией выплат или инвестиционной рекомендацией. Все финансовые показатели следует сверять с отчётом брокера.</footer>
+<footer>Content Hub v2.4 · Данные T-Invest API · Только локальный доступ. Даты и прогнозные купоны могут изменяться; оценки не являются гарантией выплат или инвестиционной рекомендацией. Все финансовые показатели следует сверять с отчётом брокера.</footer>
 </main></div>
 <script>
 const el=id=>document.getElementById(id);
@@ -882,7 +883,8 @@ function renderContent(){
  ct.append(tbody);calendar.append(ct);
  table('topics',['Рубрика','Тема / UID','Дата'],state.topics.map(x=>[x.kind,x.topic_key,x.created_at.slice(0,10)]));
  const sug=el('editorSuggestions');sug.replaceChildren();
- if(!cal){sug.append(txt('p','Контент-план пока не загружен'));return}
+ if(!cal){sug.append(txt('p','Контент-план пока не загружен'));}
+ else {
  // «Бумага недели» не выводит технические причины выбора из брокерской истории.
  // Отдельная новостная рубрика «На радаре» наполняется из проверяемых размещений.
  const radar=cal.radar_suggestions||[];
@@ -941,8 +943,9 @@ function renderContent(){
    });
    wrap.append(details,btn,progress,done);sug.append(wrap);
  }
+ }
  const queue=el('editorQueue');queue.replaceChildren();
- const filt=state.editorFilter||'all';const drafts=state.drafts.filter(d=>(filt==='all'||d.state===filt)&&d.state!=='published');
+ const filt=state.editorFilter||'all';const drafts=state.drafts.filter(d=>filt==='all'?d.state!=='published':d.state===filt);
  const sel=document.createElement('select');sel.className='editor-input';
  for(const [key,value] of [['all','Все'],['new','Новые'],['review','На проверке'],['approved','Одобрены'],['scheduled','Запланированы'],['published','Опубликованы']]){const op=document.createElement('option');op.value=key;op.textContent=value;sel.append(op)}
  sel.value=filt;sel.addEventListener('change',()=>{state.editorFilter=sel.value;renderContent()});queue.append(sel);
@@ -971,12 +974,17 @@ function renderContent(){
 }
 function draftWeekday(period){const day=period.slice(0,10);const d=new Date(day+'T12:00:00Z');return Number.isNaN(d.getTime())?'Дата не задана':['Вс','Пн','Вт','Ср','Чт','Пт','Сб'][d.getUTCDay()]}
 async function markCalendar(item,status){
- if(status==='done'&&!confirm('Отметить пост как написанный? Черновик будет полностью удалён из SQLite и исчезнет из очереди.'))return;
+ const editingThis=state.editorDraft?.id===item.draft_id;
+ if(status==='done'&&editingThis&&el('editorBody').value!==state.editorDraft.body){
+   el('editorFeedback').replaceChildren(alertNode('Сначала сохрани изменения в открытом черновике.','warning'));
+   return;
+ }
+ if(status==='done'&&!confirm('Отметить пост как написанный? Черновик сохранится, а запланированная или ожидающая отправка будет отменена.'))return;
  try{
    if(status==='in_progress' && !item.draft_id){await editorRequest('/api/editor/calendar-draft','POST',{day:item.day,kind:item.kind});}
    await editorRequest('/api/editor/calendar-status','POST',{day:item.day,kind:item.kind,status});
-   if(status==='done'&&state.editorDraft?.id===item.draft_id)newDraft();
-   await refreshEditorial();
+   await refreshEditorial(editingThis?item.draft_id:undefined);
+   if(status==='done')el('editorFeedback').replaceChildren(alertNode('Пост отмечен как написанный. Черновик сохранён.'));
  }catch(e){el('editorFeedback').replaceChildren(alertNode(e.message,'warning'))}
 }
 async function openCalendarDraft(item,button){
@@ -998,14 +1006,14 @@ function newDraft(kind='paper',body=''){
  el('editorPeriod').value=new Date().toISOString().slice(0,10);el('editorBody').value=body;el('editorSave').disabled=false;
  el('editorFeedback').replaceChildren();renderEditorActions();
 }
-async function openDraft(id){try{
- const draft=await getJson('/api/editor/drafts/'+id);state.editorDraft=draft;
+async function openDraft(id,canReplace=()=>true){try{
+ const draft=await getJson('/api/editor/drafts/'+id);if(!canReplace())return false;state.editorDraft=draft;
  el('editorTitle').textContent='Черновик #'+draft.id;el('editorStatus').textContent=editorialStatuses[draft.state]||draft.state;
  el('editorKind').value=draft.kind;el('editorPeriod').value=draft.period;el('editorBody').value=draft.body;
  el('editorKind').disabled=el('editorPeriod').disabled=true;
  el('editorSave').disabled=['published','publishing'].includes(draft.state);
- el('editorFeedback').replaceChildren();renderContent();
- }catch(e){el('editorFeedback').replaceChildren(alertNode(e.message,'warning'))}}
+ el('editorFeedback').replaceChildren();renderContent();return true;
+ }catch(e){el('editorFeedback').replaceChildren(alertNode(e.message,'warning'));return false}}
 function renderEditorActions(){const actions=el('editorActions');actions.replaceChildren();const d=state.editorDraft;if(!d)return;
  const make=(label,action)=>{const btn=editorNode('button',label);btn.type='button';btn.addEventListener('click',()=>performAction(action));actions.append(btn)};
  if(['new','draft','rejected','approved','scheduled'].includes(d.state))make('🔎 На проверку','review');
@@ -1032,8 +1040,10 @@ async function deleteEditorDraft(d){
  }
 }
 async function refreshEditorial(id){
- const [drafts,plan,topics]=await Promise.all([getJson('/api/drafts'),getJson('/api/content-plan'),getJson('/api/topics')]);
- state.drafts=drafts;state.contentPlan=plan;state.topics=topics;
+ const results=await Promise.allSettled([getJson('/api/drafts'),getJson('/api/content-plan'),getJson('/api/topics')]);
+ const keys=['drafts','contentPlan','topics'];
+ results.forEach((r,i)=>{if(r.status==='fulfilled')state[keys[i]]=r.value});
+ if(results[0].status==='rejected')throw results[0].reason;
  if(id)await openDraft(id);else renderContent();
 }
 async function editorRequest(url,method,payload){const res=await fetch(url,{method,headers:{'Content-Type':'application/json','X-CSRF-Token':state.editorToken},body:JSON.stringify(payload)});
@@ -1218,35 +1228,68 @@ async function refreshTechNews(){
 el('techNewsCategory').addEventListener('change',refreshTechNews);
 el('techNewsRefresh').addEventListener('click',refreshTechNews);
 let activeTech=null;
+function openTechDraft(d){activeTech=d;el('techTitle').value=d.title;el('techBody').value=d.body;el('techSource').value=d.source_url||'';el('techFeedback').replaceChildren();window.scrollTo({top:0,behavior:'smooth'})}
 function resetTech(){activeTech=null;el('techForm').reset();el('techFeedback').replaceChildren()}
 async function refreshTech(){
  try {const rows=await getJson('/api/tech/drafts');const host=el('techDrafts');host.replaceChildren();
  if(!rows.length){host.append(txt('p','Пока нет черновиков. Создай первый пост о технологиях.'));return}
  for(const d of rows){const card=document.createElement('div');card.className='tech-entry';
  card.append(txt('strong',d.title),txt('p',d.body.slice(0,130)));
- const edit=txt('button','Редактировать');edit.type='button';edit.addEventListener('click',()=>{activeTech=d;el('techTitle').value=d.title;el('techBody').value=d.body;el('techSource').value=d.source_url||'';el('techFeedback').replaceChildren();window.scrollTo({top:0,behavior:'smooth'})});
+ const edit=txt('button','Редактировать');edit.type='button';edit.addEventListener('click',()=>openTechDraft(d));
  const del=txt('button','Удалить');del.type='button';del.addEventListener('click',async()=>{if(!confirm('Удалить tech-черновик?'))return;try{await editorRequest('/api/tech/drafts/'+d.id,'DELETE',{revision:d.revision});if(activeTech?.id===d.id)resetTech();await refreshTech()}catch(e){el('techFeedback').replaceChildren(alertNode(e.message,'warning'))}});
  card.append(edit,del);host.append(card)
  }} catch(e){el('techFeedback').replaceChildren(alertNode('Tech: '+e.message,'warning'))}
 }
-el('techReset').addEventListener('click',resetTech);
+el('techReset').addEventListener('click',()=>resetTech());
 el('techForm').addEventListener('submit',async ev=>{ev.preventDefault();try{
  const payload={title:el('techTitle').value,body:el('techBody').value,source_url:el('techSource').value};
  if(activeTech)payload.revision=activeTech.revision;
- await editorRequest(activeTech?'/api/tech/drafts/'+activeTech.id:'/api/tech/drafts',activeTech?'PUT':'POST',payload);
+ activeTech=await editorRequest(activeTech?'/api/tech/drafts/'+activeTech.id:'/api/tech/drafts',activeTech?'PUT':'POST',payload);
  resetTech();await refreshTech();el('techFeedback').replaceChildren(alertNode('Tech-черновик сохранён. Автопубликация пока отключена.'))
  }catch(e){el('techFeedback').replaceChildren(alertNode(e.message,'warning'))}});
 
 async function load(){try{
   blogReportDefaultDates();
-  await loadBlogReportAccounts();
- const [a,b,risk,goals,editor,drafts,topics,contentPlan,routine,performance,placements]=await Promise.all([getJson('/api/overview'),getJson('/api/bonds'),getJson('/api/risk'),getJson('/api/goals'),getJson('/api/editor-token'),getJson('/api/drafts'),getJson('/api/topics'),getJson('/api/content-plan'),getJson('/api/publication-routine'),getJson('/api/performance'),getJson('/api/placements')]);
- if(!a.has_data||!b.has_data){el('status').textContent='Данные портфеля ещё не загружены';}
- state.overview=a;state.bonds=b;state.risk=risk;state.goals=goals;state.editorToken=editor.token;state.drafts=drafts;state.topics=topics;state.contentPlan=contentPlan;state.routine=routine;state.performance=performance;state.placements=placements;
- if(a.has_data)el('status').textContent='Снимок '+a.as_of+' · '+(a.sync?.status||'нет статуса');
- if(a.has_data&&b.has_data){renderOverview();renderBonds();renderCalendar();renderIncome();renderRisk();renderGoals();renderPerformance();}
- renderContent();renderPlacements();await refreshTech();await refreshTechNews();await refreshTechPublishing();showPage(state.page);
- }catch(err){el('fatal').style.display='block';el('fatal').textContent='Не удалось загрузить дашборд: '+err.message;el('status').textContent='Ошибка загрузки';}}
+  // One unavailable endpoint must not hide unrelated sections.
+  const endpoints=[
+    ['overview','/api/overview'],['bonds','/api/bonds'],['risk','/api/risk'],
+    ['goals','/api/goals'],['editorToken','/api/editor-token'],
+    ['drafts','/api/drafts'],['topics','/api/topics'],
+    ['contentPlan','/api/content-plan'],['routine','/api/publication-routine'],
+    ['performance','/api/performance'],['placements','/api/placements']
+  ];
+  const responses=await Promise.allSettled(endpoints.map(([,url])=>getJson(url)));
+  const failed=[];
+  responses.forEach((result,i)=>{
+    const [key,url]=endpoints[i];
+    if(result.status==='rejected'){failed.push(url);return}
+    state[key]=key==='editorToken'?result.value.token:result.value;
+  });
+  const a=state.overview,b=state.bonds;
+  if(a?.has_data&&b?.has_data)renderOverview();
+  if(b?.has_data){renderBonds();renderCalendar();renderIncome();}
+  if(state.risk)renderRisk();
+  if(state.goals)renderGoals();
+  if(state.performance)renderPerformance();
+  renderContent();renderPlacements();
+  // These functions display their own local errors and can load independently.
+  await Promise.allSettled([loadBlogReportAccounts(),refreshTech(),refreshTechNews(),refreshTechPublishing()]);
+  showPage(state.page);
+  el('status').textContent=a?.has_data
+    ?'Снимок '+a.as_of+' · '+(a.sync?.status||'нет статуса')+(failed.length?' · часть данных недоступна':'')
+    :(failed.length?'Часть данных недоступна':'Данные портфеля ещё не загружены');
+  const warning=el('fatal');
+  if(failed.length){
+    warning.replaceChildren(txt('span','Не удалось загрузить: '+failed.join(', ')+'. Остальные разделы доступны. '));
+    const retry=txt('button','Повторить загрузку');retry.type='button';
+    retry.addEventListener('click',load);warning.append(retry);
+    warning.style.display='block';
+  }else{warning.replaceChildren();warning.style.display='none'}
+  }catch(err){
+    el('fatal').style.display='block';
+    el('fatal').textContent='Ошибка отображения дашборда: '+err.message;
+    el('status').textContent='Ошибка загрузки';
+  }}
 window.addEventListener('load',load);
 setInterval(()=>{if(state.page==='placements')refreshPlacements()},60000);
-</script></body></html>
+</script><script src="/static/assets.js"></script><script src="/static/workspace.js"></script></body></html>

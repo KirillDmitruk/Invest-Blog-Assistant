@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 from fastapi import FastAPI
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import HTMLResponse, Response
+from fastapi.staticfiles import StaticFiles
 
 from .portfolio_store import PortfolioStore
 from .integrity import check_integrity
@@ -40,7 +41,7 @@ HTML_PATH = Path(__file__).parent / 'web_static' / 'index.html'
 def create_app(db_path: Path, bond_target: float = 0.60, max_position: float = 0.15,
                timezone: ZoneInfo | None = None,
                times: dict[str, tuple[int, int]] | None = None) -> FastAPI:
-    app = FastAPI(title='Content Hub v2.0.1', docs_url=None, redoc_url=None, openapi_url=None)
+    app = FastAPI(title='Content Hub v2.4', docs_url=None, redoc_url=None, openapi_url=None)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=['127.0.0.1', 'localhost', 'testserver'])
     portfolio=PortfolioStore(db_path)
     drafts=DraftStore(db_path)
@@ -65,6 +66,11 @@ def create_app(db_path: Path, bond_target: float = 0.60, max_position: float = 0
 
     from .iis_routes import register_iis_routes
     register_iis_routes(app, db_path, require_editor)
+    from .editor_tools import register_editor_tools
+    register_editor_tools(app, require_editor)
+    from .walt_routes import register_walt_routes
+    register_walt_routes(app, db_path, require_editor)
+    app.mount('/static', StaticFiles(directory=HTML_PATH.parent), name='static')
 
 
     @app.get('/', response_class=HTMLResponse)
@@ -368,12 +374,13 @@ def create_app(db_path: Path, bond_target: float = 0.60, max_position: float = 0
         return report
 
     @app.get('/api/drafts')
-    def recent_drafts():
+    def recent_drafts(include_body: bool = False):
         queued = {r['id'] for r in drafts.pending_publications(limit=200)}
         return [{'id':r['id'],'kind':r['kind'],'period':r['period'], 'state':r['state'],
                  'revision':r['revision'], 'queued':r['id'] in queued,
                  'scheduled_at':r['scheduled_at'],
-                 'created_at':r['created_at']} for r in drafts.list_recent(100)]
+                 'created_at':r['created_at'],
+                 **({'body':r['body']} if include_body else {})} for r in drafts.list_recent(100)]
 
     @app.get('/api/publication-routine')
     def publication_routine():
