@@ -28,6 +28,7 @@ from .creator_studio import CreatorStore, PROJECTS, STATUSES
 from .tech_store import TechDraftStore
 from .tech_news import TechNewsStore, CATEGORY_LABELS
 from .posts import PostGenerator, previous_workweek
+from .blog_report import build_blog_report
 from .tinvest import TInvest
 from .config import Settings
 from .model import Draft
@@ -318,6 +319,53 @@ def create_app(db_path: Path, bond_target: float = 0.60, max_position: float = 0
             goals.delete(goal_id)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail='Цель не найдена') from exc
+
+    @app.get('/api/blog-report/accounts')
+    def blog_report_accounts():
+        settings = Settings.load()
+        return {
+            'accounts': [{'id': aid, 'label': 'Счёт …' + aid[-4:]} for aid in settings.account_ids],
+            'default_account_id': (
+                settings.iis_review_account_id if settings.iis_review_account_id in settings.account_ids
+                else settings.account_ids[0] if len(settings.account_ids) == 1 else None
+            ),
+        }
+
+    @app.post('/api/blog-report')
+    async def blog_report(request: Request):
+        """Fetch fresh executed operations for one configured account, read-only."""
+        require_editor(request)
+        payload = await request.json()
+        if not isinstance(payload, dict):
+            raise HTTPException(422, detail='Ожидается объект')
+        try:
+            start = date.fromisoformat(payload.get('start', ''))
+            end = date.fromisoformat(payload.get('end', ''))
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(422, detail='Укажи корректные даты начала и окончания') from exc
+        settings = Settings.load()
+        today = datetime.now(settings.timezone).date()
+        if start > end or (end - start).days > 365 or end > today:
+            raise HTTPException(422, detail='Период: от 1 до 366 дней, без будущих дат')
+        account_id = payload.get('account_id')
+        if not isinstance(account_id, str) or account_id not in settings.account_ids:
+            raise HTTPException(422, detail='Выбери один из настроенных счетов')
+        if not settings.invest_token:
+            raise HTTPException(503, detail='TINVEST_TOKEN не настроен')
+        try:
+            api = TInvest(settings.invest_token, settings.timezone)
+            operations = api.operations(account_id, start, end)
+            def describe(op):
+                instrument = api.instrument(uid=op.get('instrumentUid') or '',
+                                            figi=op.get('figi') or '')
+                return instrument.name + instrument.tag
+            report = build_blog_report(operations, start, end, settings.timezone, describe)
+        except Exception as exc:
+            # Never expose credentials or raw broker error responses to the browser.
+            raise HTTPException(502, detail='Не удалось получить операции T-Invest: ' +
+                                type(exc).__name__) from exc
+        report['draft_supported'] = len(report['text']) <= 10000
+        return report
 
     @app.get('/api/drafts')
     def recent_drafts():
