@@ -50,6 +50,7 @@
 .creator-entry button{background:#1b425e;color:#e3f4ff;border:1px solid #3b708f;border-radius:9px;padding:8px 11px;cursor:pointer}
 @media(max-width:760px){.creator-projects{grid-template-columns:1fr}.creator-entry{align-items:flex-start;flex-direction:column}}
 </style>
+<link rel="stylesheet" href="/static/hub-theme.css">
 </head>
 <body>
 <div class="shell">
@@ -83,17 +84,18 @@
  <div class="hub-projects">
   <button class="hub-project" type="button" data-target="overview"><strong>◈ Инвестиции</strong><span>Портфель, доходность, новые облигации и публикации</span><em>Перейти к аналитике →</em></button>
   <button class="hub-project" type="button" data-target="tech"><strong>⚙ Tech &amp; Gadgets</strong><span>Технологический блог, собственные проекты и отдельная редакторская очередь</span><em>Открыть редактор →</em></button>
+  <button class="hub-project" type="button" data-target="trading"><strong>◈ Торговый бот</strong><span>Виртуальные фьючерсы, Grok, ограничения риска и журнал решений</span><em>Открыть лабораторию →</em></button>
  </div>
  <div class="note">Аналитика, новости и единая редакционная очередь. Создавай материалы, проверяй текст и управляй публикацией из одного пространства.</div>
 </section>
 <section class="section" id="page-tech">
  <div class="grid">
   <div class="card full"><h2>Tech &amp; Gadgets · редакция</h2><p class="hint">Отдельная очередь постов о робототехнике, гаджетах, AI и собственных проектах. Новости собираются каждые 2 часа при запущенном боте. Публикации в VK и Telegram управляются отдельно. AI-редактор пока отключён.</p></div>
-  <div class="card full"><div class="toolbar"><h2>Kir in Tech News · автопубликация</h2><button type="button" id="techPublishRefresh">Обновить статусы</button></div>
-   <p class="hint">Расписание работает только при запущенном боте. Переключатели настраиваются в .env и требуют перезапуска бота.</p>
+  <div class="card full"><div class="toolbar"><h2>Kir in Tech News · публикация новостей</h2><button type="button" id="techPublishRefresh">Обновить статусы</button></div>
+   <p class="hint">Расписание работает при запущенном издателе Tech или основном боте. После изменения настроек перезапусти соответствующий процесс.</p>
    <div id="techPublishStatus" class="hint">Загрузка статуса...</div>
    <div class="goal-actions"><button type="button" id="techPublishNow">Опубликовать сейчас (1 новость)</button></div>
-   <div id="techPublishFeedback"></div><h3>История отправок и проблем</h3><div id="techPublishHistory"></div>
+   <div class="editor-buttons"><button type="button" id="techTgPreview">Предпросмотр Telegram</button><button type="button" id="techTgPublishNow">Опубликовать только в Telegram</button></div><p class="hint" id="techTgSchedule"></p><textarea id="techTgPreviewText" class="editor-input" rows="7" readonly hidden aria-label="Предпросмотр новости Telegram"></textarea><div id="techPublishFeedback"></div><h3>История отправок и проблем</h3><div id="techPublishHistory"></div>
   </div>
   <div class="card full"><h2>Лента технологических новостей</h2>
    <p class="hint">Новости из RSS-источников. Выбор категории и создание черновика для ручной проверки.</p>
@@ -1201,12 +1203,37 @@ async function refreshTechPublishing(){
  const status=el('techPublishStatus'),history=el('techPublishHistory');
  try{
   const data=await getJson('/api/tech/publishing');
-  status.textContent=`VK: ${data.vk_enabled?'включён':'выключен'} · Telegram: ${data.telegram_enabled?'включён':'выключен'}${!data.telegram_configured?' (канал не настроен)':''} · Сегодня VK: ${data.today.vk}/4, TG: ${data.today.telegram} · Занято слотов VK: ${data.vk_daily_reserved}/4 · Ожидают TG: ${data.tg_pending} · Следующая: ${data.next_at?new Date(data.next_at).toLocaleString('ru-RU'):'не запланирована'} · Часовой пояс: ${data.timezone}`;
+  status.textContent=`VK: ${data.vk_enabled?'включён':'выключен'} · Telegram: ${data.telegram_enabled?'включён':'выключен'}${!data.telegram_configured?' (канал не настроен)':''} · Сегодня VK: ${data.today.vk}/4, TG: ${data.today.telegram} · Занято слотов VK: ${data.vk_daily_reserved}/4 · Ожидают TG: ${data.tg_pending} · Следующий слот VK: ${data.next_at?new Date(data.next_at).toLocaleString('ru-RU'):'не запланирована'} · Часовой пояс: ${data.timezone}`;
+  const direct=data.telegram_mode==='direct',cfg=data.telegram_schedule;
+  el('techTgPreview').hidden=el('techTgPublishNow').hidden=!direct;
+  el('techTgPublishNow').disabled=!data.telegram_enabled||!data.telegram_configured;
+  el('techPublishNow').hidden=direct;
+  const last=data.telegram_last_run;
+  el('techTgSchedule').textContent=direct
+    ?'Telegram: '+(data.telegram_channel||'канал не указан')+' · '+(cfg?'каждые 30 минут, '+String(cfg.start_hour).padStart(2,'0')+':00–'+String(cfg.end_hour).padStart(2,'0')+':00 (окончание не включается), максимум '+cfg.daily_limit+' в день':'ошибка расписания')+' · следующий плановый слот: '+(data.telegram_next_at?new Date(data.telegram_next_at).toLocaleString('ru-RU'):'выключен')+' · последняя проверка: '+(last?new Date(last.checked_at).toLocaleString('ru-RU')+' — '+last.note:'пока не было')+'. Для расписания должен работать '+(data.telegram_runner==='worker'?'фоновый издатель Tech':'основной бот')+'.'
+    :'Telegram получает уже опубликованные новости VK.';
+  if(data.telegram_schedule_error)el('techTgSchedule').textContent+=' '+data.telegram_schedule_error;
   history.replaceChildren();if(!data.history.length){history.append(txt('p','Публикаций пока нет.'));return}
   for(const item of data.history){const row=document.createElement('div');row.className='creator-entry';const info=document.createElement('div');info.append(txt('strong',`${item.platform} · ${item.status} · ${item.title||'#'+item.news_id}`),txt('p',item.updated_at));if(item.status==='uncertain')info.append(txt('p','Результат не подтверждён — проверь площадку вручную перед повтором.'));row.append(info);if(item.url&&item.url.startsWith('https://')){const a=document.createElement('a');a.textContent='Открыть';a.href=item.url;a.target='_blank';a.rel='noopener noreferrer';row.append(a)}history.append(row)}
  }catch(err){status.textContent='Ошибка загрузки: '+err.message}
 }
 el('techPublishRefresh').addEventListener('click',refreshTechPublishing);
+el('techTgPreview').addEventListener('click',async()=>{
+ const button=el('techTgPreview');button.disabled=true;
+ try{const result=await editorRequest('/api/tech/publishing/telegram-preview','POST',{});
+   const preview=el('techTgPreviewText');preview.hidden=!result.prepared?.length;
+   preview.value=result.prepared?.[0]?.text||'';
+   el('techPublishFeedback').replaceChildren(alertNode(result.note||'Предпросмотр готов.'));
+ }catch(e){el('techPublishFeedback').replaceChildren(alertNode(e.message,'warning'))}finally{button.disabled=false}
+});
+el('techTgPublishNow').addEventListener('click',async()=>{
+ if(!confirm('Опубликовать одну свежую новость только в Tech Telegram-канале? Учитываются часы, лимит и занятость текущего получасового слота.'))return;
+ const button=el('techTgPublishNow');button.disabled=true;
+ try{const result=await editorRequest('/api/tech/publishing/telegram-now','POST',{confirm:'PUBLISH'});
+ el('techPublishFeedback').replaceChildren(alertNode(result.note));await refreshTechPublishing()}
+ catch(e){el('techPublishFeedback').replaceChildren(alertNode(e.message,'warning'))}finally{button.disabled=false}
+});
+
 el('techPublishNow').addEventListener('click',async()=>{
  if(!confirm('Сейчас будет опубликована одна новость в VK и, если включён Telegram, отправлена туда же. Продолжить?'))return;
  try{el('techPublishNow').disabled=true;const result=await editorRequest('/api/tech/publishing/now','POST',{confirm:'PUBLISH'});el('techPublishFeedback').replaceChildren(alertNode('Результат: '+JSON.stringify(result)));await refreshTechPublishing()}catch(err){el('techPublishFeedback').replaceChildren(alertNode(err.message,'warning'))}finally{el('techPublishNow').disabled=false}
@@ -1292,4 +1319,4 @@ async function load(){try{
   }}
 window.addEventListener('load',load);
 setInterval(()=>{if(state.page==='placements')refreshPlacements()},60000);
-</script><script src="/static/assets.js"></script><script src="/static/workspace.js"></script></body></html>
+</script><script src="/static/assets.js"></script><script src="/static/trading.js"></script><script src="/static/workspace.js"></script></body></html>

@@ -1,0 +1,41 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const {chromium}=require(process.env.CONTENT_HUB_PLAYWRIGHT_PATH||'playwright');
+(async()=>{const browser=await chromium.launch({executablePath:process.env.CONTENT_HUB_BROWSER,headless:true});
+try{
+ const page=await browser.newPage({viewport:{width:1440,height:1100}}),errors=[];
+ page.on('pageerror',e=>errors.push(e.message));
+ await page.route('https://cdn.jsdelivr.net/**',r=>r.abort());
+ await page.goto('http://127.0.0.1:8768/#trading');
+ await page.locator('#labEquity').filter({hasText:/10.*000/}).waitFor();
+ await page.locator('[data-lab-tab=settings]').click();
+ await page.locator('#labStrategy').selectOption('connector');
+ await page.locator('#labEnabled').selectOption('true');
+ await page.locator('#labSave').click();await page.locator('#labFeedback').filter({hasText:'Настройки сохранены'}).waitFor();
+ assert.equal(await page.locator('#labAiCheck').isVisible(),false);
+ await page.locator('[data-lab-tab=account]').click();
+ await page.locator('#labAnalysisScope').selectOption('sample');
+ await page.locator('#labPrepare').click();await page.locator('#labFeedback').filter({hasText:'Данные готовы'}).waitFor();
+ const get=path=>page.evaluate(p=>fetch('/api/trading/'+p).then(r=>r.json()),path);
+ const packet=(await get('analysis')).latest;
+ assert.equal(packet.candidates.length,1);assert.match(await page.locator('#labGrokPrompt').inputValue(),new RegExp(packet.id));
+ const rpc=async(name,args={})=>{const r=await page.request.post('http://127.0.0.1:8770/mcp',{
+  headers:{Authorization:'Bearer '+'demo-not-a-real-secret-'.repeat(3)},
+  data:{jsonrpc:'2.0',id:1,method:'tools/call',params:{name,arguments:args}}});return r.json()};
+ assert.equal((await rpc('get_prepared_market_analysis')).result.isError,false);
+ const proposal={analysis_id:packet.id,uid:'demo',action:'long',confidence:.8,reason:'Демонстрационный ответ внешнего клиента; реальный Grok не вызывался.'};
+ assert.equal((await rpc('submit_paper_decision',proposal)).result.isError,false);
+ await rpc('submit_paper_decision',proposal);
+ assert.equal((await get('overview')).trades.length,1);
+ await page.locator('#labRefresh').click();await page.locator('#labAnalysisStatus').filter({hasText:'Решение обработано'}).waitFor();
+ assert.equal((await get('overview')).account.equity,'9997.00');
+ await page.locator('.lab-badge').evaluate(n=>n.textContent='ДЕМОНСТРАЦИЯ · тестовый MCP-клиент');
+ fs.mkdirSync('docs/previews',{recursive:true});await page.evaluate(()=>window.scrollTo(0,0));
+ await page.screenshot({path:'docs/previews/grok-connector-demo.png',fullPage:true});
+ await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+ await page.screenshot({path:'docs/previews/grok-connector-mobile-demo.png',fullPage:true});
+ await page.reload();await page.locator('#labAnalysisStatus').filter({hasText:'Решение обработано'}).waitFor();
+ assert.equal((await get('overview')).trades.length,1);
+ assert.deepEqual(errors,[]);
+ console.log('Grok connector UI + HTTP MCP: prepare, read packet, propose, risk sizing, idempotency, persistence, mobile passed. No real Grok or broker orders.');
+}finally{await browser.close()}})().catch(e=>{console.error(e);process.exit(1)});

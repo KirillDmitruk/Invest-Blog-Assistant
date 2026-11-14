@@ -1,0 +1,22 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const {chromium}=require(process.env.CONTENT_HUB_PLAYWRIGHT_PATH||'playwright');
+(async()=>{const browser=await chromium.launch({executablePath:process.env.CONTENT_HUB_BROWSER,headless:true});
+try{
+ const page=await browser.newPage({viewport:{width:1440,height:1000}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.route('https://cdn.jsdelivr.net/**',r=>r.abort());
+ await page.route('**/api/tech/publishing/telegram-preview',r=>r.fulfill({json:{prepared:[{text:'Демонстрационный предпросмотр новости.\n\nКраткое описание для проверки панели.\n\nИсточник: Example\nhttps://example.org/news'}],note:'Предпросмотр. Отправки нет.'}}));
+ let sent=0;await page.route('**/api/tech/publishing/telegram-now',r=>{sent++;return r.fulfill({json:{sent:[{news_id:1}],note:'Тест панели: отправка подменена.'}})});
+ page.on('dialog',d=>d.accept());
+ await page.goto(process.env.CONTENT_HUB_URL||'http://127.0.0.1:8767/#publishing');
+ await page.locator('#techTgSchedule').filter({hasText:'@kirintechnews'}).waitFor();
+ assert.equal(await page.locator('#techPublishNow').isVisible(),false);
+ assert.match(await page.locator('#techTgSchedule').innerText(),/09:00–23:00/);
+ await page.locator('#techTgPreview').click();await page.locator('#techTgPreviewText').waitFor({state:'visible'});
+ assert.equal(sent,0);assert.match(await page.locator('#techTgPreviewText').inputValue(),/Демонстрационный/);
+ await page.locator('#techTgPublishNow').click();await page.locator('#techPublishFeedback').filter({hasText:'отправка подменена'}).waitFor();assert.equal(sent,1);
+ fs.mkdirSync('docs/previews',{recursive:true});await page.screenshot({path:'docs/previews/telegram-schedule-demo.png',fullPage:true});
+ await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+ await page.screenshot({path:'docs/previews/telegram-schedule-mobile-demo.png',fullPage:true});
+ assert.deepEqual(errors,[]);console.log('Telegram panel browser checks passed: schedule, preview, confirmed action, no VK, mobile. All sends mocked.');
+}finally{await browser.close()}})().catch(e=>{console.error(e);process.exit(1)});

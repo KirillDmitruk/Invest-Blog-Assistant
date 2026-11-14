@@ -70,6 +70,8 @@ def create_app(db_path: Path, bond_target: float = 0.60, max_position: float = 0
     register_editor_tools(app, require_editor)
     from .walt_routes import register_walt_routes
     register_walt_routes(app, db_path, require_editor)
+    from .trading_routes import register_trading_routes
+    register_trading_routes(app, db_path, require_editor)
     app.mount('/static', StaticFiles(directory=HTML_PATH.parent), name='static')
 
 
@@ -181,6 +183,29 @@ def create_app(db_path: Path, bond_target: float = 0.60, max_position: float = 0
         from .tech_publish_dashboard import dispatch
         try:
             return dispatch(db_path, timezone, limit=1)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+
+    @app.post('/api/tech/publishing/telegram-preview')
+    async def tech_preview_telegram(request: Request):
+        require_editor(request)
+        from .tech_direct import run
+        from starlette.concurrency import run_in_threadpool
+        try:
+            return await run_in_threadpool(run, db_path, timezone or ZoneInfo('Europe/Moscow'), publish=False)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+
+    @app.post('/api/tech/publishing/telegram-now')
+    async def tech_publish_telegram_now(request: Request):
+        require_editor(request)
+        data = await request.json()
+        if not isinstance(data, dict) or data.get('confirm') != 'PUBLISH':
+            raise HTTPException(422, 'Подтверди публикацию словом PUBLISH')
+        from .tech_direct import run
+        from starlette.concurrency import run_in_threadpool
+        try:
+            return await run_in_threadpool(run, db_path, timezone or ZoneInfo('Europe/Moscow'), publish=True)
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from exc
 

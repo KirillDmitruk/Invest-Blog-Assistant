@@ -26,6 +26,33 @@ class TechTelegramPublisher:
         self.token, self.channel_id = token, channel_id
         self.session = session or requests.Session()
 
+    def _check_call(self, method, payload):
+        try:
+            response = self.session.post(f'https://api.telegram.org/bot{self.token}/{method}',
+                                         json=payload, timeout=15)
+            response.raise_for_status()
+            data = response.json()
+            if not data.get('ok') or not isinstance(data.get('result'), dict):
+                raise ValueError
+            return data['result']
+        except (requests.RequestException, ValueError, TypeError, AttributeError):
+            # Never include the token-bearing request URL or the original exception.
+            raise ValueError('Не удалось проверить Telegram. Проверь токен, адрес канала и права бота.') from None
+
+    def resolve_chat(self, chat_id):
+        return self._check_call('getChat', {'chat_id': chat_id})
+
+    def check_channel(self):
+        me = self._check_call('getMe', {})
+        chat = self.resolve_chat(self.channel_id)
+        if chat.get('type') != 'channel' or not isinstance(chat.get('id'), int) or not isinstance(me.get('id'), int):
+            raise ValueError('Нужен Telegram-канал, а не личный чат, группа или username бота.')
+        member = self._check_call('getChatMember', {'chat_id': chat['id'], 'user_id': me['id']})
+        if member.get('status') != 'creator' and not (member.get('status') == 'administrator' and member.get('can_post_messages')):
+            raise ValueError('Добавь бота в администраторы Tech-канала с правом публикации сообщений.')
+        self.verified_chat_id = chat['id']
+        return {'id': chat['id'], 'title': chat.get('title', ''), 'username': chat.get('username', ''), 'can_post': True}
+
     def send(self, text: str) -> str:
         if not text.strip() or len(text) > 4096:
             raise ValueError('Текст Telegram должен содержать 1–4096 символов')
@@ -38,7 +65,7 @@ class TechTelegramPublisher:
             response.raise_for_status()
             payload = response.json()
         except (requests.RequestException, ValueError) as exc:
-            raise RuntimeError('Нет подтверждения отправки в Telegram; автоматический повтор заблокирован') from exc
+            raise RuntimeError('Нет подтверждения отправки в Telegram; автоматический повтор заблокирован') from None
         if not payload.get('ok') or not isinstance(payload.get('result'), dict):
             raise RuntimeError('Telegram отклонил публикацию; проверь права бота и ID канала')
         message_id = payload['result'].get('message_id')

@@ -21,6 +21,11 @@ def ps_quote(value):
 @pytest.mark.parametrize(('arguments', 'expected'), [
     (['web', '--port', '8080'], ['run', 'python', '-m', 'invest_blog.cli', 'web', '--port', '8080']),
     (['bot'], ['run', 'python', '-m', 'invest_blog.cli', 'bot']),
+    (['trading-worker'], ['run', 'python', '-m', 'invest_blog.cli', 'trading-worker']),
+    (['grok-connector', '--port', '8769'], ['run', 'python', '-m', 'invest_blog.cli', 'grok-connector', '--port', '8769']),
+    (['grok-key'], ['run', 'python', 'tools/setup_grok_connector.py']),
+    (['tech-publisher'], ['run', 'python', '-m', 'invest_blog.cli', 'tech-publisher']),
+    (['translation-model'], ['run', '--extra', 'translation', 'python', 'tools/setup_translation.py']),
     (['install', '--python', '3.13'], ['sync', '--extra', 'dev', '--python', '3.13']),
     (['test', '-k', 'editorial or backup'], ['run', '--extra', 'dev', 'python', '-m', 'pytest', '-q', '-k', 'editorial or backup']),
     (['backup', '--db', r'C:\My Data\drafts.sqlite3'], ['run', 'python', 'tools/backup_db.py', '--db', r'C:\My Data\drafts.sqlite3']),

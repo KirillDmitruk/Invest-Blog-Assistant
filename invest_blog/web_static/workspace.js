@@ -12,10 +12,11 @@
     ['cashflow', '▦ Денежные потоки', ['income', 'calendar']],
     ['strategy', '◎ Стратегия', ['goals', 'allocation']],
     ['placements', '🛰 Новые размещения', ['placements']],
+    ['trading', '◈ Торговый бот', ['trading']],
     ['news', '⚙ Tech · Новости', ['news', 'publishing']],
     ['editorial', '✎ Редакция', ['desk', 'content', 'tech', 'creator']],
   ];
-  const labels = {assets:'Все активы',walt:'Walt · Позиции',desk:'Общая очередь',content:'Инвестиции', tech:'Tech · Черновики', creator:'Creator Studio', news:'Лента новостей', publishing:'Публикация и история'};
+  const labels = {trading:'Торговый бот · виртуальный счёт',assets:'Все активы',walt:'Walt · Позиции',desk:'Общая очередь',content:'Инвестиции', tech:'Tech · Черновики', creator:'Creator Studio', news:'Лента новостей', publishing:'Публикация и история'};
   const buttons = new Map(oldButtons.map(b => [b.dataset.page || 'iis', b]));
   // Split the long Tech page without copying forms or event handlers.
   for (const [page, anchor] of [['news','techNewsList'],['publishing','techPublishStatus']]) {
@@ -43,14 +44,14 @@
   const primary = new Map(); nav.replaceChildren();
   for (const [key,label,pages] of groups) {
     const b=txt('button',label);b.type='button';b.addEventListener('click',()=>showPage(pages[0]));
-    primary.set(key,b);nav.append(b);
+    b.dataset.workspace=key;primary.set(key,b);nav.append(b);
   }
   const originalShowPage = showPage;
   showPage = function(page) {
     if (page==='iis') {window.location.href='/iis';return}
     if (!el('page-'+page)) page='home';
     originalShowPage(page);
-    const group=groups.find(g=>g[2].includes(page)); tabs.replaceChildren();
+    const group=groups.find(g=>g[2].includes(page)); document.body.dataset.workspace=group[0];tabs.replaceChildren();
     for(const [key,b] of primary) {b.classList.toggle('active',key===group[0]);if(key===group[0])b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')}
     if(group[2].length>1) for(const target of group[2]) {
       const b=buttons.get(target);if(!b)continue;

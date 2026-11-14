@@ -25,6 +25,7 @@ def test_publish_action_requires_csrf_confirmation_and_feature_flag(tmp_path,mon
 
 
 def test_dispatch_tg_even_on_vk_failure(tmp_path,monkeypatch):
+    monkeypatch.setenv('TECH_TG_MODE','crosspost')
     from invest_blog import tech_publish_dashboard as mod
     monkeypatch.setenv('VK_AUTO_PUBLISH','true')
     monkeypatch.setenv('TECH_TG_AUTO_PUBLISH','true')

@@ -47,14 +47,33 @@ def overview(db_path, tz):
                 candidate += timedelta(days=1)
             if next_time is None or candidate < next_time:
                 next_time = candidate
+    from .tech_direct import direct_mode, DirectSchedule, DirectQueue
+    direct = direct_mode()
+    tg_next = None
+    direct_config = None
+    last_run = None
+    schedule_error = None
+    if direct:
+        try:
+            config = DirectSchedule.from_env()
+            direct_config = {'start_hour':config.start_hour,'end_hour':config.end_hour,
+                             'daily_limit':config.daily_limit,'max_age_hours':config.max_age_hours}
+            if enabled('TECH_TG_AUTO_PUBLISH'):
+                tg_next = config.next_at(now)
+            last_run = DirectQueue(db_path).last_run()
+        except ValueError as exc:
+            schedule_error = str(exc)
     today = now.date().isoformat()
-    return {'vk_enabled':enabled('VK_AUTO_PUBLISH'), 'telegram_enabled':enabled('TECH_TG_AUTO_PUBLISH'),
+    return {'telegram_runner':os.getenv('TECH_TG_RUNNER','bot'), 'telegram_mode':'direct' if direct else 'crosspost', 'telegram_schedule':direct_config,
+            'telegram_next_at':tg_next.isoformat() if tg_next else None, 'telegram_last_run':last_run,
+            'telegram_schedule_error':schedule_error,
+            'telegram_channel':os.getenv('TECH_TELEGRAM_CHANNEL_ID',''), 'vk_enabled':enabled('VK_AUTO_PUBLISH'), 'telegram_enabled':enabled('TECH_TG_AUTO_PUBLISH'),
             'telegram_configured':bool(os.getenv('TECH_TELEGRAM_CHANNEL_ID')),
             'times':[f'{h:02d}:{m:02d}' for h,m in schedule(tz)],
             'timezone':str(tz),'next_at':next_time.isoformat() if next_time else None,
             'today':{'vk':sum(x['day']==today and x['status']=='published' for x in vk_rows),
                      'telegram':sum(datetime.fromisoformat(x['updated_at']).astimezone(tz).date().isoformat()==today and x['status']=='published' for x in tg_rows)},
-            'vk_daily_reserved':vk.count(today),'tg_pending':len(tg.pending(50)), 'history':items}
+            'vk_daily_reserved':vk.count(today),'tg_pending':len(DirectQueue(db_path).candidates(now, direct_config['max_age_hours'])) if direct and direct_config else len(tg.pending(50)), 'history':items}
 
 
 def dispatch(db_path, tz, *, limit=1):
@@ -66,7 +85,7 @@ def dispatch(db_path, tz, *, limit=1):
     except Exception as exc:
         result['vk'] = {'errors':[{'error':str(exc)}]}
     # Telegram independently retries confirmed VK deliveries, even if VK has no new post.
-    if enabled('TECH_TG_AUTO_PUBLISH'):
+    if enabled('TECH_TG_AUTO_PUBLISH') and os.getenv('TECH_TG_MODE','crosspost').strip().lower() != 'direct':
         try:
             result['telegram'] = publish_tg(db_path, publish=True, limit=limit)
         except Exception as exc:

@@ -1,0 +1,38 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const {chromium}=require(process.env.CONTENT_HUB_PLAYWRIGHT_PATH||'playwright');
+(async()=>{const browser=await chromium.launch({executablePath:process.env.CONTENT_HUB_BROWSER,headless:true});
+try{
+ const page=await browser.newPage({viewport:{width:1440,height:1000}});const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
+ await page.route('https://cdn.jsdelivr.net/**',r=>r.abort());
+ await page.goto(process.env.CONTENT_HUB_URL||'http://127.0.0.1:8768/#trading');
+ await page.locator('#labEquity').filter({hasText:/10.*000/}).waitFor();
+ const data=()=>page.evaluate(()=>fetch('/api/trading/overview').then(r=>r.json()));
+ assert.equal((await data()).live_orders_available,false);
+ assert.equal(await page.locator('#labPositions .lab-position').count(),0);
+ await page.locator('[data-lab-tab=contracts]').click();await page.locator('#labSearchQuery').fill('DEMO');await page.locator('#labSearchForm button').click();
+ await page.locator('#labSearchResults button').click();await page.locator('#labWatchlist').filter({hasText:'DEMO'}).waitFor();
+ await page.locator('[data-lab-tab=settings]').click();
+ assert.match(await page.locator('#labAiTitle').innerText(),/не подключён/);
+ await page.locator('#labStrategy').selectOption('rules');await page.locator('#labEnabled').selectOption('true');await page.locator('#labSave').click();
+ await page.locator('#labFeedback').filter({hasText:'Настройки сохранены'}).waitFor();
+ await page.locator('[data-lab-tab=account]').click();
+ const cycle=async()=>{await page.locator('#labCycle').click();await page.waitForFunction(()=>!document.getElementById('labCycle').disabled)};
+ await cycle();assert.equal((await data()).account.equity,'9997.00');
+ await cycle();assert.equal((await data()).trades.length,1);
+ for(const price of ['138','140','139']){await page.request.post('http://127.0.0.1:8768/demo/quote/'+price);await cycle()}
+ assert.equal((await data()).account.equity,'10001.00');assert.equal(await page.locator('#labChart svg').count(),1);
+ await page.locator('.lab-badge').evaluate(n=>n.textContent='ДЕМОНСТРАЦИЯ · тестовые котировки');
+ fs.mkdirSync('docs/previews',{recursive:true});await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:'docs/previews/trading-lab-demo.png',fullPage:true});
+ await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+ await page.screenshot({path:'docs/previews/trading-lab-mobile-demo.png',fullPage:true});
+ await page.setViewportSize({width:1440,height:1000});await page.locator('#labPause').click();await page.locator('#labFeedback').filter({hasText:'Новые входы остановлены'}).waitFor();
+ assert.equal((await data()).state.enabled,false);
+ await page.locator('#labPositions button').filter({hasText:'Закрыть виртуально'}).click();await page.locator('#labFeedback').filter({hasText:'позиция закрыта'}).waitFor();
+ assert.equal((await data()).account.equity,'9998.00');assert.equal((await data()).trades.length,2);
+ await page.reload();await page.locator('#labEquity').filter({hasText:/9.*998/}).waitFor();assert.equal((await data()).trades.length,2);
+ await page.locator('.nav button').filter({hasText:'Главная'}).click();await page.screenshot({path:'docs/previews/hub-colorful-home.png',fullPage:true});
+ await page.locator('.nav button').filter({hasText:'Редакция'}).click();assert.equal(await page.locator('.section.active').getAttribute('id'),'page-desk');
+ await page.locator('.nav button').filter({hasText:'Портфель'}).click();assert.equal(await page.locator('.section.active').getAttribute('id'),'page-assets');
+ assert.deepEqual(errors,[]);console.log('Trading UI checks passed: contracts, rules, correct fees/slippage, risk pause, paper close, persistence, chart, colourful hub and mobile. No broker orders or AI calls.');
+}finally{await browser.close()}})().catch(e=>{console.error(e);process.exit(1)});

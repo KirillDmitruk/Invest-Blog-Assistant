@@ -229,8 +229,21 @@ class InvestBot:
                 h,m=map(int,slot.strip().split(':'))
                 self.scheduler.add_job(self.run_vk_news,CronTrigger(hour=h,minute=m,timezone=self.settings.timezone),
                                        id=f'vk-news-{i}',max_instances=1,coalesce=True,misfire_grace_time=600)
-        self.scheduler.add_job(self.run_tech_news,'interval',hours=2,args=[app],id='tech-rss',
-                               max_instances=1,coalesce=True,misfire_grace_time=3600)
+        from .tech_direct import direct_mode, DirectSchedule
+        direct_active = False
+        if direct_mode() and os.getenv('TECH_TG_AUTO_PUBLISH','false').lower() in ('1','true','yes') and os.getenv('TECH_TG_RUNNER','bot').lower() == 'bot':
+            try:
+                cfg = DirectSchedule.from_env()
+                self.scheduler.add_job(self.run_tech_direct, CronTrigger(
+                    hour=','.join(str(h) for h in range(cfg.start_hour,cfg.end_hour)), minute='0,30',
+                    timezone=self.settings.timezone), args=[app], id='tech-telegram-direct',
+                    max_instances=1, coalesce=True, misfire_grace_time=120)
+                direct_active = True
+            except ValueError:
+                log.warning('Расписание Tech Telegram не включено: проверь часы и лимиты в .env')
+        if not direct_active:
+            self.scheduler.add_job(self.run_tech_news,'interval',hours=2,args=[app],id='tech-rss',
+                                   max_instances=1,coalesce=True,misfire_grace_time=3600)
         if self.settings.auto_snapshot:
             self.scheduler.add_job(self.run_snapshot,CronTrigger(hour=21,minute=0,timezone=self.settings.timezone),
                                    args=[app],id='daily-snapshot',max_instances=1,coalesce=True)
@@ -247,6 +260,19 @@ class InvestBot:
             log.info('Tech RSS checked: %s',report)
         except Exception:
             log.exception('Ошибка автоматического сбора Tech RSS')
+
+    async def run_tech_direct(self, app: Application) -> None:
+        from .tech_direct import run, DirectQueue
+        try:
+            await self.run_tech_news(app)
+            result = await asyncio.to_thread(run, self.settings.db_path, self.settings.timezone, publish=True)
+            log.info('Tech Telegram: %s', result.get('note'))
+        except Exception as exc:
+            # Exception URLs can contain bot tokens; only record a generic error type.
+            note = 'Публикация не выполнена: проверь настройки канала и переводчика (' + type(exc).__name__ + ')'
+            await asyncio.to_thread(DirectQueue(self.settings.db_path).record, 'error', note,
+                                    datetime.now(self.settings.timezone))
+            log.warning('%s', note)
 
     async def run_iis_review(self, app: Application) -> None:
         from .iis_review import run_review

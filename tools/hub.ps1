@@ -19,6 +19,16 @@ Content Hub - Windows commands
 
   .\hub web [--port 8080]      Start the local dashboard
   .\hub bot                    Start the Telegram bot and scheduler
+  .\hub --translation tech-publisher  Run only Tech Telegram news
+  .\hub translation-model      Install the local EN -> RU model once
+  .\hub news-start             Start Tech news in the background
+  .\hub news-status            Check the background publisher
+  .\hub news-stop              Stop the background publisher
+  .\hub trade-start            Start the PAPER futures worker
+  .\hub grok-key               Create a local connector credential (no paid API)
+  .\hub grok-connector         Run isolated MCP on localhost:8769
+  .\hub trade-status           Check the PAPER worker
+  .\hub trade-stop             Stop the PAPER worker
   .\hub install                Install application and test dependencies
   .\hub test [-k name]          Run tests
   .\hub backup [--db PATH]      Back up SQLite safely
@@ -52,7 +62,11 @@ try {
     switch ($hubAction) {
         'install' { & uv sync --extra dev @hubExtras @hubForward }
         'test' { & uv run --extra dev @hubExtras python -m pytest -q @hubForward }
+        { $_ -in @('news-start', 'news-status', 'news-stop') } { & (Join-Path $PSScriptRoot 'tech_worker.ps1') $hubAction.Substring(5) }
+        { $_ -in @('trade-start', 'trade-status', 'trade-stop') } { & (Join-Path $PSScriptRoot 'trading_worker.ps1') $hubAction.Substring(6) }
+        'translation-model' { & uv run --extra translation @hubExtras python tools/setup_translation.py @hubForward }
         'backup' { & uv run @hubExtras python tools/backup_db.py @hubForward }
+        'grok-key' { & uv run @hubExtras python tools/setup_grok_connector.py @hubForward }
         { $_ -in @('weekly', 'monthly', 'plan', 'paper', 'glossary', 'purchase') } {
             & uv run @hubExtras python -m invest_blog.cli preview $hubAction @hubForward
         }

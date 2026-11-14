@@ -36,6 +36,9 @@ invest_blog/tech_telegram.py
 invest_blog/tinvest.py
 invest_blog/vk_news.py
 invest_blog/vk_publisher.py
+invest_blog/walt_portfolio.py
+invest_blog/walt_routes.py
+invest_blog/web_static/assets.js
 invest_blog/web_static/iis.html
 invest_blog/web_static/index.html
 invest_blog/web_static/workspace.css
@@ -78,3 +81,5 @@ tests/test_v200.py
 tests/test_v201.py
 tests/test_vk_news.py
 tests/test_vk_publisher.py
+tests/test_walt_portfolio.py
+tests/test_windows_launcher.py

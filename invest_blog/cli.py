@@ -22,7 +22,7 @@ from .model import money, fmt_money
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Invest Blog Assistant")
-    parser.add_argument("action", choices=("bot", "accounts", "preview", "diagnose", "sync", "web", "audit", "bonds", "backfill", "risk", "performance", "placements", "tech-news", "vk-test", "vk-news", "tg-news", "tg-test", "iis-review"))
+    parser.add_argument("action", choices=("bot", "accounts", "preview", "diagnose", "sync", "web", "audit", "bonds", "backfill", "risk", "performance", "placements", "tech-news", "vk-test", "vk-news", "tg-news", "tg-test", "iis-review", "tech-publisher", "trading-worker", "grok-connector"))
     parser.add_argument("kind", nargs="?", choices=("weekly", "monthly", "plan", "paper", "glossary", "purchase"))
     parser.add_argument("--date", dest="date_string", help="Локальная дата YYYY-MM-DD для preview (брокерские данные — актуальные)")
     parser.add_argument("--start", help="Начало периода YYYY-MM-DD (для diagnose)")
@@ -49,7 +49,10 @@ def main() -> None:
         if not token or not channel:
             parser.error('Укажи TELEGRAM_BOT_TOKEN и TECH_TELEGRAM_CHANNEL_ID в .env')
         if not args.publish:
-            print(f'Telegram: проверка для {channel}. Отправка отключена.')
+            import json
+            info = TechTelegramPublisher(token, channel).check_channel()
+            print(json.dumps(info, ensure_ascii=False, indent=2))
+            print('Канал и права проверены. Отправки не было.')
             print('Для реального теста: uv run python -m invest_blog.cli tg-test --publish --confirm PUBLISH')
             return
         if args.confirm != 'PUBLISH':
@@ -58,10 +61,12 @@ def main() -> None:
         return
     if args.action == "tg-news":
         from .tech_telegram import sync
+        from .tech_direct import direct_mode, run as direct_run
         import json
         if args.publish and args.confirm != "PUBLISH":
             parser.error("Нужно --confirm PUBLISH")
-        print(json.dumps(sync(settings.db_path, publish=args.publish, limit=args.limit), ensure_ascii=False, indent=2))
+        result = direct_run(settings.db_path, settings.timezone, publish=args.publish) if direct_mode() else sync(settings.db_path, publish=args.publish, limit=args.limit)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
         return
     if args.action == "vk-news":
         from .vk_news import run
@@ -71,7 +76,7 @@ def main() -> None:
         result = run(settings.db_path,settings.timezone,publish=args.publish,limit=args.limit)
         if args.publish:
             from .tech_telegram import sync
-            if __import__('os').getenv('TECH_TG_AUTO_PUBLISH','false').lower() in ('true','1','yes'):
+            if __import__('os').getenv('TECH_TG_AUTO_PUBLISH','false').lower() in ('true','1','yes') and __import__('os').getenv('TECH_TG_MODE','crosspost').lower() != 'direct':
                 result['telegram'] = sync(settings.db_path, publish=True, limit=args.limit)
         print(json.dumps(result,ensure_ascii=False,indent=2))
         return
@@ -87,6 +92,18 @@ def main() -> None:
             parser.error("Для тестовой отправки требуется --confirm PUBLISH")
         url = VKPublisher(cfg).publish(message, guid="content-hub-vk-connectivity-test-v1")
         print("Опубликовано:", url)
+        return
+    if args.action == 'grok-connector':
+        from .grok_mcp import serve
+        serve(settings.db_path, 8769 if args.port == 8000 else args.port)
+        return
+    if args.action == 'trading-worker':
+        from .trading_routes import serve
+        serve(settings.db_path)
+        return
+    if args.action == 'tech-publisher':
+        from .tech_direct import serve
+        serve(settings.db_path, settings.timezone)
         return
     if args.action == "bot":
         from .bot import InvestBot
