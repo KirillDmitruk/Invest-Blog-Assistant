@@ -301,6 +301,26 @@
  </div>
 </div></section>
 <section class="section" id="page-content"><div class="grid">
+  <div class="card full">
+    <h2>📊 Инвестиционный отчёт за период · T-Invest API</h2>
+    <p class="hint">Получает исполненные операции выбранного счёта напрямую из T-Invest. Только чтение: сделок и публикаций не выполняет.</p>
+    <div class="editor-fields">
+      <label>Начало периода<input id="blogReportStart" type="date" class="editor-input"></label>
+      <label>Конец периода<input id="blogReportEnd" type="date" class="editor-input"></label>
+      <label>Счёт<select id="blogReportAccount" class="editor-input"><option value="">Загрузка счетов…</option></select></label>
+    </div>
+    <div class="editor-buttons">
+      <button id="blogReportFetch" type="button">↻ Сформировать отчёт</button>
+      <button id="blogReportCopy" type="button" disabled>📋 Копировать текст</button>
+      <button id="blogReportDraft" type="button" disabled>✎ Сохранить в черновики</button>
+    </div>
+    <div id="blogReportFeedback"></div>
+    <div id="blogReportSummary"></div>
+    <label class="editor-label">Готовый текст поста
+      <textarea id="blogReportText" class="editor-input" rows="14" readonly placeholder="Выбери счёт и период, затем нажми «Сформировать отчёт»"></textarea>
+    </label>
+    <p class="hint">Выплаты, пополнения, покупки и продажи учитываются отдельно. Погашения не считаются купонным доходом. Перед публикацией проверь суммы по брокерскому отчёту.</p>
+  </div>
  <div class="card full">
    <div class="panel-head"><h2>🗓 Недельный план публикаций</h2><span class="badge" id="routineTimezone">Часовой пояс: —</span></div>
    <div id="weeklyRoutine" class="routine-grid"></div>
@@ -1033,6 +1053,71 @@ el('editorForm').addEventListener('submit',async event=>{event.preventDefault();
  await refreshEditorial(row.id);el('editorFeedback').replaceChildren(alertNode('Текст сохранён. Изменение требует повторного одобрения.'));
  }catch(e){el('editorFeedback').replaceChildren(alertNode('Ошибка: '+e.message,'warning'))}
 });
+// Read-only activity report; a draft is saved only after an explicit click.
+let activeBlogReport=null;
+function blogReportDefaultDates(){
+  const fmt=d=>[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');
+  const end=new Date();end.setDate(end.getDate()-1);
+  const start=new Date(end);start.setDate(start.getDate()-13);
+  el('blogReportStart').value=fmt(start);
+  el('blogReportEnd').value=fmt(end);
+}
+async function loadBlogReportAccounts(){
+  try{
+    const data=await getJson('/api/blog-report/accounts');
+    const select=el('blogReportAccount');select.replaceChildren();
+    const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent='Выбери счёт';select.append(placeholder);
+    for(const account of data.accounts){
+      const option=document.createElement('option');option.value=account.id;option.textContent=account.label;select.append(option);
+    }
+    select.value=data.default_account_id||'';
+    if(!data.accounts.length)el('blogReportFeedback').replaceChildren(alertNode('Укажи TINVEST_ACCOUNT_IDS в .env.','warning'));
+  }catch(e){el('blogReportFeedback').replaceChildren(alertNode('Счета: '+e.message,'warning'))}
+}
+el('blogReportFetch').addEventListener('click',async()=>{
+  const btn=el('blogReportFetch');
+  const start=el('blogReportStart').value,end=el('blogReportEnd').value,account_id=el('blogReportAccount').value;
+  if(!start||!end||!account_id){el('blogReportFeedback').replaceChildren(alertNode('Выбери даты и счёт.','warning'));return}
+  btn.disabled=true;activeBlogReport=null;
+  el('blogReportCopy').disabled=true;el('blogReportDraft').disabled=true;
+  el('blogReportText').value='';el('blogReportSummary').replaceChildren();
+  el('blogReportFeedback').replaceChildren(alertNode('Загружаем исполненные операции из T-Invest…'));
+  try{
+    const report=await editorRequest('/api/blog-report','POST',{start,end,account_id});
+    activeBlogReport=report;
+    el('blogReportText').value=report.text;
+    const count=report.counts;
+    const info=el('blogReportSummary');
+    const counts=[['Купоны',count.coupons],['Дивиденды',count.dividends],['Пополнения',count.deposits],['Покупки',count.buys],['Продажи',count.sells],['Погашения',count.repayments]];
+    info.replaceChildren(txt('p',counts.map(([name,value])=>name+': '+value).join(' · ')));
+    el('blogReportCopy').disabled=false;
+    el('blogReportDraft').disabled=!report.draft_supported;
+    el('blogReportFeedback').replaceChildren(alertNode(report.draft_supported?
+      'Отчёт готов. Можно скопировать или сохранить в редактор.':
+      'Отчёт готов, но превышает 10 000 символов. Для черновика сократи период.','info'));
+  }catch(e){el('blogReportFeedback').replaceChildren(alertNode('Ошибка отчёта: '+e.message,'warning'))}
+  finally{btn.disabled=false}
+});
+el('blogReportCopy').addEventListener('click',async()=>{
+  if(!activeBlogReport)return;
+  try{await navigator.clipboard.writeText(activeBlogReport.text);
+    el('blogReportFeedback').replaceChildren(alertNode('Текст скопирован.'))}
+  catch(e){el('blogReportFeedback').replaceChildren(alertNode('Не удалось скопировать: '+e.message,'warning'))}
+});
+el('blogReportDraft').addEventListener('click',async()=>{
+  if(!activeBlogReport||!activeBlogReport.draft_supported)return;
+  const btn=el('blogReportDraft');btn.disabled=true;
+  try{
+    const r=activeBlogReport;
+    const draft=await editorRequest('/api/editor/drafts','POST',{
+      kind:'weekly',period:r.start+'_'+r.end,body:r.text
+    });
+    await refreshEditorial(draft.id);
+    showPage('content');
+    el('editorForm').scrollIntoView({behavior:'smooth',block:'center'});
+    el('blogReportFeedback').replaceChildren(alertNode('Черновик #'+draft.id+' создан. Отредактируй текст перед публикацией.'));
+  }catch(e){btn.disabled=false;el('blogReportFeedback').replaceChildren(alertNode('Не удалось сохранить черновик: '+e.message,'warning'))}
+});
 // v1.5.1: all untrusted source text is rendered via textContent only.
 async function refreshPlacements(){
  try{state.placements=await getJson('/api/placements');renderPlacements()}
@@ -1153,6 +1238,8 @@ el('techForm').addEventListener('submit',async ev=>{ev.preventDefault();try{
  }catch(e){el('techFeedback').replaceChildren(alertNode(e.message,'warning'))}});
 
 async function load(){try{
+  blogReportDefaultDates();
+  await loadBlogReportAccounts();
  const [a,b,risk,goals,editor,drafts,topics,contentPlan,routine,performance,placements]=await Promise.all([getJson('/api/overview'),getJson('/api/bonds'),getJson('/api/risk'),getJson('/api/goals'),getJson('/api/editor-token'),getJson('/api/drafts'),getJson('/api/topics'),getJson('/api/content-plan'),getJson('/api/publication-routine'),getJson('/api/performance'),getJson('/api/placements')]);
  if(!a.has_data||!b.has_data){el('status').textContent='Данные портфеля ещё не загружены';}
  state.overview=a;state.bonds=b;state.risk=risk;state.goals=goals;state.editorToken=editor.token;state.drafts=drafts;state.topics=topics;state.contentPlan=contentPlan;state.routine=routine;state.performance=performance;state.placements=placements;
