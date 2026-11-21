@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import io
 import logging
+import os
 from datetime import datetime, timezone
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -168,6 +169,8 @@ class InvestBot:
                 f'⚠️ Снимок портфеля не сохранён: {type(exc).__name__}')
 
     async def run_scheduled(self, kind: str, app: Application) -> None:
+        if os.getenv('PULSE_CLOUD_DRAFTS_ENABLED','false').lower() in ('true','1','yes'):
+            return  # Cloud owns recurring drafts; manual commands remain local.
         now=datetime.now(self.settings.timezone).date()
         if self.editorial_workflow.states().get((now.isoformat(),kind))=='done':
             return
