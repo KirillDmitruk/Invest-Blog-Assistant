@@ -64,6 +64,7 @@ def test_ambiguous_send_stays_claimed_and_storage_failure_never_sends():
 
 def test_broker_write_method_never_reaches_transport():
     api=BrokerReadOnly('SECRET',ZoneInfo('Europe/Moscow'))
+    assert str(api.session.verify).endswith('tbank-ca.pem')
     with pytest.raises(ValueError):api.call('OrdersService','PostOrder',{})
 
 

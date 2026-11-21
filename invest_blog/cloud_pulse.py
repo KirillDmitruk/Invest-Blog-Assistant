@@ -22,6 +22,11 @@ class BrokerReadError(TInvestError):
 
 
 class BrokerReadOnly(TInvest):
+    def __init__(self,*args,**kwargs):
+        super().__init__(*args,**kwargs)
+        bundle=Path(__file__).resolve().parents[1]/'deploy/tbank-ca.pem'
+        if not bundle.is_file():raise ValueError('Нет доверенного хранилища Т-Банка.')
+        self.session.verify=str(bundle)  # Scoped to this broker session, not Telegram/GitHub.
     def call(self,service,method,payload=None):
         if (service,method) not in READS:raise ValueError('Облачным черновикам разрешено только чтение данных.')
         try:return super().call(service,method,payload)
