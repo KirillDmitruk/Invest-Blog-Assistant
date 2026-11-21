@@ -80,6 +80,18 @@ def test_state_is_encrypted_before_github_receives_it(monkeypatch):
     with pytest.raises(InvalidToken):Fernet(Fernet.generate_key()).decrypt(encrypted)
 
 
+def test_retention_preserves_recent_glossary_marker_not_alphabetical_rubrics(monkeypatch):
+    import invest_blog.cloud_pulse as module
+    key=Fernet.generate_key();saved=[];state=Store().value
+    state['deliveries']={f'weekly:old:{i}':{'period':'2025-01-01','status':'sent'} for i in range(105)}
+    state['deliveries']['glossary:new']={'period':'2026-11-23','created_at':'2026-11-27T07:00:00+00:00','status':'attempted'}
+    def call(session,method,url,**kw):saved.append(kw['json']);return {'content':{'sha':'new'}}
+    monkeypatch.setattr(module,'json_call',call)
+    PrivateState('owner/repo','TOKEN','a'*40,key).save(state)
+    result=json.loads(Fernet(key).decrypt(base64.b64decode(saved[0]['content'])))
+    assert len(result['deliveries'])==100 and 'glossary:new' in result['deliveries']
+
+
 def test_long_post_goes_as_private_document_with_no_truncation(monkeypatch):
     import invest_blog.cloud_pulse as module
     calls=[]

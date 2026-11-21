@@ -1,5 +1,5 @@
 """Private Pulse drafts on an ephemeral runner. Read-only broker; no publishing."""
-from datetime import datetime,timedelta
+from datetime import datetime,timedelta,timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 import argparse,base64,hashlib,json,logging,os,re
@@ -64,7 +64,8 @@ class PrivateState:
             return state
         except Exception:raise ValueError('Зашифрованное состояние недоступно или повреждено. Отправка запрещена.') from None
     def save(self,state):
-        state={**state,'deliveries':dict(sorted(state['deliveries'].items())[-100:]),'papers':state['papers'][:12],'glossary':state['glossary'][:12]}
+        latest=sorted(state['deliveries'].items(),key=lambda item:(item[1].get('created_at',item[1]['period']),item[0]))[-100:]
+        state={**state,'deliveries':dict(latest),'papers':state['papers'][:12],'glossary':state['glossary'][:12]}
         encrypted=self.cipher.encrypt(json.dumps(state,ensure_ascii=False).encode())
         body={'message':'Record encrypted Pulse delivery state','branch':self.branch,'content':base64.b64encode(encrypted).decode()}
         if self.sha:body['sha']=self.sha
@@ -98,7 +99,7 @@ def send_due(kinds,day,state_store,sender,generator_factory,recipient):
         generator=generator_factory(state)
         draft=generator.generate(kind,day)
         if draft.kind!=kind or draft.period!=period(kind,day) or not draft.body.strip():raise ValueError('Генератор вернул неподтверждённый черновик.')
-        state['deliveries'][key]={'kind':kind,'period':draft.period,'status':'attempted'}
+        state['deliveries'][key]={'kind':kind,'period':draft.period,'status':'attempted','created_at':datetime.now(timezone.utc).isoformat()}
         topic=generator.selected_paper_uid if kind=='paper' else generator.selected_glossary_topic if kind=='glossary' else None
         if topic:
             field='papers' if kind=='paper' else 'glossary';state[field]=[topic]+[t for t in state[field] if t!=topic]
