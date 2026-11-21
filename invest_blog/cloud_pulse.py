@@ -15,11 +15,19 @@ READS={('UsersService','GetAccounts'),('OperationsService','GetPortfolio'),('Ope
        ('InstrumentsService','GetDividends')}
 
 
+class BrokerReadError(TInvestError):
+    def __init__(self,method,status=None):
+        self.method=method;self.status=status
+        super().__init__('Broker read not confirmed')
+
+
 class BrokerReadOnly(TInvest):
     def call(self,service,method,payload=None):
         if (service,method) not in READS:raise ValueError('Облачным черновикам разрешено только чтение данных.')
         try:return super().call(service,method,payload)
-        except Exception:raise TInvestError('Т-Инвестиции не подтвердили чтение. Личные данные и ответ сервера скрыты.') from None
+        except Exception as exc:
+            status=re.search(r'\bHTTP (\d{3})\b',str(exc))
+            raise BrokerReadError(method,int(status[1]) if status else None) from None
 
 
 def due(now,times=DEFAULT_TIMES):
@@ -110,22 +118,41 @@ def send_due(kinds,day,state_store,sender,generator_factory,recipient):
 
 
 def main():
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--kind',choices=['auto',*DEFAULT_TIMES],default='auto');p.add_argument('--send',action='store_true');args=p.parse_args()
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--kind',choices=['auto',*DEFAULT_TIMES],default='auto');p.add_argument('--send',action='store_true');p.add_argument('--check',action='store_true');args=p.parse_args()
     # Never allow broker/HTTP debug logs or tracebacks into this public workflow.
     logging.disable(logging.CRITICAL)
+    phase='configuration'
     try:
         now=datetime.now(ZoneInfo('Europe/Moscow'));kinds=due(now) if args.kind=='auto' else [args.kind]
-        if not args.send:print('Schedule check only. Due rubrics: '+(', '.join(kinds) or 'none'));return
-        if not kinds:print('No rubrics due in the three-hour window.');return
+        if not args.send and not args.check:print('Schedule check only. Due rubrics: '+(', '.join(kinds) or 'none'));return
+        if not kinds and not args.check:print('No rubrics due in the three-hour window.');return
         token=os.environ['PULSE_TINVEST_TOKEN'];accounts=tuple(x.strip() for x in os.environ['PULSE_ACCOUNT_IDS'].split(',') if x.strip())
         if not token or not accounts:raise ValueError
         state=PrivateState(os.environ['GITHUB_REPOSITORY'],os.environ['GH_STATE_TOKEN'],os.environ['GITHUB_SHA'],os.environ['PULSE_STATE_KEY'].encode())
+        phase='private_recipient'
         sender=PrivateTelegram(os.environ['SIGNALS_BOT_TOKEN'],os.environ['SIGNALS_CHAT_ID'])
         api=BrokerReadOnly(token,ZoneInfo('Europe/Moscow'))
         def factory(saved):return PostGenerator(api,accounts,Path('data/cbr_events.json'),tuple(saved['papers']),tuple(saved['glossary']))
+        if args.check:
+            phase='encrypted_state';saved=state.load();print('Encrypted state: verified.')
+            phase='broker_accounts';available=api.accounts()
+            if not set(accounts).issubset({a.get('id') for a in available}):raise ValueError
+            print('Configured accounts: verified.')
+            phase='broker_portfolio'
+            for account in accounts:
+                if not isinstance(api.portfolio(account).get('positions'),list):raise ValueError
+            print('Portfolio read: verified.')
+            phase='draft_generation'
+            for kind in kinds:
+                draft=factory(saved).generate(kind,now.date())
+                if not draft.body.strip():raise ValueError
+            print('Selected drafts generated in memory. No sends or draft artifacts.');return
+        phase='generate_claim_send'
         result=send_due(kinds,now.date(),state,sender,factory,os.environ['SIGNALS_CHAT_ID'])
         for kind,status in result.items():print(kind+': '+status)
-    except Exception:raise SystemExit('Pulse draft job did not complete. Private data and error details withheld. No automatic send retry.') from None
+    except Exception as exc:
+        detail=(' method='+exc.method+' http='+str(exc.status)) if isinstance(exc,BrokerReadError) else ''
+        raise SystemExit('Pulse job stopped: phase='+phase+detail+'. Private response details withheld. No automatic send retry.') from None
 
 
 if __name__=='__main__':main()
