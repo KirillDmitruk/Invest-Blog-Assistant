@@ -43,7 +43,7 @@ jobs:
           SIGNALS_BOT_TOKEN: ${{ secrets.SIGNALS_BOT_TOKEN }}
           SIGNALS_CHAT_ID: ${{ secrets.SIGNALS_CHAT_ID }}
           GH_STATE_TOKEN: ${{ github.token }}
-          SEND_REPORT: ${{ github.event_name == 'schedule' || inputs.send }}
+          SEND_REPORT: ${{ (github.event_name == 'schedule' && vars.CLOUD_SIGNALS_NOTIFY == 'true') || inputs.send }}
         run: |
           if [ "$SEND_REPORT" = "true" ]; then
             python -m invest_blog.cloud_signals --send
