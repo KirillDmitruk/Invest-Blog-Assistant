@@ -249,13 +249,14 @@ class GithubLedger:
         except Exception:raise ValueError('Состояние отправок GitHub недоступно. Отправка Telegram запрещена.') from None
     def save(self,state):
         value={'message':'Record cloud report delivery state','branch':self.branch,
-            'content':base64.b64encode(json.dumps(dict(sorted(state.items())[-100:])).encode()).decode()}
+            'content':base64.b64encode(json.dumps(dict(sorted(state.items(),key=lambda item:item[1].get('at',''))[-100:])).encode()).decode()}
         if self.sha:value['sha']=self.sha
         response=json_call(self.session,'PUT',self.url+'/contents/cloud-signals-state.json',headers=self.headers,json=value)
         self.sha=response['content']['sha']
 
 
-def deliver(packet,token,chat,ledger,session=None):
+def deliver(packet,token,chat,ledger,session=None,request_tag=''):
+    if request_tag and not re.fullmatch(r'[a-f0-9]{16}',request_tag):raise ValueError('Неверный запрос следующего сигнала.')
     if not token or not re.fullmatch(r'[1-9][0-9]{4,19}',chat or ''):raise ValueError('Нужны токен бота и ID личного чата; канал не допускается.')
     session=session or requests.Session();base='https://api.telegram.org/bot'+token+'/'
     me=json_call(session,'POST',base+'getMe',json={})
@@ -264,10 +265,18 @@ def deliver(packet,token,chat,ledger,session=None):
         raise ValueError('Получатель не подтверждён как твой личный чат. Отправки не было.')
     state=ledger.load();slot=int(datetime.fromisoformat(packet['created_at']).timestamp())//7200
     recipient=hashlib.sha256((token+':'+chat).encode()).hexdigest()[:16];key=f'{slot:010d}:{recipient}'
+    if request_tag:
+        key='request:'+recipient+':'+request_tag
+        if key in state:return 'already_attempted'
+        if any(recipient in k and 0<=datetime.fromisoformat(packet['created_at']).timestamp()-datetime.fromisoformat(v['at']).timestamp()<300 for k,v in state.items()):return 'rate_limited'
     if key in state:return 'already_attempted'
     state[key]={'status':'attempted','at':packet['created_at']};ledger.save(state)
     # From this point every ambiguous failure remains attempted. No retry.
-    value=json_call(session,'POST',base+'sendMessage',json={'chat_id':chat,'text':report(packet,rich=True),'parse_mode':'HTML','disable_web_page_preview':True})
+    payload={'chat_id':chat,'text':report(packet,rich=True),'parse_mode':'HTML','disable_web_page_preview':True}
+    if os.getenv('WALT_TELEGRAM_ENABLED')=='true':
+        from .walt_telegram_protocol import signal_keyboard
+        payload['reply_markup']=signal_keyboard(packet,os.environ['GITHUB_RUN_ID'],chat,os.environ['WALT_BUTTON_KEY'])
+    value=json_call(session,'POST',base+'sendMessage',json=payload)
     if not value.get('ok') or type(value.get('result',{}).get('message_id')) is not int:raise ValueError('Telegram не подтвердил отправку. Повтор заблокирован.')
     state[key]['status']='sent';ledger.save(state)
     return 'sent'
@@ -299,9 +308,10 @@ def previous_public_report(run):
 
 
 def main():
-    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--send',action='store_true');parser.add_argument('--review-run');args=parser.parse_args()
+    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--send',action='store_true');parser.add_argument('--review-run');parser.add_argument('--request-tag',default='');args=parser.parse_args()
     try:
         if args.review_run and args.send:raise ValueError('Повторная проверка старого отчёта не отправляется в Telegram.')
+        if args.request_tag and (not args.send or args.review_run or not re.fullmatch(r'[a-f0-9]{16}',args.request_tag)):raise ValueError('Неверный запрос следующего сигнала.')
         packet=previous_public_report(args.review_run) if args.review_run else scan(PublicStore(Path('.cloud-signals/cache.sqlite3')))
         review(packet,os.getenv('CF_ACCOUNT_ID',''),os.getenv('CF_AI_TOKEN',''))
         output=Path('cloud-report');output.mkdir(exist_ok=True)
@@ -310,7 +320,7 @@ def main():
         print(f"Checked {packet['checked']}/{packet['total']}; AI: {packet['ai']['status']}. No wallet operations.")
         if args.send:
             ledger=GithubLedger(os.environ['GITHUB_REPOSITORY'],os.environ['GH_STATE_TOKEN'],os.environ['GITHUB_SHA'])
-            print('Telegram:',deliver(packet,os.getenv('SIGNALS_BOT_TOKEN',''),os.getenv('SIGNALS_CHAT_ID',''),ledger))
+            print('Telegram:',deliver(packet,os.getenv('SIGNALS_BOT_TOKEN',''),os.getenv('SIGNALS_CHAT_ID',''),ledger,request_tag=args.request_tag))
     except Exception as exc:
         print(str(exc) if type(exc) is ValueError else 'Cloud report failed. Secrets withheld. No retry.');raise SystemExit(1) from None
 

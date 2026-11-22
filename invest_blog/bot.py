@@ -557,6 +557,8 @@ class InvestBot:
         await msg.reply_text(f'✅ Текст #{did} обновлён. /show {did}')
 
     def run(self):
+        if os.getenv('WALT_TELEGRAM_CLOUD_ENABLED')=='true':
+            raise ValueError('Кнопки бота обслуживает облако. Локальный запуск бота отключён; веб-хаб можно использовать отдельно.')
         app=(ApplicationBuilder().token(self.settings.telegram_token)
              .post_init(self.post_init).post_shutdown(self.post_shutdown).build())
         app.add_handler(CommandHandler(('start','help'),self.help))

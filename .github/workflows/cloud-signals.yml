@@ -11,6 +11,10 @@ on:
         description: Optional prior public report run id for AI-only testing (no Telegram)
         type: string
         default: ''
+      request_tag:
+        description: Signed-button request deduplication tag
+        type: string
+        default: ''
   schedule:
     - cron: '17 */2 * * *'
 
@@ -38,7 +42,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install minimal dependencies
-        run: python -m pip install 'requests>=2.31,<3' 'pytest>=8,<10'
+        run: python -m pip install 'requests>=2.31,<3' 'pytest>=8,<10' 'cryptography>=43,<47'
       - name: Verify report and delivery boundaries
         run: python -m pytest tests/test_cloud_signals.py tests/test_cloud_scenarios.py tests/test_cloud_message.py -q
       - name: Build report; optionally send once
@@ -50,11 +54,14 @@ jobs:
           GH_STATE_TOKEN: ${{ github.token }}
           SEND_REPORT: ${{ (github.event_name == 'schedule' && vars.CLOUD_SIGNALS_NOTIFY == 'true') || inputs.send }}
           REVIEW_RUN: ${{ inputs.review_run }}
+          REQUEST_TAG: ${{ inputs.request_tag }}
+          WALT_TELEGRAM_ENABLED: ${{ vars.WALT_TELEGRAM_ENABLED }}
+          WALT_BUTTON_KEY: ${{ secrets.WALT_BUTTON_KEY }}
         run: |
           if [ -n "$REVIEW_RUN" ]; then
             python -m invest_blog.cloud_signals --review-run "$REVIEW_RUN"
           elif [ "$SEND_REPORT" = "true" ]; then
-            python -m invest_blog.cloud_signals --send
+            python -m invest_blog.cloud_signals --send --request-tag "$REQUEST_TAG"
           else
             python -m invest_blog.cloud_signals
           fi

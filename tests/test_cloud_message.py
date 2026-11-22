@@ -5,6 +5,14 @@ from test_cloud_signals import packet,Session,Ledger
 from test_cloud_scenarios import bars
 from invest_blog.cloud_scenarios import describe
 
+def test_next_signal_tag_deduplicates_across_scheduled_slots():
+    p=packet();ledger=Ledger();session=Session()
+    assert deliver(p,'SECRET','12345',ledger,session,request_tag='a'*16)=='sent'
+    from datetime import datetime,timedelta
+    p['created_at']=(datetime.fromisoformat(p['created_at'])+timedelta(hours=2)).isoformat()
+    assert deliver(p,'SECRET','12345',ledger,session,request_tag='a'*16)=='already_attempted'
+    assert sum(url.endswith('sendMessage') for url,_ in session.calls)==1
+
 
 def market(symbol,ident,change,volume=2_000_000):
     r=deepcopy(packet()['rows'][0]);r.update(symbol=symbol,market_id=ident,side='wait',volume_24h_quote=volume,scenario=describe(bars(-1)))
