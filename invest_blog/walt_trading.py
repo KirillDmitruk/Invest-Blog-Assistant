@@ -147,7 +147,10 @@ def calculate(contract,price,free,equity,limits,side,existing_risk=Decimal(0),re
     amount=min(caps).quantize(Decimal('.01'),rounding=ROUND_FLOOR)
     if requested is not None:
         requested=number(requested)
-        if requested<=0 or requested>amount:raise ValueError('Запрошенная маржа превышает расчётный лимит. Сумма автоматически не увеличивается.')
+        if requested<=0:raise ValueError('Запрошенная маржа должна быть положительной.')
+        if requested>amount:raise ValueError(
+            f'Запрошенная маржа превышает текущий расчётный лимит: было {decimal(requested)}, сейчас максимум {decimal(amount)}. '
+            'Цена, баланс или доступный риск изменились. До отправки нужен новый расчёт и отдельное подтверждение; сумма автоматически не меняется.')
         amount=requested.quantize(Decimal('.01'),rounding=ROUND_FLOOR)
     minimum=max(number(limits['min_margin']),number(contract['min_size_quote']))
     if amount<minimum:raise ValueError(
@@ -169,6 +172,27 @@ def calculate(contract,price,free,equity,limits,side,existing_risk=Decimal(0),re
         'profit_estimate':decimal(gain.quantize(Decimal('.01'),rounding=ROUND_FLOOR)),
         'funding_hour_estimate':decimal(funding.quantize(Decimal('.000001'))),'liquidation':None,
         'free_balance':decimal(free),'equity_estimate':decimal(equity),'group':group_for(contract['base_asset'])}
+
+
+def reserve_entry_drift(contract,proposal,free,equity,limits,existing_risk):
+    """Size at the adverse allowed quote drift; keep the actual quote and SL/TP.
+
+    This is headroom, not permission to ignore a later risk/balance change.
+    Confirmation still validates the exact original amount against fresh data.
+    """
+    drift=number(limits['max_drift_pct'])
+    if not 0<=drift<100:raise ValueError('Некорректный предел изменения цены.')
+    direction=1 if proposal['side']=='long' else -1
+    reference=number(proposal['reference_price'])
+    adverse=reference*(1+direction*drift/100)
+    try:
+        stressed=calculate(contract,adverse,free,equity,limits,proposal['side'],existing_risk,fixed=proposal)
+    except ValueError:
+        raise ValueError('Не удалось подобрать сумму с запасом на изменение цены в пределах лимитов и минимального размера контракта. Исполнения не было.') from None
+    amount=min(number(proposal['margin']),number(stressed['margin']))
+    result=calculate(contract,reference,free,equity,limits,proposal['side'],existing_risk,amount,fixed=proposal)
+    result['entry_drift_reserve_pct']=decimal(drift)
+    return result
 
 
 class WaltTrading:
@@ -315,7 +339,7 @@ class WaltTrading:
         if not row:raise ValueError('Сделка не найдена.')
         return dict(row),json.loads(row['payload'])
 
-    def quote(self,signal_id,contract_id,side,requested=None,leverage=None):
+    def quote(self,signal_id,contract_id,side,requested=None,leverage=None,reserve_price_drift=False):
         with self.agent.db() as db:row=db.execute('SELECT payload FROM walt_trade_signals WHERE id=?',(signal_id,)).fetchone()
         if not row:raise ValueError('Сначала нажми «Сигнал».')
         packet=safe_signal(json.loads(row[0]))
@@ -336,7 +360,10 @@ class WaltTrading:
             if type(leverage) is not int or not 1<=leverage<=min(int(limits['leverage']),int(c['max_leverage'])):
                 raise ValueError('Выбранное плечо превышает разрешённый предел.')
             sizing_limits={**limits,'leverage':leverage}
-        proposal=calculate(c,self.price(c,sid),account['free'],account['equity'],sizing_limits,side,account['risk'],requested)
+        price=self.price(c,sid)
+        proposal=calculate(c,price,account['free'],account['equity'],sizing_limits,side,account['risk'],requested)
+        if reserve_price_drift and requested is None:
+            proposal=reserve_entry_drift(c,proposal,account['free'],account['equity'],sizing_limits,account['risk'])
         proposal['quote_currency']=c['quote_asset']
         proposal['currency']=account['currency']
         ident=secrets.token_hex(16)

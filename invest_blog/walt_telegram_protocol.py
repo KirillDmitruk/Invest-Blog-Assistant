@@ -77,6 +77,7 @@ def draft_card(draft):
         f'Стоп: <b>{escape(p["stop"])}</b> · тейк: <b>{escape(p["take"])}</b>']
     if p.get('profit_estimate'):lines.append('Оценка прибыли у тейка: '+escape(p['profit_estimate'])+' '+escape(p['currency']))
     if p.get('funding_hour_estimate'):lines.append('Оценка фандинга в час: '+escape(p['funding_hour_estimate'])+' '+escape(p['currency'])+' (плюс — расход, минус — поступление; ставка меняется).')
+    if p.get('entry_drift_reserve_pct'):lines.append('В размер заложен запас на изменение цены до '+escape(p['entry_drift_reserve_pct'])+'%. Баланс и риск всё равно проверяются перед отправкой.')
     if actual:lines.append('Фактический вход: '+escape(str(actual.get('avg_entry_price')))+' · ликвидация Walt: '+escape(str(actual.get('liquidation_price'))))
     elif p.get('liquidation'):
         label='Граница защиты — расчёт хаба, не цена Walt' if p.get('liquidation_source')=='local_conservative_estimate' else 'Оценка ликвидации Walt'
