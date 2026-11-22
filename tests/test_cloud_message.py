@@ -38,3 +38,18 @@ def test_model_reviews_the_displayed_movers_even_without_entry_candidates():
     review(p,'a'*32,'SECRET',s)
     assert p['ai']['status']=='ok'
     assert all('ai_review' in r for r in display_rows(p['rows']))
+
+
+def test_model_prompt_is_compact_and_old_approval_is_cleared():
+    import json
+    p=packet();p['rows']=[market('ASSET'+str(i),i,-i) for i in range(8)]
+    for row in p['rows']:
+        row['scenario']['advice']='x'*20000
+        row['ai_review']={'accept':True,'reason':'checks_pass'}
+    s=Session({'reviews':[{'market_id':i,'accept':False,'reason':'trend_unclear'} for i in range(8)]})
+    review(p,'a'*32,'SECRET',s)
+    body=s.calls[0][1]['json']['messages'][1]['content']
+    assert len(body)<12000 and 'advice' not in body
+    assert p['ai']['status']=='ok'
+    review(p,'','',s)
+    assert p['ai']['status']=='not_configured' and all('ai_review' not in row for row in p['rows'])

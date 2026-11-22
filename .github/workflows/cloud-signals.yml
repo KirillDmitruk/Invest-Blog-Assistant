@@ -7,6 +7,10 @@ on:
         description: Send report to your private Telegram chat
         type: boolean
         default: false
+      review_run:
+        description: Optional prior public report run id for AI-only testing (no Telegram)
+        type: string
+        default: ''
   schedule:
     - cron: '17 */2 * * *'
 
@@ -25,6 +29,7 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: write
+      actions: read
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -35,7 +40,7 @@ jobs:
       - name: Install minimal dependencies
         run: python -m pip install 'requests>=2.31,<3' 'pytest>=8,<10'
       - name: Verify report and delivery boundaries
-        run: python -m pytest tests/test_cloud_signals.py tests/test_cloud_scenarios.py -q
+        run: python -m pytest tests/test_cloud_signals.py tests/test_cloud_scenarios.py tests/test_cloud_message.py -q
       - name: Build report; optionally send once
         env:
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
@@ -44,8 +49,11 @@ jobs:
           SIGNALS_CHAT_ID: ${{ secrets.SIGNALS_CHAT_ID }}
           GH_STATE_TOKEN: ${{ github.token }}
           SEND_REPORT: ${{ (github.event_name == 'schedule' && vars.CLOUD_SIGNALS_NOTIFY == 'true') || inputs.send }}
+          REVIEW_RUN: ${{ inputs.review_run }}
         run: |
-          if [ "$SEND_REPORT" = "true" ]; then
+          if [ -n "$REVIEW_RUN" ]; then
+            python -m invest_blog.cloud_signals --review-run "$REVIEW_RUN"
+          elif [ "$SEND_REPORT" = "true" ]; then
             python -m invest_blog.cloud_signals --send
           else
             python -m invest_blog.cloud_signals
