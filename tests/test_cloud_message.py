@@ -14,7 +14,7 @@ def market(symbol,ident,change,volume=2_000_000):
 
 def test_no_entries_still_shows_liquid_movers_but_not_thin_pumps():
     p=packet();p['rows']=[market('BTC',0,-1),market('ETH',1,-.5),market('LINK',2,-5),market('GRAM',3,-3),market('THIN',4,90,10)]
-    assert [r['symbol'] for r in display_rows(p['rows'])]==['BTC','ETH','LINK','GRAM']
+    assert [r['symbol'] for r in display_rows(p['rows'])]==['LINK','GRAM','BTC']
     value=report(p,rich=True)
     assert '⚡️ <b>Рыночные сигналы</b>' in value and '19:17 МСК' in value
     assert 'Индикаторы: снижение' in value and '<b>LINK</b>' in value

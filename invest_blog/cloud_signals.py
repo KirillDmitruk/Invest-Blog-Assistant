@@ -136,18 +136,14 @@ def price_text(value):
     return f'{value:,.{digits}f}'.rstrip('0').rstrip('.').replace(',',' ').replace('.',',')
 
 
-def display_rows(rows,limit=5):
-    """Keep BTC/ETH context, then show liquid movers rather than fixed anchors."""
-    selected=[];seen=set()
-    for symbol in ('BTC','ETH'):
-        row=next((r for r in rows if r['symbol']==symbol),None)
-        if row is not None:selected.append(row);seen.add(row['market_id'])
-    others=[r for r in rows if r['market_id'] not in seen and r.get('volume_24h_quote',0)>=1_000_000]
+def display_rows(rows,limit=3):
+    """Show liquid movers; BTC/ETH context is a separate compact line."""
+    others=[r for r in rows if r.get('volume_24h_quote',0)>=1_000_000]
     def rank(r):
         return (not r.get('ai_review',{}).get('accept',False),
                 not r.get('scenario',{}).get('code','').startswith('reversal_'),
                 -abs(r['metrics']['change_24h_pct']),-r.get('volume_24h_quote',0),r['market_id'])
-    return (selected+sorted(others,key=rank))[:limit]
+    return sorted(others,key=rank)[:limit]
 
 
 def report(packet,rich=False):
@@ -162,6 +158,9 @@ def report(packet,rich=False):
         ('Подтверждённых входов сейчас нет. Ниже — заметные движения и сценарии.' if not approved else
          f'Идей после проверки ИИ: {approved}. Перед входом нужна проверка Walt.'),
         f"Проверено {packet['checked']}/{packet['total']} · кандидатов по правилам: {len(entries)}\n🤖 ИИ: {ai_label}."]
+    arrows={'up':'↑','down':'↓','range':'↔'}
+    anchors=[r for symbol in ('BTC','ETH') for r in rows if r['symbol']==symbol and r.get('scenario')]
+    if anchors:lines.append('Фон 4ч: '+' · '.join(text(r['symbol'])+' '+arrows[r['scenario']['trend_4h']] for r in anchors))
     reasons={'checks_pass':'условия кандидата согласованы','trend_unclear':'неоднозначный тренд','news_risk':'новостной риск',
         'data_uncertainty':'недостаточно подтверждений','countertrend':'движение против старшего тренда',
         'weak_volume':'слабое подтверждение объёмом','exhaustion':'признаки ослабления импульса'}
@@ -175,7 +174,7 @@ def report(packet,rich=False):
         if s:
             c=s['conditions'];arrows={'up':'↑','down':'↓','range':'↔'}
             bias='рост' if s['trend_1h']==s['trend_4h']=='up' else 'снижение' if s['trend_1h']==s['trend_4h']=='down' else 'смешанные'
-            card=[head,f"Индикаторы: {bias} · 1ч {arrows[s['trend_1h']]} / 4ч {arrows[s['trend_4h']]}",text(s['label'].capitalize()),
+            card=[head,f"Индикаторы: {bias} · 1ч {arrows[s['trend_1h']]} / 4ч {arrows[s['trend_4h']]}",text('Сценарий: '+s['label']),
                   text(c['confirmation_text'])+' $'+price_text(c['confirmation'])+'; '+text(c['invalidation_text'].lower())+' $'+price_text(c['invalidation'])+'.']
             card.append(text(ai_line))
             if s['flags']:card.append('⚠️ '+text(s['flags'][0]))
