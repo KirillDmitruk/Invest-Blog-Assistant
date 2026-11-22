@@ -62,3 +62,15 @@ def test_cloudflare_copy_whitespace_and_bearer_prefix_are_normalized():
     assert s.calls[0][1]['headers']['Authorization']=='Bearer SECRET'
     s=Session();review(p,'a'*32,'SECRET\nINJECTED',s)
     assert p['ai']['diagnostic']['kind']=='credential_format' and not s.calls
+
+
+def test_current_cloudflare_model_accepts_chat_completion_response(monkeypatch):
+    import invest_blog.cloud_signals as module
+    import json
+    assert module.MODEL=='@cf/google/gemma-4-26b-a4b-it'
+    answer=json.dumps({'reviews':[{'market_id':0,'accept':True,'reason':'checks_pass'}]})
+    for data in ({'success':True,'result':{'choices':[{'message':{'content':answer}}]}},
+                 {'choices':[{'message':{'content':answer}}]}):
+        monkeypatch.setattr(module,'json_call',lambda *a,**kw:data)
+        p=packet();review(p,'a'*32,'SECRET')
+        assert p['ai']['status']=='ok'
