@@ -42,9 +42,11 @@ def main():
     update={'callback_query':{'id':'cloudcheck_'+secrets.token_hex(8),'data':data,'from':{'id':int(owner)},
         'message':{'message_id':message['message_id'],'from':{'id':me['id']},'chat':{'id':int(owner),'type':'private'}}}}
     result=session.post(url,json=update,headers={'X-Telegram-Bot-Api-Secret-Token':os.environ['TG_WEBHOOK_SECRET']},timeout=30)
-    if result.status_code!=200 or result.text!='OK':raise ValueError('Read-only callback dispatch not confirmed')
+    if result.status_code!=200 or result.text!='OK':
+        detail=result.text if result.text.startswith('Dispatch not confirmed: ') else 'gateway rejected'
+        raise ValueError('Read-only callback '+detail)
     print('Gateway health, unsigned rejection, webhook, wallet reads and READ-only callback dispatch verified. No orders sent.')
 
 if __name__=='__main__':
     try:main()
-    except Exception:raise SystemExit('Read-only gateway check not confirmed. Details withheld; no orders sent.') from None
+    except Exception as exc:raise SystemExit('Read-only gateway check not confirmed: '+(str(exc) if type(exc) is ValueError else type(exc).__name__)+'. Details withheld; no orders sent.') from None

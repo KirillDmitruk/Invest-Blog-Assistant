@@ -47,7 +47,7 @@ export async function handle(request,env,fetcher=fetch){
   const result=await fetcher('https://api.github.com/repos/'+env.GITHUB_REPOSITORY+'/actions/workflows/'+workflow+'/dispatches',{
    method:'POST',headers:{Authorization:'Bearer '+env.GH_DISPATCH_TOKEN,Accept:'application/vnd.github+json','Content-Type':'application/json','User-Agent':'ContentHub-Walt'},body:JSON.stringify({ref:'main',inputs})});
   await tg('answerCallbackQuery',{callback_query_id:q.id,text:result.status===204?'Запрос принят. Дождись новой карточки в чате.':'Запуск не подтверждён. Проверь чат и состояние Walt; не повторяй открытие вслепую.',show_alert:result.status!==204});
-  return new Response('OK',{status:200});
+  return new Response(result.status===204?'OK':'Dispatch not confirmed: '+result.status,{status:200});
  }catch{
   await tg('answerCallbackQuery',{callback_query_id:q.id,text:'Кнопка недоступна или устарела. Нужна новая проверка.',show_alert:true});
   return new Response('Ignored',{status:200});
