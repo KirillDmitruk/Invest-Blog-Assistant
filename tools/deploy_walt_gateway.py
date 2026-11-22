@@ -1,5 +1,5 @@
 """Deploy stateless callback gateway. Explicit activation changes Telegram webhook."""
-import base64,json,os,re,sqlite3,sys
+import base64,hashlib,json,os,re,sqlite3,sys
 from pathlib import Path
 import requests
 
@@ -61,8 +61,13 @@ def run():
     call('PUT',cf+'/workers/scripts/'+script,headers=headers,files={
         'metadata':('metadata.json',json.dumps(metadata),'application/json'),
         'worker.mjs':('worker.mjs',code,'application/javascript+module')})
+    try:subdomain=call('GET',cf+'/workers/subdomain',headers=headers)['result']['subdomain']
+    except ValueError as exc:
+        if str(exc)!='Cloudflare account-subdomain HTTP 404 codes [10007]':raise
+        name='kirill-content-hub-'+hashlib.sha256(account.encode()).hexdigest()[:8]
+        subdomain=call('PUT',cf+'/workers/subdomain',headers=headers,json={'subdomain':name})['result']['subdomain']
+        print('Initialized free workers.dev account address.')
     call('POST',cf+'/workers/scripts/'+script+'/subdomain',headers=headers,json={'enabled':True,'previews_enabled':False})
-    subdomain=call('GET',cf+'/workers/subdomain',headers=headers)['result']['subdomain']
     if not re.fullmatch('[a-z0-9-]+',subdomain):raise ValueError('Subdomain not confirmed')
     url='https://'+script+'.'+subdomain+'.workers.dev'
     if active:
