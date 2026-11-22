@@ -19,7 +19,13 @@ def run():
     def call(method,url,**kwargs):
         response=session.request(method,url,timeout=(5,30),**kwargs)
         service='Cloudflare' if url.startswith('https://api.cloudflare.com/') else 'GitHub' if url.startswith('https://api.github.com/') else 'Telegram'
-        if response.status_code>=300:raise ValueError(service+' setup HTTP '+str(response.status_code))
+        if response.status_code>=300:
+            codes=[]
+            if service=='Cloudflare':
+                try:codes=[e.get('code') for e in response.json().get('errors',[]) if type(e.get('code')) is int]
+                except Exception:pass
+            stage='upload' if 'files' in kwargs else 'account-subdomain' if url==cf+'/workers/subdomain' else 'script-subdomain' if '/subdomain' in url else 'request'
+            raise ValueError(service+' '+stage+' HTTP '+str(response.status_code)+' codes '+str(codes))
         value=response.json()
         if value.get('success') is False or value.get('ok') is False:raise ValueError(service+' setup not confirmed')
         return value
