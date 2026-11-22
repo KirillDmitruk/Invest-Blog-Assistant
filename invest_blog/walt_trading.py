@@ -77,9 +77,23 @@ def expiry(value):
 
 
 def group_for(symbol):
+    symbol=str(symbol).upper()
     if symbol in ('NVDA','AAPL','MSFT','AMD','GOOGL','GOOG','META','AMZN','TSLA','AVGO','INTC'):return 'technology'
-    if symbol in ('XAU','XAG','GOLD','SILVER','OIL','BRENT','WTI'):return 'commodities'
+    if symbol in ('XAU','XAG','XCU','GOLD','SILVER','COPPER','OIL','BRENT','WTI'):return 'commodities'
+    currencies={'USD','EUR','GBP','JPY','CHF','CAD','AUD','NZD','CNH','CNY','KRW','BRL','MXN'}
+    if len(symbol)==6 and symbol[:3] in currencies and symbol[3:] in currencies and symbol[:3]!=symbol[3:]:return 'forex'
+    if symbol in ('BTC','ETH','SOL','XRP','BNB','DOGE','ADA','AVAX','LINK','DOT','LTC','BCH','TRX','TON','SUI','APT','NEAR','ARB','OP','UNI','AAVE','ZEC','HYPE','GRAM'):return 'crypto'
     return 'other'  # Conservative shared bucket for unclassified assets, not an inferred industry.
+
+
+def check_group_limit(symbol,catalog,positions,limit):
+    group=group_for(symbol)
+    held=[catalog[p['contract_id']]['base_asset'] for p in positions if group_for(catalog[p['contract_id']]['base_asset'])==group]
+    if len(held)>=limit:
+        label={'technology':'Технологические акции','commodities':'Сырьевые активы','forex':'Валютные пары',
+            'crypto':'Криптоактивы','other':'Неклассифицированные активы'}[group]
+        raise ValueError(f'Лимит группы «{label}»: занято {len(held)} из {limit}. Открыты: {", ".join(held)}. '
+            f'Новая позиция {symbol} не рассчитана. Лонг и шорт учитываются в одном лимите; заявки не отправлялись.')
 
 
 DEFAULT_LIMITS={'revision':1,'leverage':5,'risk_pct':'1','portfolio_risk_pct':'5',
@@ -316,8 +330,7 @@ class WaltTrading:
         account=self.account(catalog,sid);limits=self.limits()
         if len(account['positions'])>=limits['max_positions']:raise ValueError('Достигнут лимит открытых позиций.')
         if any(p.get('contract_id')==contract_id for p in account['positions']):raise ValueError('По этому контракту уже есть позиция. Наращивание не поддерживается.')
-        groups=[group_for(catalog[p['contract_id']]['base_asset']) for p in account['positions']]
-        if groups.count(group_for(c['base_asset']))>=limits['max_group_positions']:raise ValueError('Достигнут лимит позиций в одной локальной группе активов.')
+        check_group_limit(c['base_asset'],catalog,account['positions'],limits['max_group_positions'])
         proposal=calculate(c,self.price(c,sid),account['free'],account['equity'],limits,side,account['risk'],requested)
         proposal['quote_currency']=c['quote_asset']
         proposal['currency']=account['currency']
@@ -351,11 +364,12 @@ class WaltTrading:
         catalog=self.catalog(sid);c=catalog.get(draft['proposal']['contract_id'])
         if not c:raise ValueError('Контракт недоступен.')
         account=self.account(catalog,sid);p=draft['proposal'];price=self.price(c,sid);limits=self.limits()
+        if p.get('group')!=group_for(c['base_asset']):raise ValueError('Классификация инструмента обновилась. Нужны новый расчёт и подтверждение.')
         if p.get('currency')!=account['currency']:raise ValueError('Валюта обеспечения изменилась. Нужен новый расчёт.')
         if min(int(limits['leverage']),int(c['max_leverage']))!=p['leverage']:raise ValueError('Допустимое плечо изменилось. Нужен новый расчёт.')
         if abs(price-number(p['reference_price']))/number(p['reference_price'])*100>number(limits['max_drift_pct']):raise ValueError('Цена изменилась сильнее допустимого. Нужен новый расчёт и подтверждение.')
         if len(account['positions'])>=limits['max_positions'] or any(pos.get('contract_id')==c['contract_id'] for pos in account['positions']):raise ValueError('Состав позиций изменился. Проверь кошелёк и пересчитай сделку.')
-        if sum(group_for(catalog[pos['contract_id']]['base_asset'])==group_for(c['base_asset']) for pos in account['positions'])>=limits['max_group_positions']:raise ValueError('Достигнут лимит локальной группы активов.')
+        check_group_limit(c['base_asset'],catalog,account['positions'],limits['max_group_positions'])
         calculate(c,price,account['free'],account['equity'],limits,p['side'],account['risk'],p['margin'],fixed=p)
         return c
 
