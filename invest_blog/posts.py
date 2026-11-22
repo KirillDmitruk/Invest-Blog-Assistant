@@ -9,6 +9,7 @@ from typing import Iterable
 
 from .model import Draft, fmt_money, fmt_num, fmt_totals, group_amounts, iso_day, money, quotation
 from .tinvest import TInvest, TInvestError
+from .report_templates import render_report,POST_OPENERS
 
 COUPON = {"OPERATION_TYPE_COUPON"}
 DIVIDEND = {"OPERATION_TYPE_DIVIDEND", "OPERATION_TYPE_DIV_EXT"}
@@ -114,38 +115,31 @@ class PostGenerator:
             "Пополнения": [o for o in ops if operation_type(o) in DEPOSIT],
         }
         purchases = [o for o in ops if operation_type(o) in BUY] if monthly else []
-        head = f"📈 Итоги за {d(start)}–{d(end)}" if monthly else "Делаю отчет за неделю🫡"
-        sections = [head, "", "Были следующие выплаты:"]
-        icons = {"Купоны": "💰", "Дивиденды": "🏦", "Погашения": "💸", "Пополнения": "➕"}
-        for title, group in pools.items():
-            if title in ("Дивиденды", "Погашения") and not group:
-                continue
-            sections += ["", f"{icons[title]} {title}"]
-            if not group:
-                sections.append("Выплат не было" if title != "Пополнения" else "Пополнений не было")
-            elif title == "Пополнения":
-                sections.extend(fmt_money(*money(item.get("payment"))) for item in group)
-            else:
-                for item in group:
-                    amount, currency = money(item.get("payment"))
-                    sections.append(f"{self.describe_op(item)} — {fmt_money(amount, currency)}")
-        sections.extend(["", "Итог:"])
-        for title, group in pools.items():
-            sections.append(f"{title} — {fmt_totals(group_amounts(group))}")
-        if monthly:
-            # A monthly activity summary; no purchase list (the weekly format stays unchanged).
-            purchase_sums = group_amounts(purchases)
-            spent = {cur: abs(value) for cur, value in purchase_sums.items()}
-            sections.extend(["", "🛒 Покупки за месяц",
-                             f"Количество операций — {len(purchases)}",
-                             f"Сумма списаний — {fmt_totals(spent)}" if purchases else "Покупок не было"])
-            # Snapshot is CURRENT (not the historical last-day valuation).
-            positions, current = self.get_positions()
-            sections.extend(["", f"💼 Стоимость портфеля на сегодня: {fmt_money(current, 'RUB')}",
-                             f"Активных позиций (облигации и акции): {len(positions)}",
-                             "", "Стоимость портфеля — текущий снимок, не доходность за месяц."])
-        sections.extend(["", "Суммы по исполненным операциям брокера; налоги и комиссии отдельно не вычитались."])
-        return "\n".join(sections)
+        totals={title:group_amounts(group) for title,group in pools.items()}
+        payments={}
+        for title in ('Купоны','Дивиденды','Погашения'):
+            grouped={}
+            for item in pools[title]:
+                amount,currency=money(item.get('payment'))
+                identity=item.get('instrumentUid') or item.get('figi') or item.get('id') or item.get('name') or item.get('description') or 'Бумага'
+                key=(identity,currency)
+                if key not in grouped:grouped[key]=[item,Decimal(0)]
+                grouped[key][1]+=amount
+            payments[title]=[f'{self.describe_op(item)} — {fmt_money(amount,currency)}' for (_,currency),(item,amount) in grouped.items()]
+        positions,current=self.get_positions()
+        month_ops=ops if monthly or start.day==1 else self.get_operations(end.replace(day=1),end)
+        month_income=sum((money(o.get('payment'))[0] for o in month_ops
+            if operation_type(o) in COUPON|DIVIDEND and money(o.get('payment'))[1]=='RUB'),Decimal(0))
+        count=len(pools['Купоны']);n=count%100
+        word='купонных выплат' if 11<=n<=14 else 'купонная выплата' if count%10==1 else 'купонные выплаты' if count%10 in (2,3,4) else 'купонных выплат'
+        summary=f'За {"месяц" if monthly else "неделю"} — {count} {word}.' if count else f'За {"месяц" if monthly else "неделю"} купонных выплат не было.'
+        rub=[o for o in pools['Купоны'] if money(o.get('payment'))[1]=='RUB' and money(o.get('payment'))[0]>0]
+        if rub:
+            largest=max(rub,key=lambda o:money(o.get('payment'))[0])
+            summary+=f' Самая крупная купонная выплата в рублях: {self.describe_op(largest)} — {fmt_money(*money(largest.get("payment")))}.'
+        if not pools['Пополнения']:summary+=' В этот раз без пополнений.'
+        return render_report(start=start,end=end,monthly=monthly,payments=payments,totals=totals,capital=current,positions=len(positions),
+            month_income=month_income,purchase_count=len(purchases),purchase_totals={c:abs(v) for c,v in group_amounts(purchases).items()},summary=summary)
 
     def weekly(self, today: date) -> Draft:
         start, end = previous_workweek(today)
@@ -203,7 +197,7 @@ class PostGenerator:
             except (TInvestError, ValueError) as exc:
                 errors.append(f"{uid or figi}: {str(exc)[:90]}")
         cb, has_calendar = self.events(start, end)
-        parts = [f"📅 План на неделю: {d(start)}–{d(end)}", "",
+        parts = [f"📅 План на неделю: {d(start)}–{d(end)}", "", POST_OPENERS['plan'], "",
                  "💰 Ожидаемые купоны", *(x[1] for x in sorted(coupons)),
                  *([] if coupons else ["По доступному календарю событий не найдено."]),
                  "", "🏦 Дивиденды: ориентировочные даты выплат", *(x[1] for x in sorted(dividends)),
@@ -263,7 +257,7 @@ class PostGenerator:
             "Попробуем понять, из чего складываются привлекательность бумаги и её главные риски.",
         )
         parts = [
-            f"📊 Бумага недели — {info.name}{info.tag}", "",
+            f"📊 Бумага недели — {info.name}{info.tag}", "", POST_OPENERS['paper'], "",
             hooks[today.isocalendar().week % len(hooks)], "",
             "🏢 Что за компания?",
             "[Чем занимается эмитент, какие товары или услуги предлагает, на чём зарабатывает? "
@@ -338,7 +332,7 @@ class PostGenerator:
         self.selected_glossary_topic = title
         return Draft(
             "glossary", monday.isoformat(),
-            f"📚 Ликбез за 2 минуты: {title}\n\n{body}\n\n"
+            f"📚 Ликбез за 2 минуты: {title}\n\n{POST_OPENERS['glossary']}\n\n{body}\n\n"
             "Вот и всё — ещё одним сложным инвестиционным термином меньше 😁\n"
             "О каком понятии рассказать в следующий раз? 👇"
         )
@@ -361,7 +355,7 @@ class PostGenerator:
         quantity = quantity_done if quantity_done > 0 else Decimal(str(op.get("quantity") or "0"))
         price, currency = money(op.get("price"))
         total, total_cur = money(op.get("payment"))
-        parts = ["Сделал покупку🛒", "", f"{info.name}{info.tag}",
+        parts = ["Сделал покупку🛒", "", POST_OPENERS['purchase'], "", f"{info.name}{info.tag}",
                  f"Количество: {fmt_num(quantity, 0)} шт. по {fmt_money(price, currency)}",
                  f"Сумма списания: {fmt_money(abs(total), total_cur)}",
                  f"Дата операции: {d(iso_day(op.get('date'), self.api.tz))}"]
