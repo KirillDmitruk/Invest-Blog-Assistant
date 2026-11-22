@@ -107,8 +107,13 @@ def scan(store,session=None,clock=time.time,sleep=time.sleep):
 def review(packet,account,token,session=None):
     packet['ai']={'status':'not_configured'}
     for row in packet['rows']:row.pop('ai_review',None)
+    account=account.strip();token=token.strip()
+    if token.lower().startswith('bearer '):token=token[7:].strip()
     if not account or not token:return
-    if not re.fullmatch(r'[a-fA-F0-9]{32}',account):raise ValueError('Неверный Account ID Cloudflare.')
+    if not re.fullmatch(r'[a-fA-F0-9]{32}',account) or not re.fullmatch(r'[!-~]+',token):
+        packet['ai']={'status':'unavailable','reviewed':0,'diagnostic':{'stage':'configuration','kind':'credential_format'},
+            'note':'Проверь формат Cloudflare Secrets: Account ID и токен одной строкой. Значения скрыты.'}
+        return
     candidates=display_rows(packet['rows']);used={r['market_id'] for r in candidates}
     for row in focus(packet['rows']):
         if len(candidates)>=8:break

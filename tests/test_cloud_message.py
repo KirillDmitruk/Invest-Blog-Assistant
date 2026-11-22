@@ -53,3 +53,12 @@ def test_model_prompt_is_compact_and_old_approval_is_cleared():
     assert p['ai']['status']=='ok'
     review(p,'','',s)
     assert p['ai']['status']=='not_configured' and all('ai_review' not in row for row in p['rows'])
+
+
+def test_cloudflare_copy_whitespace_and_bearer_prefix_are_normalized():
+    p=packet();s=Session({'reviews':[{'market_id':0,'accept':True,'reason':'checks_pass'}]})
+    review(p,' '+('a'*32)+'\n','\r\nBearer SECRET\r\n',s)
+    assert p['ai']['status']=='ok'
+    assert s.calls[0][1]['headers']['Authorization']=='Bearer SECRET'
+    s=Session();review(p,'a'*32,'SECRET\nINJECTED',s)
+    assert p['ai']['diagnostic']['kind']=='credential_format' and not s.calls
