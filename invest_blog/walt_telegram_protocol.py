@@ -70,7 +70,7 @@ def signal_keyboard(packet,run,owner,key,clock=time.time):
 def draft_card(draft):
     p=draft['proposal'];actual=draft.get('actual_position');status=draft['status']
     side='лонг' if p['side']=='long' else 'шорт'
-    title='Позиция открыта · защита сверена' if status=='protected' else 'Проверь сделку' if status=='previewed' else 'Проверь состояние Walt'
+    title='Позиция открыта · защита сверена' if status=='protected' else 'Проверь сделку' if status=='previewed' else 'Расчёт заблокирован · сделка не открыта' if status=='blocked' else 'Проверь состояние Walt'
     lines=[f'<b>{title}</b>\n{escape(p["symbol"])} · {side}',
         f'Маржа: <b>{escape(p["margin"])} {escape(p["currency"])}</b> · плечо {p["leverage"]}×',
         f'Риск с расходами: {escape(p["risk_estimate"])} {escape(p["currency"])}',
@@ -81,8 +81,9 @@ def draft_card(draft):
     elif p.get('liquidation'):
         label='Граница защиты — расчёт хаба, не цена Walt' if p.get('liquidation_source')=='local_conservative_estimate' else 'Оценка ликвидации Walt'
         lines.append(label+': '+escape(p['liquidation']))
-    for key in ('block_reason','alert'):
+    for key in ('telegram_notice','block_reason','alert'):
         if draft.get(key):lines.append(escape(draft[key]))
     if draft.get('ai',{}).get('side')!=p['side']:lines.append('Направление выбрано вручную; это не подтверждённый ИИ вход.')
     if status=='previewed':lines.append('Это реальные деньги. Открытие — только по отдельной кнопке подтверждения. Если срок истёк, потребуется новая проверка.')
+    if status=='blocked':lines.append('Подтверждение недоступно: проверка не пройдена. Этот расчёт не отправлялся на исполнение. Нужен новый расчёт с допустимыми параметрами или новый сигнал.')
     return '\n\n'.join(lines)

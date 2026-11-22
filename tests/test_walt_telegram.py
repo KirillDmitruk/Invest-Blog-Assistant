@@ -95,3 +95,10 @@ def test_expired_confirm_never_executes(tmp_path):
     with service.agent.db() as db:db.execute('UPDATE walt_tg_buttons SET expires=0')
     with pytest.raises(ValueError):controller.handle({**event('n:1:'+str(int(time.time()+60))),'data':data})
     assert service.executions==0
+
+def test_blocked_card_explains_missing_confirmation_and_has_no_execute_button(tmp_path):
+    service,controller,messages,_=setup(tmp_path)
+    controller.show({**service.draft,'status':'blocked','block_reason':'Защита не подтверждена.'})
+    text,markup=messages[-1]
+    assert 'Расчёт заблокирован' in text and 'Подтверждение недоступно' in text
+    assert not markup['inline_keyboard'] and service.executions==0

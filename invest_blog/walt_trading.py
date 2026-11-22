@@ -315,7 +315,7 @@ class WaltTrading:
         if not row:raise ValueError('Сделка не найдена.')
         return dict(row),json.loads(row['payload'])
 
-    def quote(self,signal_id,contract_id,side,requested=None):
+    def quote(self,signal_id,contract_id,side,requested=None,leverage=None):
         with self.agent.db() as db:row=db.execute('SELECT payload FROM walt_trade_signals WHERE id=?',(signal_id,)).fetchone()
         if not row:raise ValueError('Сначала нажми «Сигнал».')
         packet=safe_signal(json.loads(row[0]))
@@ -331,7 +331,12 @@ class WaltTrading:
         if len(account['positions'])>=limits['max_positions']:raise ValueError('Достигнут лимит открытых позиций.')
         if any(p.get('contract_id')==contract_id for p in account['positions']):raise ValueError('По этому контракту уже есть позиция. Наращивание не поддерживается.')
         check_group_limit(c['base_asset'],catalog,account['positions'],limits['max_group_positions'])
-        proposal=calculate(c,self.price(c,sid),account['free'],account['equity'],limits,side,account['risk'],requested)
+        sizing_limits=limits
+        if leverage is not None:
+            if type(leverage) is not int or not 1<=leverage<=min(int(limits['leverage']),int(c['max_leverage'])):
+                raise ValueError('Выбранное плечо превышает разрешённый предел.')
+            sizing_limits={**limits,'leverage':leverage}
+        proposal=calculate(c,self.price(c,sid),account['free'],account['equity'],sizing_limits,side,account['risk'],requested)
         proposal['quote_currency']=c['quote_asset']
         proposal['currency']=account['currency']
         ident=secrets.token_hex(16)
@@ -366,11 +371,11 @@ class WaltTrading:
         account=self.account(catalog,sid);p=draft['proposal'];price=self.price(c,sid);limits=self.limits()
         if p.get('group')!=group_for(c['base_asset']):raise ValueError('Классификация инструмента обновилась. Нужны новый расчёт и подтверждение.')
         if p.get('currency')!=account['currency']:raise ValueError('Валюта обеспечения изменилась. Нужен новый расчёт.')
-        if min(int(limits['leverage']),int(c['max_leverage']))!=p['leverage']:raise ValueError('Допустимое плечо изменилось. Нужен новый расчёт.')
+        if type(p['leverage']) is not int or not 1<=p['leverage']<=min(int(limits['leverage']),int(c['max_leverage'])):raise ValueError('Допустимое плечо изменилось. Нужен новый расчёт.')
         if abs(price-number(p['reference_price']))/number(p['reference_price'])*100>number(limits['max_drift_pct']):raise ValueError('Цена изменилась сильнее допустимого. Нужен новый расчёт и подтверждение.')
         if len(account['positions'])>=limits['max_positions'] or any(pos.get('contract_id')==c['contract_id'] for pos in account['positions']):raise ValueError('Состав позиций изменился. Проверь кошелёк и пересчитай сделку.')
         check_group_limit(c['base_asset'],catalog,account['positions'],limits['max_group_positions'])
-        calculate(c,price,account['free'],account['equity'],limits,p['side'],account['risk'],p['margin'],fixed=p)
+        calculate(c,price,account['free'],account['equity'],{**limits,'leverage':p['leverage']},p['side'],account['risk'],p['margin'],fixed=p)
         return c
 
     def prepare(self,ident):

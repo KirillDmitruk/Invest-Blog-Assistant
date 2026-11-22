@@ -47,6 +47,21 @@ class TradeBot:
         packet={'id':signal,'created':now,'expires':now+180,'analysis_version':3,'candidates':[candidate]}
         with self.agent.db() as db:db.execute('INSERT INTO walt_trade_signals VALUES(?,?,?)',(signal,now,json.dumps(packet)))
         draft=self.service.quote(signal,ident,side);preview=self.service.prepare(draft['id'])
+        initial_leverage=preview['proposal']['leverage']
+        while (preview['status']=='blocked' and preview['proposal']['leverage']>1
+            and preview.get('liquidation_evidence',{}).get('source')=='local_conservative_estimate'
+            and preview.get('block_reason')=='Стоп с учётом проскальзывания не имеет достаточного запаса до границы ликвидации. Исполнение заблокировано.'):
+            # Only decrease leverage, keeping the exact same user risk/margin caps.
+            # Every quote and preview independently re-read Walt. No execution.
+            lower=preview['proposal']['leverage']-1
+            draft=self.service.quote(signal,ident,side,leverage=lower)
+            preview=self.service.prepare(draft['id'])
+        if preview['proposal']['leverage']<initial_leverage:
+            notice=f'Плечо снижено с {initial_leverage}× до {preview["proposal"]["leverage"]}× для запаса защиты. Сумма и риск пересчитаны; лимиты не повышались. Проверь новые условия перед подтверждением.'
+            row,private=self.service.row(preview['id']);private['telegram_notice']=notice
+            private['warnings'].append(notice)
+            with self.agent.db() as db:db.execute('UPDATE walt_trade_drafts SET payload=? WHERE id=?',(json.dumps(private,ensure_ascii=False),preview['id']))
+            preview=self.service.public(preview['id'])
         self.checkpoint();self.show(preview)
     def register_button(self,draft,kind,expires):
         nonce=secrets.token_hex(8)
