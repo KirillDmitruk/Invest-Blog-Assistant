@@ -1,5 +1,6 @@
 """Offline, explicit export of Walt-only state. No network or broker methods."""
 import argparse,json,os,sqlite3,sys,time
+from contextlib import closing
 from pathlib import Path
 from cryptography.fernet import Fernet
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
@@ -10,7 +11,7 @@ TABLES=('walt_agent_state','walt_trade_limits','walt_trade_signals','walt_trade_
 def snapshot(source,key,decrypt=protect):
     cipher=Fernet(key)
     # Read one consistent SQLite snapshot; never export the complete hub DB.
-    with sqlite3.connect(Path(source).resolve().as_uri()+'?mode=ro',uri=True) as original:
+    with closing(sqlite3.connect(Path(source).resolve().as_uri()+'?mode=ro',uri=True)) as original:
         memory=sqlite3.connect(':memory:');original.backup(memory)
     try:
         for table in ('walt_agent_lock','walt_trade_lock'):

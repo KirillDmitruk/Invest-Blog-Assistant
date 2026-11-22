@@ -1,6 +1,7 @@
 """Encrypted cloud-only SQLite state with durable checkpoints before execution."""
 from pathlib import Path
-import base64,json,re,sqlite3
+from contextlib import closing
+import base64,json,re,sqlite3,time
 import requests
 from cryptography.fernet import Fernet
 from .cloud_signals import json_call
@@ -21,18 +22,21 @@ class CloudWaltState:
             meta=json_call(self.session,'GET',self.url+'/contents/'+self.filename,headers=self.headers,params={'ref':self.branch})
             self.sha=meta['sha']
             if not meta.get('content'):
-                meta=json_call(self.session,'GET',self.url+'/git/blobs/'+self.sha,headers=self.headers)
+                meta=json_call(self.session,'GET',self.url+'/git/blobs/'+self.sha,headers=self.headers,response_limit=self.maximum*2)
             encrypted=base64.b64decode(meta['content'])
             if len(encrypted)>self.maximum*2:raise ValueError
             plain=self.cipher.decrypt(encrypted)
             if len(plain)>self.maximum or not plain.startswith(b'SQLite format 3\0'):raise ValueError
             self.path.write_bytes(plain)
-            with sqlite3.connect(self.path) as db:
+            with closing(sqlite3.connect(self.path)) as db:
                 if db.execute('PRAGMA quick_check').fetchone()[0]!='ok':raise ValueError
         except Exception:raise ValueError('Состояние облачного Walt недоступно. Новое пустое состояние не создаётся; сделки запрещены.') from None
     def checkpoint(self):
         if not self.sha:raise ValueError('Облачное состояние не загружено.')
-        with sqlite3.connect(self.path) as db:plain=db.serialize()
+        with closing(sqlite3.connect(self.path)) as db:
+            # Expired scan packets are a cache; keep all trade drafts/journal.
+            db.execute("DELETE FROM walt_trade_signals WHERE json_extract(payload,'$.expires') < ?",(time.time(),))
+            db.commit();db.execute('VACUUM');plain=db.serialize()
         if len(plain)>self.maximum:raise ValueError('Превышен размер состояния. Исполнение остановлено.')
         encrypted=self.cipher.encrypt(plain)
         value=json_call(self.session,'PUT',self.url+'/contents/'+self.filename,headers=self.headers,json={

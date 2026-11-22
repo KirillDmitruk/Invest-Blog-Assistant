@@ -24,7 +24,7 @@ class ServiceCallError(ValueError):
         super().__init__('Внешний сервис не подтвердил запрос. Секретные параметры скрыты; автоповтора нет.')
 
 
-def json_call(session,method,url,**kwargs):
+def json_call(session,method,url,response_limit=3_000_000,**kwargs):
     """Never expose URLs containing bot tokens or untrusted provider error prose."""
     try:
         with session.request(method,url,timeout=(5,60),allow_redirects=False,**kwargs) as response:
@@ -32,7 +32,7 @@ def json_call(session,method,url,**kwargs):
             chunks=[];size=0
             for chunk in response.iter_content(65536):
                 size+=len(chunk)
-                if size>3_000_000:raise ValueError
+                if size>response_limit:raise ValueError
                 chunks.append(chunk)
             return json.loads(b''.join(chunks))
     except ServiceCallError:raise

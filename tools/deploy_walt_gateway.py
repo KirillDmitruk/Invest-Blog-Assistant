@@ -5,7 +5,7 @@ import requests
 
 def required(name):
     value=os.environ.get(name,'').strip()
-    if not value:raise ValueError('Missing configuration')
+    if not value:raise ValueError('Missing configuration: '+name)
     return value
 
 def run():
@@ -18,9 +18,10 @@ def run():
     headers={'Authorization':'Bearer '+required('CF_WORKERS_DEPLOY_TOKEN')}
     def call(method,url,**kwargs):
         response=session.request(method,url,timeout=(5,30),**kwargs)
-        if response.status_code>=300:raise ValueError('Service rejected setup')
+        service='Cloudflare' if url.startswith('https://api.cloudflare.com/') else 'GitHub' if url.startswith('https://api.github.com/') else 'Telegram'
+        if response.status_code>=300:raise ValueError(service+' setup HTTP '+str(response.status_code))
         value=response.json()
-        if value.get('success') is False or value.get('ok') is False:raise ValueError('Setup not confirmed')
+        if value.get('success') is False or value.get('ok') is False:raise ValueError(service+' setup not confirmed')
         return value
     me=call('POST','https://api.telegram.org/bot'+bot+'/getMe',json={})['result']
     chat=call('POST','https://api.telegram.org/bot'+bot+'/getChat',json={'chat_id':owner})['result']
@@ -50,6 +51,7 @@ def run():
     metadata={'main_module':'worker.mjs','compatibility_date':'2026-11-22','bindings':bindings,
         'observability':{'enabled':False},'logpush':False}
     code=(Path(__file__).resolve().parents[1]/'cloudflare/walt-webhook/worker.mjs').read_bytes()
+    print('Uploading disabled gateway.' if not active else 'Uploading gateway for approved activation.')
     call('PUT',cf+'/workers/scripts/'+script,headers=headers,files={
         'metadata':('metadata.json',json.dumps(metadata),'application/json'),
         'worker.mjs':('worker.mjs',code,'application/javascript+module')})
@@ -69,4 +71,4 @@ def run():
 
 if __name__=='__main__':
     try:run()
-    except Exception:raise SystemExit('Gateway setup not confirmed. Secrets withheld; no automatic retry.') from None
+    except Exception as exc:raise SystemExit('Gateway setup not confirmed: '+(str(exc) if type(exc) is ValueError else type(exc).__name__)+'. Secrets withheld; no automatic retry.') from None
