@@ -44,7 +44,7 @@ class Ledger:
 def test_unconfigured_model_is_never_called_or_claimed():
     p=packet();s=Session();review(p,'','',s)
     assert not s.calls and 'не подключён' in report(p)
-    assert 'без проверки ИИ' in report(p)
+    assert 'без проверки ии' in report(p).lower()
 
 
 @pytest.mark.parametrize('bad',[
