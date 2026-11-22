@@ -70,6 +70,10 @@ def run():
     call('POST',cf+'/workers/scripts/'+script+'/subdomain',headers=headers,json={'enabled':True,'previews_enabled':False})
     if not re.fullmatch('[a-z0-9-]+',subdomain):raise ValueError('Subdomain not confirmed')
     url='https://'+script+'.'+subdomain+'.workers.dev'
+    health=session.get(url,timeout=(5,30),allow_redirects=False)
+    if health.status_code!=200 or health.text!='Walt callback gateway':raise ValueError('Public gateway health not confirmed')
+    denied=session.post(url,json={},timeout=(5,30),allow_redirects=False)
+    if denied.status_code!=403:raise ValueError('Unsigned gateway request not rejected')
     if active:
         # This explicit switch disables getUpdates/local polling for this bot.
         call('POST','https://api.telegram.org/bot'+bot+'/setWebhook',json={
