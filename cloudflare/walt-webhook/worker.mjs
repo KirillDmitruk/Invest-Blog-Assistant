@@ -37,6 +37,10 @@ export async function handle(request,env,fetcher=fetch){
  try{
   if(env.ENABLED!=='true')throw Error('disabled');
   const parts=await verifyButton(q.data,owner,env.WALT_BUTTON_KEY);
+  if(env.TRADING_MODE==='paper'&&parts[0]!=='n'){
+   await tg('answerCallbackQuery',{callback_query_id:q.id,text:'Сейчас PAPER: реальные сделки отключены. Виртуальные позиции открываются автоматически; смотри хаб → Автотрейдинг · демо.',show_alert:true});
+   return new Response('Paper mode; no real action',{status:200});
+  }
   const event={data:q.data,query:q.id,owner,chat:owner,message:String(q.message.message_id),created:Math.floor(Date.now()/1000)};
   let workflow='cloud-walt.yml',inputs={event:await seal(event,env.WALT_EVENT_KEY)};
   if(parts[0]==='n'){

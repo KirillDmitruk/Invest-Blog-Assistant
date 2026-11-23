@@ -13,7 +13,7 @@ permissions:
   contents: read
 jobs:
   manual-action:
-    if: vars.WALT_TELEGRAM_ENABLED == 'true'
+    if: vars.WALT_TELEGRAM_ENABLED == 'true' && vars.TRADING_MODE != 'paper'
     runs-on: ubuntu-latest
     timeout-minutes: 8
     permissions:
@@ -32,6 +32,7 @@ jobs:
       - name: Process one authenticated owner action
         env:
           WALT_EVENT: ${{ inputs.event }}
+          TRADING_MODE: ${{ vars.TRADING_MODE }}
           WALT_EVENT_KEY: ${{ secrets.WALT_EVENT_KEY }}
           WALT_BUTTON_KEY: ${{ secrets.WALT_BUTTON_KEY }}
           WALT_CLOUD_STATE_KEY: ${{ secrets.WALT_CLOUD_STATE_KEY }}

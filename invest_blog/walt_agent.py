@@ -201,6 +201,9 @@ class WaltAgent:
             db.execute('UPDATE walt_agent_state SET payload=? WHERE id=1',(json.dumps(state),))
 
     def rpc(self,method,params=None,session_id=None,_manual=False):
+        if (os.getenv('TRADING_MODE')=='paper' and method=='tools/call' and isinstance(params,dict)
+            and params.get('name') in ('perps_prepare_order_place','perps_execute_operation','perps_readiness')):
+            raise ValueError('Включён PAPER: реальные торговые действия Walt отключены. Виртуальный счёт — в разделе «Автотрейдинг · демо».')
         if (os.getenv('WALT_CLOUD_TRADING_ENABLED')=='true' and not getattr(self,'cloud_execution_backend',False)
             and method=='tools/call' and isinstance(params,dict)
             and params.get('name') in ('perps_prepare_order_place','perps_execute_operation','perps_readiness')):

@@ -219,8 +219,10 @@ def report(packet,rich=False):
     news=[n for n in packet['news']['items'] if n.get('source')=='ФРС' or any(re.search(r'\b'+re.escape(w)+r'\b',n['title'],re.I) for w in wanted)]
     if news:lines.append('🗞 '+text(news[0]['source']+': '+news[0]['title'][:125]))
     footer='Уровни — для наблюдения: закрытие 4ч + объём ≥1,2 среднего часа за сутки и удержание/ретест. Разворот не гарантирован.\nЦены — закрытие часа Lighter, не спот-пары /USDT и не текущие котировки Walt. Перед сделкой — проверка кошелька, расходов, стопов и ручное подтверждение.'
+    paper=os.getenv('TRADING_MODE')=='paper'
+    if paper:footer='Цены выше — закрытие часа Lighter. Автосимулятор отдельно проверяет свежие котировки и лимиты. Сценарий наблюдения не равен разрешению на вход. Все открытия и результаты — только виртуальные; реальные заявки отключены.'
     # Keep the safety context intact rather than silently cutting the message.
-    while len('\n\n'.join(lines+[footer]))>3950 and len(shown)>2:
+    while len('\n\n'.join(lines+[footer]))>(3500 if paper else 3950) and len(shown)>2:
         symbol=shown.pop()['symbol'];lines=[line for line in lines if not any(line.startswith(dot+' '+bold(symbol)+' $') for dot in ('🔴','🟢','⚪️'))]
     return '\n\n'.join(lines+[footer])
 
@@ -273,7 +275,13 @@ def deliver(packet,token,chat,ledger,session=None,request_tag=''):
     state[key]={'status':'attempted','at':packet['created_at']};ledger.save(state)
     # From this point every ambiguous failure remains attempted. No retry.
     payload={'chat_id':chat,'text':report(packet,rich=True),'parse_mode':'HTML','disable_web_page_preview':True}
-    if os.getenv('WALT_TELEGRAM_ENABLED')=='true':
+    if os.getenv('TRADING_MODE')=='paper':
+        payload['text']='🧪 <b>Режим PAPER · реальные сделки отключены</b>\n\n'+payload['text']+'\n\nВиртуальный счёт: $10 000 на старте. Автосделки и позиции — в хабе → «Автотрейдинг · демо».'
+        if os.getenv('WALT_BUTTON_KEY') and os.getenv('GITHUB_RUN_ID'):
+            from .walt_telegram_protocol import button
+            expiry=int(time.time()+7200);run=os.environ['GITHUB_RUN_ID']
+            payload['reply_markup']={'inline_keyboard':[[{'text':'⚡ Следующий обзор','callback_data':button(f'n:{run}:{expiry}',chat,os.environ['WALT_BUTTON_KEY'])}]]}
+    elif os.getenv('WALT_TELEGRAM_ENABLED')=='true':
         from .walt_telegram_protocol import signal_keyboard
         payload['reply_markup']=signal_keyboard(packet,os.environ['GITHUB_RUN_ID'],chat,os.environ['WALT_BUTTON_KEY'])
     value=json_call(session,'POST',base+'sendMessage',json=payload)

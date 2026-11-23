@@ -112,6 +112,7 @@ class TradeBot:
 
 
 def main():
+    if os.getenv('TRADING_MODE')=='paper':raise SystemExit('Real Walt execution disabled in PAPER mode.')
     logging.disable(logging.CRITICAL)
     try:
         owner=os.environ['SIGNALS_CHAT_ID'];bot=os.environ['SIGNALS_BOT_TOKEN']

@@ -19,4 +19,7 @@ assert.equal(JSON.stringify(calls[0].body).includes(owner),false);
 const raw=Buffer.from(calls[0].body.inputs.event.slice(3),'base64url');
 const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:raw.subarray(0,12),additionalData:new TextEncoder().encode('content-hub-walt-v1')},await crypto.subtle.importKey('raw',Buffer.alloc(32,120),'AES-GCM',false,['decrypt']),raw.subarray(12));
 assert.equal(JSON.parse(new TextDecoder().decode(plain)).owner,owner);
+const before=calls.filter(c=>c.url.includes('github.com')).length;
+await handle(request(),{...env,TRADING_MODE:'paper'},fetcher);
+assert.equal(calls.filter(c=>c.url.includes('github.com')).length,before);
 console.log('Worker authentication and encrypted dispatch checks passed.');

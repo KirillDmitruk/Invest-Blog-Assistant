@@ -58,6 +58,7 @@ jobs:
           REVIEW_RUN: ${{ inputs.review_run }}
           REQUEST_TAG: ${{ inputs.request_tag }}
           WALT_TELEGRAM_ENABLED: ${{ vars.WALT_TELEGRAM_ENABLED }}
+          TRADING_MODE: ${{ vars.TRADING_MODE }}
           WALT_BUTTON_KEY: ${{ secrets.WALT_BUTTON_KEY }}
         run: |
           if [ -n "$REVIEW_RUN" ]; then

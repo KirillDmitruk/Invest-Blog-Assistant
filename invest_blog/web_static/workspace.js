@@ -13,6 +13,7 @@
     ['strategy', '◎ Стратегия', ['goals', 'allocation']],
     ['placements', '🛰 Новые размещения', ['placements']],
     ['trading', '◈ Торговый бот', ['trading']],
+    ['paper', '🧪 Автотрейдинг · демо', ['paper']],
     ['news', '⚙ Tech · Новости', ['news', 'publishing']],
     ['editorial', '✎ Редакция', ['desk', 'content', 'tech', 'creator']],
   ];

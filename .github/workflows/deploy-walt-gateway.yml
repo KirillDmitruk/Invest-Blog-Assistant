@@ -38,6 +38,7 @@ jobs:
           SIGNALS_BOT_TOKEN: ${{ secrets.SIGNALS_BOT_TOKEN }}
           SIGNALS_CHAT_ID: ${{ secrets.SIGNALS_CHAT_ID }}
           ACTIVATE_WALT_WEBHOOK: ${{ inputs.activate }}
+          TRADING_MODE: ${{ vars.TRADING_MODE }}
           WALT_CLOUD_STATE_KEY: ${{ secrets.WALT_CLOUD_STATE_KEY }}
           GH_STATE_TOKEN: ${{ github.token }}
         run: python tools/deploy_walt_gateway.py

@@ -72,6 +72,8 @@ def create_app(db_path: Path, bond_target: float = 0.60, max_position: float = 0
     register_walt_routes(app, db_path, require_editor)
     from .trading_routes import register_trading_routes
     register_trading_routes(app, db_path, require_editor)
+    from .paper_routes import register_paper_routes
+    register_paper_routes(app, db_path)
     app.mount('/static', StaticFiles(directory=HTML_PATH.parent), name='static')
 
 

@@ -13,6 +13,7 @@ def run():
     if not re.fullmatch('[a-f0-9]{32}',account):raise ValueError('Invalid account')
     repo=required('GITHUB_REPOSITORY');owner=required('SIGNALS_CHAT_ID');bot=required('SIGNALS_BOT_TOKEN')
     active=os.getenv('ACTIVATE_WALT_WEBHOOK')=='true'
+    mode=os.getenv('TRADING_MODE','live')
     script='content-hub-walt-callbacks';session=requests.Session()
     cf='https://api.cloudflare.com/client/v4/accounts/'+account
     headers={'Authorization':'Bearer '+required('CF_WORKERS_DEPLOY_TOKEN')}
@@ -35,7 +36,7 @@ def run():
     secrets={'TG_BOT_TOKEN':bot,'OWNER_ID':owner,'BOT_ID':str(me['id']),
         'TG_WEBHOOK_SECRET':required('TG_WEBHOOK_SECRET'),'WALT_BUTTON_KEY':required('WALT_BUTTON_KEY'),
         'WALT_EVENT_KEY':required('WALT_EVENT_KEY'),'GH_DISPATCH_TOKEN':required('WALT_GH_DISPATCH_TOKEN')}
-    if active:
+    if active and mode!='paper':
         # No empty/new OAuth account on activation; require imported funded identity.
         from cryptography.fernet import Fernet
         cipher=Fernet(required('WALT_CLOUD_STATE_KEY').encode())
@@ -53,6 +54,7 @@ def run():
         finally:db.close()
     bindings=[{'type':'secret_text','name':name,'text':value} for name,value in secrets.items()]
     bindings += [{'type':'plain_text','name':'GITHUB_REPOSITORY','text':repo},
+        {'type':'plain_text','name':'TRADING_MODE','text':mode},
         {'type':'plain_text','name':'ENABLED','text':'true' if active else 'false'}]
     metadata={'main_module':'worker.mjs','compatibility_date':'2026-11-22','bindings':bindings,
         'observability':{'enabled':False},'logpush':False}
