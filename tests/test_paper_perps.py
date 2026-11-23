@@ -78,6 +78,15 @@ def test_daily_loss_pause_does_not_disable_position_monitoring():
     e,m=opened();e.state['day_start']='11000';e.cycle(report(),m,NOW)
     assert e.state['paused'] and e.state['positions']
 
+def test_stopped_account_balance_includes_all_entry_exit_costs_and_funding():
+    e,m=opened();p=e.state['positions']['1'];t=p['checked_until']
+    m.fundings=[{'t':NOW+30,'value':'.01','direction':'long'}]
+    e.cycle(report(),m,NOW+30)
+    m.bars=[{'t':t,'o':'100','h':'101','l':p['stop'],'c':p['stop']}]
+    e.cycle(report(),m,t+60)
+    trade=e.state['closed'][-1]
+    assert num(e.state['cash'])==Decimal(10000)+num(trade['net_pnl'])
+
 def test_entire_cycle_contains_no_secret_or_real_execution_dependencies():
     import inspect
     import invest_blog.paper_perps as module

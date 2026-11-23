@@ -17,3 +17,6 @@ data/tech-publisher/
 
 # PAPER trading worker process identity and logs
 data/trading-worker/
+# Local simulation keys and verification artifacts
+*.dpapi
+.paper-ui-check/

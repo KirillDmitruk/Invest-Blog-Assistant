@@ -34,7 +34,9 @@ def main():
         check=s.get('https://api.github.com/repos/'+REPO+'/actions/variables/'+name,timeout=20)
         method='PATCH' if check.status_code==200 else 'POST';path='/actions/variables'+('/'+name if method=='PATCH' else '')
         api(s,method,path,expected=(201,204),json={'name':name,'value':value})
-    api(s,'PUT','/actions/workflows/cloud-walt.yml/disable',expected=(204,))
+    workflow=api(s,'GET','/actions/workflows/cloud-walt.yml')
+    if not workflow.get('state','').startswith('disabled'):
+        api(s,'PUT','/actions/workflows/cloud-walt.yml/disable',expected=(204,))
     envfile=ROOT/'.env';text=envfile.read_text(encoding='utf-8')
     if re.search(r'^TRADING_MODE=',text,re.M):text=re.sub(r'^TRADING_MODE=.*$','TRADING_MODE=paper',text,flags=re.M)
     else:text=text.rstrip()+'\nTRADING_MODE=paper\n'
@@ -45,4 +47,4 @@ def main():
 
 if __name__=='__main__':
     try:main()
-    except Exception as exc:raise SystemExit('Paper setup stopped: '+type(exc).__name__+'. Keys withheld; no real operations.') from None
+    except Exception as exc:raise SystemExit('Paper setup stopped: '+(str(exc) if type(exc) is ValueError else type(exc).__name__)+'. Keys withheld; no real operations.') from None

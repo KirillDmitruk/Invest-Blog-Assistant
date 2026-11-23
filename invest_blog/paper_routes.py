@@ -1,6 +1,6 @@
 """Local read-only dashboard of the encrypted cloud PAPER account."""
 from pathlib import Path
-import json,time,threading
+import json,time,threading,os
 import requests
 from cryptography.fernet import Fernet
 from .walt_agent import protect
@@ -18,7 +18,7 @@ class PaperDashboard:
             try:
                 key=protect(self.key_path.read_bytes(),True)
                 url='https://raw.githubusercontent.com/'+REPO+'/refs/heads/automation/paper-perps-state/paper-state.enc'
-                with self.session.get(url,timeout=(5,15),allow_redirects=False,stream=True) as r:
+                with self.session.get(url,params={'v':int(time.time()//120)},headers={'Cache-Control':'no-cache'},timeout=(5,15),allow_redirects=False,stream=True) as r:
                     if r.status_code!=200:raise ValueError
                     chunks=[];size=0
                     for b in r.iter_content(65536):
@@ -36,4 +36,4 @@ class PaperDashboard:
 def register_paper_routes(app,path):
     service=PaperDashboard(path)
     @app.get('/api/paper/overview')
-    def paper_overview():return service.overview()
+    def paper_overview():return {**service.overview(),'real_execution_disabled':os.getenv('TRADING_MODE')=='paper'}
