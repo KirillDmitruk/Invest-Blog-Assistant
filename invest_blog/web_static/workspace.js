@@ -12,12 +12,12 @@
     ['cashflow', '▦ Денежные потоки', ['income', 'calendar']],
     ['strategy', '◎ Стратегия', ['goals', 'allocation']],
     ['placements', '🛰 Новые размещения', ['placements']],
-    ['trading', '◈ Торговый бот', ['trading']],
-    ['paper', '🧪 Автотрейдинг · демо', ['paper']],
+    ['trading', '◈ Т-инвестиции демо', ['trading']],
+    ['paper', '◈ Walt демо', ['paper']],
     ['news', '⚙ Tech · Новости', ['news', 'publishing']],
     ['editorial', '✎ Редакция', ['desk', 'content', 'tech', 'creator']],
   ];
-  const labels = {trading:'Торговый бот · виртуальный счёт',assets:'Все активы',walt:'Walt · Позиции',desk:'Общая очередь',content:'Инвестиции', tech:'Tech · Черновики', creator:'Creator Studio', news:'Лента новостей', publishing:'Публикация и история'};
+  const labels = {trading:'Т-инвестиции демо',paper:'Walt демо',assets:'Все активы',walt:'Walt · Позиции',desk:'Общая очередь',content:'Инвестиции', tech:'Tech · Черновики', creator:'Creator Studio', news:'Лента новостей', publishing:'Публикация и история'};
   const buttons = new Map(oldButtons.map(b => [b.dataset.page || 'iis', b]));
   // Split the long Tech page without copying forms or event handlers.
   for (const [page, anchor] of [['news','techNewsList'],['publishing','techPublishStatus']]) {
