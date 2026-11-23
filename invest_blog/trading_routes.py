@@ -75,9 +75,9 @@ def register_trading_routes(app, path, require_editor):
             raise HTTPException(409, str(exc)) from exc
 
     @router.get('/overview')
-    def overview():
+    def overview(refresh:bool=False):
         if os.getenv('TINVEST_PAPER_CLOUD_ENABLED') == 'true':
-            try:return cloud.overview()
+            try:return cloud.overview(force=refresh)
             except ValueError as exc:raise HTTPException(503,str(exc)) from exc
         return lab.overview()
 

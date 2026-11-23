@@ -17,13 +17,13 @@ class FuturesDashboard:
         self.key=Path(path).parent/'tinvest-paper-key.dpapi'
         self.session=session or requests.Session();self.cached=None;self.checked=0;self.lock=threading.Lock()
 
-    def overview(self):
+    def overview(self,force=False):
         with self.lock:
-            if self.cached and time.time()-self.checked<120:return self.cached
+            if not force and self.cached and time.time()-self.checked<120:return {**self.cached,'sync':'cached'}
             try:
                 key=protect(self.key.read_bytes(),True)
                 url='https://raw.githubusercontent.com/KirillDmitruk/Invest-Blog-Assistant/refs/heads/automation/tinvest-paper-state/tinvest-paper.enc'
-                with self.session.get(url,params={'v':int(time.time()//120)},headers={'Cache-Control':'no-cache'},
+                with self.session.get(url,params={'v':time.time_ns() if force else int(time.time()//120)},headers={'Cache-Control':'no-cache'},
                                       timeout=(5,20),allow_redirects=False,stream=True) as r:
                     r.raise_for_status();chunks=[];size=0
                     for b in r.iter_content(65536):
@@ -39,7 +39,7 @@ class FuturesDashboard:
                     'Стоп — 2 ATR, цель — 4 ATR; исполнение по минутным свечам приблизительное. При касании обоих уровней сначала стоп.',
                     'Комиссия в модели: 2 ₽ за контракт на сторону; проскальзывание — 1 тик. Это не тариф брокера.',
                     'Бюджет отдельный: 1 000 000 ₽. Старая локальная история сохранена. ИИ не получает реальные счета или баланс.']
-                self.cached=value;self.checked=time.time();return value
+                self.checked=time.time();value['fetched_at']=self.checked;self.cached=value;return value
             except Exception:
                 if self.cached:return {**self.cached,'sync':'unavailable','notes':self.cached['notes']+['Связь с облаком недоступна: показан сохранённый снимок.']}
                 raise ValueError('Виртуальный счёт пока недоступен. Проверь облачный цикл; пустой счёт вместо данных не создаётся.') from None

@@ -1,12 +1,13 @@
 /* Futures PAPER account: all displayed trades come from the persisted virtual ledger. */
 (() => {
   const page=txt('section','');page.id='page-trading';page.className='section';
+  const freshnessStyle=document.createElement('link');freshnessStyle.rel='stylesheet';freshnessStyle.href='/static/demo-freshness.css';document.head.append(freshnessStyle);
   const visibilityStyle=document.createElement('style');visibilityStyle.textContent='#page-trading [hidden]{display:none!important}';document.head.append(visibilityStyle);
   page.innerHTML=`
   <div class="lab-hero"><div class="lab-hero-top"><span class="lab-badge">◈ ПИЛОТ · Виртуальные фьючерсы</span><span class="lab-pill" id="labMode">Новые входы на паузе</span></div>
     <h2 id="labEquity">Загрузка счёта…</h2><strong id="labPnl" class="lab-flat">История ещё не накоплена</strong><p class="lab-source" id="labAsOf">Реальные деньги и ИИС не используются.</p>
     <div class="lab-stats"><div class="lab-stat"><span>Свободно после ГО</span><strong id="labFree">—</strong></div><div class="lab-stat"><span>ГО с запасом</span><strong id="labMargin">—</strong></div><div class="lab-stat"><span>Открытые позиции</span><strong id="labCount">0</strong></div><div class="lab-stat"><span>Просадка от пика</span><strong id="labDrawdown">0%</strong></div></div>
-    <div class="editor-buttons"><button type="button" id="labCycle">Рассчитать виртуальный цикл</button><button type="button" id="labPause" class="lab-pause">Пауза новых входов</button><button type="button" id="labRefresh">Обновить экран</button></div><div id="labFeedback" role="status"></div>
+    <div class="editor-buttons"><button type="button" id="labCycle">Рассчитать виртуальный цикл</button><button type="button" id="labPause" class="lab-pause">Пауза новых входов</button><button type="button" id="labRefresh">Обновить экран</button></div><div id="labFreshness" class="demo-freshness"></div><div id="labFeedback" role="status" aria-live="polite"></div>
   </div>
   <div class="lab-tabs" role="tablist" aria-label="Торговая лаборатория"><button type="button" role="tab" aria-selected="true" data-lab-tab="account" class="active">Счёт и позиции</button><button type="button" role="tab" aria-selected="false" data-lab-tab="contracts">Контракты</button><button type="button" role="tab" aria-selected="false" data-lab-tab="settings">Риск и ИИ</button><button type="button" role="tab" aria-selected="false" data-lab-tab="journal">Журнал</button></div>
   <div class="lab-panel" data-lab-panel="account"><div class="grid"><div class="card half"><div class="lab-heading"><h2>Позиции · лонг и шорт</h2><span class="lab-pill">Только симуляция</span></div><div id="labPositions"></div></div>
@@ -93,8 +94,13 @@
     }
     if(s.auto_pause_reason)message(s.auto_pause_reason,true);
   }
-  async function refresh(){const id=++requestId;try{const next=await getJson('/api/trading/overview');if(id!==requestId)return;overview=next;render();}catch(e){message('Не удалось загрузить симулятор: '+e.message,true)}}
-  el('labRefresh').onclick=refresh;
+  async function refresh(manual=false){const b=el('labRefresh');if(b.disabled)return;const id=++requestId,before=overview?.state.last_cycle;b.disabled=true;b.textContent='Получаем снимок…';if(manual)message('Проверяем сохранённый результат в облаке…');try{const next=await getJson('/api/trading/overview'+(manual?'?refresh=true&t='+Date.now():''));if(id!==requestId)return;overview=next;render();
+    const f=el('labFreshness'),cycle=next.state.last_cycle?new Date(next.state.last_cycle).getTime():0,age=cycle?Math.max(0,Math.floor((Date.now()-cycle)/60000)):null;f.replaceChildren();f.className='demo-freshness'+(age===null||age>30?' demo-stale':'');
+    for(const [label,value] of [['Последний расчёт',stamp(next.state.last_cycle)],['Снимок получен',next.fetched_at?new Date(next.fetched_at*1000).toLocaleTimeString('ru-RU'):'—'],['Возраст данных',age===null?'Нет расчёта':age+' мин']]){const d=txt('div','');d.append(txt('span',label),txt('strong',value));f.append(d)}
+    if(age===null||age>30){const warning=txt('p','⚠ Расчёт задерживается. Это сохранённая оценка, не текущая цена. Кнопка загружает снимок и не запускает торговый цикл.');warning.className='demo-stale-note';f.append(warning)}
+    if(manual)message(next.sync==='unavailable'?'Облако недоступно. Показан прежний снимок.':before===next.state.last_cycle?'Облако проверено. Нового расчёта пока нет; суммы остались прежними.':'Получен новый облачный расчёт. Позиции и суммы обновлены.',next.sync==='unavailable');
+  }catch(e){message('Не удалось загрузить симулятор: '+e.message,true)}finally{b.disabled=false;b.textContent='Обновить снимок'}}
+  el('labRefresh').onclick=()=>refresh(true);
   el('labCycle').onclick=async()=>{const b=el('labCycle');b.disabled=true;message('Получаем рыночные данные и рассчитываем виртуальный цикл…');try{const result=await request('/cycle');await refresh();message(result.note)}catch(e){message(e.message,true)}finally{b.disabled=false}};
   el('labPause').onclick=async()=>{try{await request('/pause');await refresh();message('Новые входы остановлены. Виртуальные позиции и история сохранены.')}catch(e){message(e.message,true)}};
   el('labSearchForm').onsubmit=async e=>{e.preventDefault();const b=el('labSearchForm').querySelector('button');b.disabled=true;try{const result=await request('/search','POST',{query:el('labSearchQuery').value});const host=el('labSearchResults');host.replaceChildren();if(!result.items.length)host.append(txt('p','Доступных фьючерсов не найдено. Попробуй точный тикер.'));for(const item of result.items){const row=txt('div','');row.className='lab-watch';row.append(txt('strong',item.ticker+' · '+item.name));const add=txt('button','Добавить');add.type='button';add.className='editor-btn';add.onclick=async()=>{add.disabled=true;try{await request('/watchlist','POST',{uid:item.uid});await refresh();message('Контракт добавлен в наблюдение. Сделка не открывалась.')}catch(error){message(error.message,true)}finally{add.disabled=false}};row.append(add);host.append(row)}}catch(error){message(error.message,true)}finally{b.disabled=false}};
