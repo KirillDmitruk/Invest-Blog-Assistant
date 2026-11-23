@@ -52,3 +52,27 @@ def test_invalid_batch_does_not_become_a_trade(monkeypatch):
     import invest_blog.tinvest_paper_cloud as module
     monkeypatch.setattr(module,'json_call',lambda *a,**k:{'result':{'response':'{"decisions":[]}'}})
     with pytest.raises(ValueError):review([{'uid':'a','features':{},'position':None}])
+
+
+def test_cloud_monitor_never_reopens_or_reanalyzes_same_batch(tmp_path,monkeypatch):
+    import invest_blog.tinvest_paper_cloud as module
+    now=datetime(2026,11,23,10,tzinfo=timezone.utc);lab=seed(tmp_path/'cloud.db')
+    c={'uid':'x','ticker':'TEST','tick':'1','tick_value':'5','margin_long':'500','margin_short':'500','expires_at':(now+timedelta(days=30)).isoformat()}
+    bars=[{'time':(now-timedelta(minutes=(35-i)*15)).isoformat(),'open':str(100+i),'close':str(100+i),'high':str(101+i),'low':str(99+i)} for i in range(35)]
+    class Market:
+        analyze=True
+        def universe(self,clock):return {'uids':['x'],'eligible_contracts':1,'selection':'test'}
+        def snapshot(self,uid,clock=None):return {'contract':c,'price':'135','quoted_at':(clock or now).isoformat(),'tradeable':True,'candles':bars}
+    class Store:
+        saved=[]
+        def save(self,value):self.saved.append(value)
+    calls=[]
+    def review(candidates):
+        calls.append(candidates)
+        return {'x':{'action':'long','confidence':.8,'reason':'Test rising trend'}}
+    monkeypatch.setattr(module,'review',review)
+    store=Store();module.cycle(lab,store,Market(),now)
+    assert len(calls)==1 and len(lab.overview()['trades'])==1
+    module.cycle(lab,store,Market(),now+timedelta(minutes=1))
+    assert len(calls)==1 and len(lab.overview()['trades'])==1
+    assert len(store.saved)==3 # Intent before AI, then two ledger checkpoints.

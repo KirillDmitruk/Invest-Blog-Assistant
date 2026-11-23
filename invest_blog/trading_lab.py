@@ -404,7 +404,7 @@ class TradingLab:
                         else:
                             result = 'Без новой сделки.'
                     detail = {'ticker': s['contract']['ticker'], 'strategy': strategy, **proposal,
-                              'result': result, 'features': features, 'status': 'complete', 'model': ai_configuration()['model'] if strategy == 'ai' else 'rules-v1'}
+                              'result': result, 'features': features, 'status': 'complete', 'model': state.get('cloud',{}).get('model') or (ai_configuration()['model'] if strategy == 'ai' else 'rules-v1')}
                     db.execute('UPDATE lab_decisions SET payload=? WHERE id=?', (json.dumps(detail, ensure_ascii=False), decision_id))
                     self._save(db, state)
             with self.db() as db:

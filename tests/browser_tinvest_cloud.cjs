@@ -1,0 +1,24 @@
+const assert=require('node:assert/strict'),path=require('node:path');
+let chromium;try{({chromium}=require('playwright'))}catch{({chromium}=require(path.resolve(path.dirname(process.execPath),'..','node_modules','playwright')))}
+(async()=>{const browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true,args:['--proxy-server=direct://','--proxy-bypass-list=*']});
+try{const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];let writes=0;
+page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.method()!=='GET')writes++});
+await page.route('https://cdn.jsdelivr.net/**',r=>r.abort());
+await page.goto('http://127.0.0.1:8000/#trading');
+await page.locator('#labAsOf').filter({hasText:/1 000 000/}).waitFor();
+assert.equal(await page.locator('#labCycle').isVisible(),false);
+assert.equal(await page.locator('#labPrepare').isVisible(),false);
+assert.equal(await page.locator('#labPositions button').count(),0);
+const d=await(await page.request.get('http://127.0.0.1:8000/api/trading/overview')).json();
+assert.equal(d.state.budget,'1000000');assert.equal(d.live_orders_available,false);assert.equal(d.cloud_mode,true);
+assert.equal(await page.locator('#labPositions .lab-position').count(),Object.keys(d.state.positions).length);
+await page.screenshot({path:'.paper-ui-check/tinvest-cloud-desktop.png',fullPage:true});
+await page.setViewportSize({width:390,height:844});
+assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+await page.screenshot({path:'.paper-ui-check/tinvest-cloud-mobile.png',fullPage:true});
+await page.locator('[data-lab-tab=settings]').click();assert.equal(await page.locator('#labSave').isDisabled(),true);
+assert.match(await page.locator('#labAiTitle').innerText(),/Cloudflare/);
+await page.locator('[data-lab-tab=contracts]').click();assert.equal(await page.locator('#labSearchForm').isVisible(),false);
+assert.equal(writes,0);assert.deepEqual(errors,[]);
+console.log('Cloud RUB dashboard verified: million account, positions, mobile width, read-only controls, zero mutations.');
+}finally{await browser.close()}})().catch(e=>{console.error(e);process.exit(1)});

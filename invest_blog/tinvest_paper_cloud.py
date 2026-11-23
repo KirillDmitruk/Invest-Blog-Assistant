@@ -62,7 +62,7 @@ def seed(path):
             raise ValueError('Existing ledger cannot be reseeded')
         state.update(budget='1000000',cash='1000000',high_water='1000000',day_start_equity='1000000',
                      enabled=True,cloud_managed=True,entry_quote_seconds=120,
-                     cloud={'next_analysis':None,'ai_status':'Ожидается первый облачный цикл.'})
+                     cloud={'next_analysis':None,'ai_status':'Ожидается первый облачный цикл.','model':MODEL})
         state['risk'].update(max_positions=4,max_contracts=10,portfolio_risk_pct='5')
         lab._save(db,state)
     return lab
