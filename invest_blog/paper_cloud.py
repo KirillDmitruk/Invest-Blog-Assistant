@@ -112,6 +112,7 @@ def notification(engine):
     for e in engine.changes:
         if e['kind']=='open':lines.append(f'🟦 Открыта виртуально: {e["symbol"]} · {e["side"]} · маржа ${num(e["margin"]):.2f}')
         else:lines.append(f'▫️ Закрыта виртуально: {e["symbol"]} · {e["reason"]} · ${num(e["pnl"]):+.2f}')
+    if s.get('warnings') or s.get('paused') or not engine.changes:lines+=['',s['reason'],*s.get('warnings',[])[:2]]
     lines+=['','Реальных заявок нет. Исполнение, комиссии и фандинг моделируются. Позиции и журнал — в хабе → «Автотрейдинг · демо».']
     return '\n'.join(lines)
 
@@ -119,9 +120,9 @@ def main():
     if os.getenv('TRADING_MODE')!='paper' or os.getenv('PAPER_ENABLED')!='true':raise SystemExit('Paper mode is not enabled.')
     try:
         now=time.time();store=PaperStore(os.environ['GITHUB_REPOSITORY'],os.environ['GH_STATE_TOKEN'],os.environ['PAPER_STATE_KEY'].encode())
-        engine=PaperEngine(store.load());packet=latest_report(now)
+        previous=store.load();engine=PaperEngine(previous);packet=latest_report(now)
         engine.cycle(packet,PublicPaperMarket(),now)
-        notify=bool(engine.changes);tag=str(int(now))
+        notify=bool(engine.changes) or engine.state.get('warnings',[])!=previous.get('warnings',[]) or engine.state.get('paused')!=previous.get('paused');tag=str(int(now))
         if notify:engine.state['notifications'][tag]='attempted';engine.state['notifications']=dict(list(engine.state['notifications'].items())[-100:])
         store.save(engine.state) # Persist all virtual actions and send intent before Telegram.
         print('Paper cycle saved. Virtual positions:',len(engine.state['positions']),'changes:',len(engine.changes))
