@@ -46,19 +46,24 @@ class FuturesMarket:
                 for r in result.get('instruments', []) if r.get('uid')
                 and r.get('instrumentType', '').lower() == 'futures'][:20]
 
-    def universe(self, clock):
+    def universe(self, clock, limit=8):
         """Bounded diverse near-expiry sample; not a claim to scan the whole market."""
         result = self.read('InstrumentsService', 'Futures', {'instrumentStatus': 'INSTRUMENT_STATUS_BASE'})
         rows = []
         for r in result.get('instruments', []):
             try:
-                expiry = iso_dt(r.get('expirationDate') or r.get('lastTradeDate'))
+                expiry = min(iso_dt(r[k]) for k in ('expirationDate','lastTradeDate') if r.get(k))
                 if not r.get('apiTradeAvailableFlag') or expiry <= clock+timedelta(days=1):
                     continue
                 rows.append((expiry, r))
             except (ValueError, TypeError):
                 continue
-        rows.sort(key=lambda item: (item[0], item[1].get('ticker', '')))
+        preferred=('Si','CNY','BR','RI','MX','GOLD','GD','NG','SR','SBRF','GAZR')
+        def priority(item):
+            ticker=item[1].get('ticker','')
+            rank=next((i for i,p in enumerate(preferred) if ticker.startswith(p)),len(preferred))
+            return (rank,item[0],ticker)
+        rows.sort(key=priority)
         chosen, seen = [], set()
         for expiry, r in rows:
             base = r.get('basicAsset') or r.get('ticker', '')[:-2]
@@ -66,10 +71,10 @@ class FuturesMarket:
                 continue
             seen.add(base)
             chosen.append(r['uid'])
-            if len(chosen) == 8:
+            if len(chosen) == limit:
                 break
         return {'uids': chosen, 'eligible_contracts': len(rows),
-                'selection': 'До 8 разных базовых активов, ближайшая действующая серия; без ранжирования по доходности.'}
+                'selection': f'До {limit} разных базовых активов, ближайшая действующая серия. Приоритет: валюты, нефть, индексы, золото и газ; это выборка, не весь рынок.'}
 
     def contract(self, uid):
         future = self.read('InstrumentsService', 'FutureBy', {'idType': 'INSTRUMENT_ID_TYPE_UID', 'id': uid}).get('instrument')
@@ -86,15 +91,15 @@ class FuturesMarket:
         # A lot must be a single futures contract; do not silently miscount multipliers.
         if int(future.get('lot', 1)) != 1:
             raise ValueError('Лот этого фьючерса требует отдельного учёта; в симулятор не добавлен.')
-        expires = future.get('expirationDate') or future.get('lastTradeDate')
+        expires = min((future[k] for k in ('expirationDate','lastTradeDate') if future.get(k)),key=iso_dt,default=None)
         if not expires or iso_dt(expires).tzinfo is None:
             raise ValueError('Нет подтверждённой даты экспирации контракта.')
         return {'uid': uid, 'ticker': future.get('ticker', ''), 'name': future.get('name', ''),
                 'tick': str(tick), 'tick_value': str(tick_value), 'margin_long': str(quotation(buy)),
-                'margin_short': str(quotation(sell)), 'expires_at': future.get('expirationDate') or future.get('lastTradeDate'),
+                'margin_short': str(quotation(sell)), 'expires_at': expires,
                 'source': 't-invest', 'as_of': datetime.now(timezone.utc).isoformat()}
 
-    def snapshot(self, uid, clock=None):
+    def snapshot(self, uid, clock=None, include_candles=True):
         supplied_clock = clock
         contract = self.contract(uid)
         prices = self.read('MarketDataService', 'GetLastPrices', {'instrumentId': [uid]}).get('lastPrices', [])
@@ -103,13 +108,13 @@ class FuturesMarket:
             raise ValueError('Нет последней цены с временем котировки.')
         clock = supplied_clock or datetime.now(timezone.utc)
         stamp = iso_dt(price['time'])
-        if stamp.tzinfo is None or not timedelta(seconds=-30) <= clock - stamp <= timedelta(minutes=15):
-            raise ValueError('Последняя котировка устарела или имеет неверное время. Сделки пропущены.')
         status = self.read('MarketDataService', 'GetTradingStatus', {'instrumentId': uid})
         tradeable = status.get('tradingStatus') == 'SECURITY_TRADING_STATUS_NORMAL_TRADING' and status.get('apiTradeAvailableFlag') is True
+        if stamp.tzinfo is None or clock-stamp<timedelta(seconds=-30) or (tradeable and clock-stamp>timedelta(minutes=15)):
+            raise ValueError('Последняя котировка устарела или имеет неверное время. Сделки пропущены.')
         candles = self.read('MarketDataService', 'GetCandles', {
             'instrumentId': uid, 'from': (clock-timedelta(days=7)).isoformat(), 'to': clock.isoformat(),
-            'interval': 'CANDLE_INTERVAL_15_MIN', 'limit': 1000}).get('candles', [])
+            'interval': 'CANDLE_INTERVAL_15_MIN', 'limit': 1000}).get('candles', []) if include_candles and tradeable else []
         completed = {}
         for c in candles:
             if c.get('isComplete') is not True or not c.get('time'):
