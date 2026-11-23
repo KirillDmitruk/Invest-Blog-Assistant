@@ -2,7 +2,7 @@ name: Autonomous PAPER account
 on:
   workflow_dispatch:
   schedule:
-    - cron: '7,22,37,52 * * * *'
+    - cron: '*/5 * * * *'
 concurrency:
   group: cloud-paper-perps
   cancel-in-progress: false

@@ -14,7 +14,7 @@ class PaperDashboard:
         self.cached=None;self.checked=0;self.lock=threading.Lock()
     def overview(self,force=False):
         with self.lock:
-            if not force and self.cached and time.time()-self.checked<300:return {**self.cached,'sync':'cached','fetched_at':self.checked}
+            if not force and self.cached and time.time()-self.checked<120:return {**self.cached,'sync':'cached','fetched_at':self.checked}
             if not self.key_path.exists():return {'configured':False,'mode':'paper','message':'Ключ чтения виртуального счёта ещё не установлен.'}
             try:
                 key=protect(self.key_path.read_bytes(),True)

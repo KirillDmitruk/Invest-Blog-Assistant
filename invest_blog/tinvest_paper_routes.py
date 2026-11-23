@@ -20,7 +20,7 @@ class FuturesDashboard:
 
     def overview(self,force=False):
         with self.lock:
-            if not force and self.cached and time.time()-self.checked<300:return {**self.cached,'sync':'cached'}
+            if not force and self.cached and time.time()-self.checked<120:return {**self.cached,'sync':'cached'}
             try:
                 key=protect(self.key.read_bytes(),True)
                 encrypted=encrypted_snapshot(self.session,'automation/tinvest-paper-state','tinvest-paper.enc',force)
@@ -29,7 +29,7 @@ class FuturesDashboard:
                     path=Path(folder)/'virtual.db';path.write_bytes(raw);value=TradingLab(path).overview()
                 if value['state'].get('cloud_managed') is not True or value['state']['budget']!='1000000':raise ValueError('Wrong virtual account')
                 value.update(cloud_mode=True,sync='ok',ai={'provider':'Cloudflare','model':value['state']['cloud'].get('model','Gemma'), 'configured':True})
-                value['notes']+=['Облако: мониторинг примерно раз в 15 минут, анализ ИИ раз в 2 часа. Запуски могут задерживаться.',
+                value['notes']+=['Облако: мониторинг примерно раз в 5 минут, анализ ИИ раз в 2 часа. Запуски могут задерживаться.',
                     'Стоп — 2 ATR, цель — 4 ATR; исполнение по минутным свечам приблизительное. При касании обоих уровней сначала стоп.',
                     'Комиссия в модели: 2 ₽ за контракт на сторону; проскальзывание — 1 тик. Это не тариф брокера.',
                     'Бюджет отдельный: 1 000 000 ₽. Старая локальная история сохранена. ИИ не получает реальные счета или баланс.']

@@ -2,7 +2,7 @@ name: T-Invest virtual futures
 on:
   workflow_dispatch:
   schedule:
-    - cron: '10,25,40,55 * * * *'
+    - cron: '*/5 * * * *'
 concurrency:
   group: cloud-tinvest-paper
   cancel-in-progress: false

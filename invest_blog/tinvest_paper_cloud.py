@@ -201,6 +201,8 @@ def main():
     with tempfile.TemporaryDirectory() as folder:
         path=Path(folder)/'virtual.db';path.write_bytes(validate_envelope(value));lab=TradingLab(path)
         now=datetime.now(timezone.utc);s=lab.overview()['state'];due=not s['cloud'].get('next_analysis') or iso_dt(s['cloud']['next_analysis'])<=now
+        if s.get('last_cycle') and 0<=(now-iso_dt(s['last_cycle'])).total_seconds()<240:
+            print('Recent virtual futures cycle already saved; duplicate trigger skipped.');return
         market=CloudMarket(os.environ['TINVEST_MARKET_TOKEN'],s['positions'],now,due)
         result,before,after=cycle(lab,store,market)
         changes=[t for t in after['trades'] if t['id']>max([t['id'] for t in before['trades']]+[0])]

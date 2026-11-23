@@ -90,18 +90,18 @@
       for(const control of el('labSettingsForm').querySelectorAll('input,select,button'))control.disabled=true;
       const conn=el('labAiTitle').closest('.card');for(const d of conn.querySelectorAll('details,code'))d.hidden=true;
       el('labAiTitle').textContent='Cloudflare · автоматический анализ';el('labAiModel').textContent=ai.model+' · при недоступности ИИ новые входы пропускаются';
-      el('labHeartbeat').textContent='Облако работает без ноутбука. Мониторинг ≈15 мин, анализ ≈2 ч. Последняя проверка: '+stamp(s.worker_heartbeat);
+      el('labHeartbeat').textContent='Облако работает без ноутбука. Мониторинг ≈5 мин, анализ ≈2 ч. Последняя проверка: '+stamp(s.worker_heartbeat);
       const watchNote=el('labWatchlist').nextElementSibling;if(watchNote)watchNote.textContent=s.cloud.coverage?.selection||'Каталог загружается из Т-Инвестиций.';
-      const runNote=el('labRuns').nextElementSibling;if(runNote)runNote.textContent='Проверки примерно раз в 15 минут, анализ ИИ раз в 2 часа. Расписание может задерживаться. Стопы и цели проверяются по минутной истории.';
+      const runNote=el('labRuns').nextElementSibling;if(runNote)runNote.textContent='Проверки примерно раз в 5 минут, анализ ИИ раз в 2 часа. Расписание может задерживаться. Стопы и цели проверяются по минутной истории.';
       if(!overview.decisions.length)el('labDecisions').replaceChildren(txt('p','Облако ожидает свежие рыночные данные. Решения и объяснения появятся здесь.'));
       if(overview.sync==='unavailable')message('Нет связи с облаком: показан сохранённый снимок.',true);
     }
     if(s.auto_pause_reason)message(s.auto_pause_reason,true);
   }
   async function refresh(manual=false){const b=el('labRefresh');if(b.disabled)return;const id=++requestId,before=overview?.state.last_cycle;b.disabled=true;b.textContent='Получаем снимок…';if(manual)message('Проверяем сохранённый результат в облаке…');try{const next=await getJson('/api/trading/overview'+(manual?'?refresh=true&t='+Date.now():''));if(id!==requestId)return;overview=next;render();
-    const f=el('labFreshness'),cycle=next.state.last_cycle?new Date(next.state.last_cycle).getTime():0,age=cycle?Math.max(0,Math.floor((Date.now()-cycle)/60000)):null;f.replaceChildren();f.className='demo-freshness'+(age===null||age>30?' demo-stale':'');
+    const f=el('labFreshness'),cycle=next.state.last_cycle?new Date(next.state.last_cycle).getTime():0,age=cycle?Math.max(0,Math.floor((Date.now()-cycle)/60000)):null;f.replaceChildren();f.className='demo-freshness'+(age===null||age>10?' demo-stale':'');
     for(const [label,value] of [['Последний расчёт',stamp(next.state.last_cycle)],['Снимок получен',next.fetched_at?new Date(next.fetched_at*1000).toLocaleTimeString('ru-RU'):'—'],['Возраст данных',age===null?'Нет расчёта':age+' мин']]){const d=txt('div','');d.append(txt('span',label),txt('strong',value));f.append(d)}
-    if(age===null||age>30){const warning=txt('p','⚠ Расчёт задерживается. Это сохранённая оценка, не текущая цена. Кнопка загружает снимок и не запускает торговый цикл.');warning.className='demo-stale-note';f.append(warning)}
+    if(age===null||age>10){const warning=txt('p','⚠ Расчёт задерживается. Это сохранённая оценка, не текущая цена. Кнопка загружает снимок и не запускает торговый цикл.');warning.className='demo-stale-note';f.append(warning)}
     if(manual)message(next.sync==='unavailable'?'Облако недоступно. Показан прежний снимок.':before===next.state.last_cycle?'Облако проверено. Нового расчёта пока нет; суммы остались прежними.':'Получен новый облачный расчёт. Позиции и суммы обновлены.',next.sync==='unavailable');
   }catch(e){message('Не удалось загрузить симулятор: '+e.message,true)}finally{b.disabled=false;b.textContent='Обновить снимок'}}
   el('labRefresh').onclick=()=>refresh(true);

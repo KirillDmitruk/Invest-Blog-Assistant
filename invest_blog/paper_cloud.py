@@ -123,7 +123,10 @@ def main():
     if os.getenv('TRADING_MODE')!='paper' or os.getenv('PAPER_ENABLED')!='true':raise SystemExit('Paper mode is not enabled.')
     try:
         now=time.time();store=PaperStore(os.environ['GITHUB_REPOSITORY'],os.environ['GH_STATE_TOKEN'],os.environ['PAPER_STATE_KEY'].encode())
-        previous=store.load();engine=PaperEngine(previous);packet=latest_report(now)
+        previous=store.load()
+        if previous.get('last_cycle') and 0<=now-float(previous['last_cycle'])<240:
+            print('Recent virtual crypto cycle already saved; duplicate trigger skipped.');return
+        engine=PaperEngine(previous);packet=latest_report(now)
         engine.cycle(packet,PublicPaperMarket(),now)
         notify=bool(engine.changes) or engine.state.get('warnings',[])!=previous.get('warnings',[]) or engine.state.get('paused')!=previous.get('paused');tag=str(int(now))
         if notify:engine.state['notifications'][tag]='attempted';engine.state['notifications']=dict(list(engine.state['notifications'].items())[-100:])
