@@ -4,6 +4,7 @@ import json
 import os
 import re
 import tempfile
+import zlib
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -37,7 +38,11 @@ def validate_envelope(value):
     if value.get('kind') != 'tinvest-futures-paper-v1' or value.get('initial') != '1000000':
         raise ValueError('Not the separate RUB paper account')
     raw = base64.b64decode(value['database'], validate=True)
-    if len(raw) > 700_000 or not raw.startswith(b'SQLite format 3\x00'):
+    if value.get('database_encoding')=='zlib':
+        decoder=zlib.decompressobj();raw=decoder.decompress(raw,4_000_001)
+        if not decoder.eof or decoder.unconsumed_tail or decoder.unused_data:raise ValueError('Invalid compressed ledger')
+    elif value.get('database_encoding') not in (None,'raw'):raise ValueError('Unknown ledger encoding')
+    if len(raw) > 4_000_000 or not raw.startswith(b'SQLite format 3\x00'):
         raise ValueError('Invalid virtual ledger')
     return raw
 
@@ -45,13 +50,15 @@ def validate_envelope(value):
 def pack(lab):
     with lab.db() as db:
         # Keep cumulative account values while bounding the encrypted journal size.
-        for table, count in [('lab_equity',500),('lab_runs',150),('lab_decisions',500),('lab_trades',500)]:
+        for table, count in [('lab_equity',500),('lab_runs',150),('lab_decisions',500)]:
             db.execute(f'DELETE FROM {table} WHERE id NOT IN (SELECT id FROM {table} ORDER BY id DESC LIMIT ?)',(count,))
         db.execute('DELETE FROM lab_ai_calls')
     with lab.db() as db:
         db.execute('VACUUM')
-    return {'kind':'tinvest-futures-paper-v1','initial':'1000000',
-            'database':base64.b64encode(lab.path.read_bytes()).decode()}
+    raw=lab.path.read_bytes()
+    if len(raw)>4_000_000:raise ValueError('Virtual journal requires archival; refusing to discard trades')
+    return {'kind':'tinvest-futures-paper-v1','initial':'1000000','database_encoding':'zlib',
+            'database':base64.b64encode(zlib.compress(raw)).decode()}
 
 
 def seed(path):

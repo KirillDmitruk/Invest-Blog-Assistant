@@ -29,6 +29,19 @@ def test_wrong_currency_ledger_is_not_used(tmp_path):
     with pytest.raises(ValueError):validate_envelope(value)
 
 
+def test_old_uncompressed_checkpoint_remains_readable(tmp_path):
+    lab=seed(tmp_path/'new.db');raw=lab.path.read_bytes()
+    assert validate_envelope({'kind':'tinvest-futures-paper-v1','initial':'1000000',
+        'database':base64.b64encode(raw).decode()})==raw
+
+
+def test_oversized_compressed_ledger_is_rejected():
+    import zlib
+    value={'kind':'tinvest-futures-paper-v1','initial':'1000000','database_encoding':'zlib',
+        'database':base64.b64encode(zlib.compress(b'x'*4_000_001)).decode()}
+    with pytest.raises(ValueError):validate_envelope(value)
+
+
 def test_minute_replay_stop_first_and_gap_fill_tick_value(tmp_path):
     lab=seed(tmp_path/'new.db');now=datetime(2026,11,23,10,tzinfo=timezone.utc)
     c={'uid':'x','ticker':'X','tick':'2','tick_value':'10','margin_long':'1000','margin_short':'1000','expires_at':(now+timedelta(days=30)).isoformat()}
