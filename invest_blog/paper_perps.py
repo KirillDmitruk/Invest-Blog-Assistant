@@ -87,6 +87,13 @@ class PaperEngine:
         p['mark']=amount(quote);p['marked_at']=observation['at'];p.pop('data_error',None)
         if direction*(quote-num(p['stop']))<=0:self.close(key,quote,now,'stop_quote');return
         if direction*(quote-num(p['take']))>=0:self.close(key,quote,now,'take_quote');return
+        if fundings:
+            latest=fundings[-1]
+            p['funding_reserve']=amount(num(latest['value'])*num(p['quantity'])*24 if latest['direction']==p['side'] else 0)
+        stop_fill=num(p['stop'])*(1-direction*num(s['limits']['slippage']))
+        p['risk']=amount(max(Decimal(0),num(p['quantity'])*(quote-stop_fill)*direction)
+            +num(p['quantity'])*(quote+stop_fill)*num(s['limits']['fee_rate'])+num(p.get('funding_reserve','0')))
+        p['maintenance']=observation['maintenance']
         equity=num(p['margin'])+num(p['quantity'])*(quote-num(p['entry']))*direction-num(p['funding_paid'])
         if equity<=num(p['quantity'])*quote*num(p['maintenance']):self.close(key,quote,now,'liquidation_model')
     def open(self,row,quote,report_id,now):
@@ -113,7 +120,7 @@ class PaperEngine:
         ident=hashlib.sha256(f'{report_id}:{key}:{side}'.encode()).hexdigest()[:20]
         p={'id':ident,'market_id':row['market_id'],'symbol':symbol,'group':group(symbol),'side':side,'leverage':leverage,
             'quantity':amount(qty),'entry':amount(entry),'mark':amount(price),'margin':amount(margin),'entry_fee':amount(fee),
-            'stop':amount(stop),'take':amount(take),'risk':amount(qty*per_unit),'funding_paid':'0','maintenance':quote['maintenance'],
+            'stop':amount(stop),'take':amount(take),'risk':amount(qty*per_unit),'funding_reserve':amount(qty*funding_reserve),'funding_paid':'0','maintenance':quote['maintenance'],
             'opened_at':now,'marked_at':now,'checked_until':int(now//60+1)*60,'funding_until':now,'source_report':report_id}
         s['cash']=amount(num(s['cash'])-fee);s['positions'][key]=p;self.event('open',p,now,{'margin':p['margin'],'entry':p['entry']});return True
     def cycle(self,packet,market,now):

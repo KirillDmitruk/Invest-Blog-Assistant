@@ -87,6 +87,11 @@ def test_stopped_account_balance_includes_all_entry_exit_costs_and_funding():
     trade=e.state['closed'][-1]
     assert num(e.state['cash'])==Decimal(10000)+num(trade['net_pnl'])
 
+def test_new_entry_risk_uses_current_mark_to_stop_not_only_original_risk():
+    e,m=opened();before=num(e.state['positions']['1']['risk']);m.price='105'
+    e.cycle(report(),m,NOW)
+    assert num(e.state['positions']['1']['risk'])>before
+
 def test_entire_cycle_contains_no_secret_or_real_execution_dependencies():
     import inspect
     import invest_blog.paper_perps as module

@@ -107,11 +107,14 @@ def latest_report(now):
     return None
 
 def notification(engine):
-    s=engine.state;lines=['🧪 Виртуальная торговля · PAPER',f'Капитал: ${num(s["equity"]):,.2f} · старт $10,000',
-        f'Открытых позиций: {len(s["positions"])} · результат: ${num(s["equity"])-10000:+,.2f}']
+    from .model import fmt_money
+    s=engine.state;usd=lambda x:fmt_money(num(x),'USD')
+    lines=['🧪 Виртуальная торговля · PAPER',f'Капитал: {usd(s["equity"])} · старт $10 000',
+        f'Открытых позиций: {len(s["positions"])} · результат: {usd(num(s["equity"])-10000)}']
+    reasons={'stop':'стоп-лосс','stop_quote':'стоп по котировке','take':'тейк-профит','take_quote':'тейк по котировке','liquidation_model':'ликвидация в модели'}
     for e in engine.changes:
-        if e['kind']=='open':lines.append(f'🟦 Открыта виртуально: {e["symbol"]} · {e["side"]} · маржа ${num(e["margin"]):.2f}')
-        else:lines.append(f'▫️ Закрыта виртуально: {e["symbol"]} · {e["reason"]} · ${num(e["pnl"]):+.2f}')
+        if e['kind']=='open':lines.append(f'🟦 Открыта виртуально: {e["symbol"]} · {"лонг" if e["side"]=="long" else "шорт"} · маржа {usd(e["margin"])}')
+        else:lines.append(f'▫️ Закрыта виртуально: {e["symbol"]} · {reasons.get(e["reason"],e["reason"])} · {usd(e["pnl"])}')
     if s.get('warnings') or s.get('paused') or not engine.changes:lines+=['',s['reason'],*s.get('warnings',[])[:2]]
     lines+=['','Реальных заявок нет. Исполнение, комиссии и фандинг моделируются. Позиции и журнал — в хабе → «Автотрейдинг · демо».']
     return '\n'.join(lines)
