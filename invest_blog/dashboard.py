@@ -43,6 +43,13 @@ def create_app(db_path: Path, bond_target: float = 0.60, max_position: float = 0
                times: dict[str, tuple[int, int]] | None = None) -> FastAPI:
     app = FastAPI(title='Content Hub v2.4', docs_url=None, redoc_url=None, openapi_url=None)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=['127.0.0.1', 'localhost', 'testserver'])
+    @app.middleware('http')
+    async def fresh_interface(request, call_next):
+        response=await call_next(request)
+        if request.url.path=='/' or request.url.path.startswith('/static/'):
+            response.headers['Cache-Control']='no-store'
+        return response
+
     portfolio=PortfolioStore(db_path)
     drafts=DraftStore(db_path)
     tech_drafts=TechDraftStore(db_path)

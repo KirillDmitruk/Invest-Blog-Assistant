@@ -86,6 +86,7 @@ class TradingLab:
         db.execute('UPDATE lab_state SET payload=? WHERE id=1', (json.dumps(state, ensure_ascii=False),))
 
     def overview(self):
+        from .trading_statistics import daily_results
         with self.db() as db:
             state = self._load(db)
             def rows(table, limit=50):
@@ -96,7 +97,7 @@ class TradingLab:
             for collection in (trades, decisions, history):
                 for row in collection:
                     row['detail'] = json.loads(row.pop('payload'))
-            return {'state': state, 'account': account_values(state), 'ai': ai_configuration(),
+            return {'state': state, 'account': account_values(state), 'ai': ai_configuration(), 'daily_results':daily_results(db),
                     'trades': trades, 'decisions': decisions, 'history': history, 'runs': rows('lab_runs', 15),
                     'live_orders_available': False,
                     'notes': ['Симулятор не отправляет заявки брокеру. Реальные деньги и ИИС не используются.',

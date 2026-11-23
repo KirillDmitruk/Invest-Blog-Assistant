@@ -24,6 +24,10 @@
     <details class="card full" style="margin-top:16px"><summary>Что учитывает эта версия</summary><div id="labAssumptions"></div><p class="lab-quiet">PnL считается в рублях через шаг цены и стоимость шага, с накоплением изменений между наблюдениями. Стопы и цели проверяются только на свежих доступных котировках, исполнение — по наблюдаемой цене с проскальзыванием. Не моделируются полный клиринг, поставка, персональное брокерское ГО, налоги и гарантированная ликвидность.</p></details>
   </div>
   <div class="lab-panel" data-lab-panel="journal" hidden><div class="grid"><div class="card full"><h2>Виртуальные действия</h2><div class="scroll" id="labTrades"></div></div><div class="card full"><h2>Работа и расписание</h2><div id="labRuns"></div><p class="lab-source">Включённый фоновый процесс рассчитывает цикл каждые 5 минут, а решение запрашивается не чаще одного раза на завершённую 15-минутную свечу контракта. При паузе новые входы не открываются; проверка уже существующих виртуальных стопов продолжается.</p></div></div></div>`;
+  const calendarHost=txt('div','');calendarHost.id='labCalendar';calendarHost.className='card full';calendarHost.style.marginTop='20px';
+  const statistics=txt('div','');statistics.className='lab-panel';statistics.dataset.labPanel='statistics';statistics.hidden=true;statistics.append(calendarHost);page.append(statistics);
+  const statisticsTab=txt('button','Статистика');statisticsTab.type='button';statisticsTab.dataset.labTab='statistics';statisticsTab.setAttribute('role','tab');statisticsTab.setAttribute('aria-selected','false');page.querySelector('.lab-tabs').insertBefore(statisticsTab,page.querySelector('[data-lab-tab="contracts"]'));
+  const calendar=new window.DemoCalendar(calendarHost);
   document.querySelector('main footer').before(page);
   const nav=txt('button','◈ Т-инвестиции демо');nav.type='button';nav.dataset.page='trading';nav.onclick=()=>showPage('trading');document.querySelector('.nav').append(nav);
   let overview=null,formRevision=1,formSaved='',requestId=0;
@@ -54,7 +58,7 @@
     const d=values.map((v,i)=>(i?'L':'M')+x(i)+','+y(v)).join(' ');svg.append(node('path',{d:d+' L595,220 L35,220 Z',fill:'#9f7dff20'}));svg.append(node('path',{d,fill:'none',stroke:'#bea0ff','stroke-width':3,'stroke-linejoin':'round'}));
     const first=node('text',{x:35,y:240,fill:'#acbad3','font-size':11});first.textContent=stamp(points[0].at);const last=node('text',{x:595,y:240,fill:'#acbad3','font-size':11,'text-anchor':'end'});last.textContent=stamp(points.at(-1).at);svg.append(first,last);host.append(svg);
   }
-  function render(){const {state:s,account:a,ai}=overview;
+  function render(){const {state:s,account:a,ai}=overview;calendar.update(overview.daily_results||[]);
     el('labCycle').textContent=s.strategy==='connector'?'Проверить позиции и стопы':'Рассчитать виртуальный цикл';
     el('labEquity').textContent=rub(n(a.equity));el('labPnl').textContent=signed(a.net_pnl)+' · '+(100*n(a.net_pnl)/n(s.budget)).toFixed(2)+'% от виртуального старта';polarity(el('labPnl'),a.net_pnl);
     el('labFree').textContent=rub(n(a.free_margin));el('labMargin').textContent=rub(n(a.margin));el('labCount').textContent=Object.keys(s.positions).length+' / '+s.risk.max_positions;el('labDrawdown').textContent=n(a.drawdown_pct).toFixed(2)+'%';
