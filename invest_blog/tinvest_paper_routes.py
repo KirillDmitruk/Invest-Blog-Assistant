@@ -10,6 +10,7 @@ from cryptography.fernet import Fernet
 from .walt_agent import protect
 from .tinvest_paper_cloud import validate_envelope
 from .trading_lab import TradingLab
+from .demo_snapshot import encrypted_snapshot
 
 
 class FuturesDashboard:
@@ -19,18 +20,11 @@ class FuturesDashboard:
 
     def overview(self,force=False):
         with self.lock:
-            if not force and self.cached and time.time()-self.checked<120:return {**self.cached,'sync':'cached'}
+            if not force and self.cached and time.time()-self.checked<300:return {**self.cached,'sync':'cached'}
             try:
                 key=protect(self.key.read_bytes(),True)
-                url='https://raw.githubusercontent.com/KirillDmitruk/Invest-Blog-Assistant/refs/heads/automation/tinvest-paper-state/tinvest-paper.enc'
-                with self.session.get(url,params={'v':time.time_ns() if force else int(time.time()//120)},headers={'Cache-Control':'no-cache'},
-                                      timeout=(5,20),allow_redirects=False,stream=True) as r:
-                    r.raise_for_status();chunks=[];size=0
-                    for b in r.iter_content(65536):
-                        size+=len(b)
-                        if size>1_500_000:raise ValueError('Ledger too large')
-                        chunks.append(b)
-                raw=validate_envelope(json.loads(Fernet(key).decrypt(b''.join(chunks))))
+                encrypted=encrypted_snapshot(self.session,'automation/tinvest-paper-state','tinvest-paper.enc',force)
+                raw=validate_envelope(json.loads(Fernet(key).decrypt(encrypted)))
                 with tempfile.TemporaryDirectory() as folder:
                     path=Path(folder)/'virtual.db';path.write_bytes(raw);value=TradingLab(path).overview()
                 if value['state'].get('cloud_managed') is not True or value['state']['budget']!='1000000':raise ValueError('Wrong virtual account')

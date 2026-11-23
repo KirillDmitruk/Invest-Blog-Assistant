@@ -1,4 +1,4 @@
-import json
+import json,base64
 import pytest
 from cryptography.fernet import Fernet
 from invest_blog.paper_perps import initial
@@ -23,7 +23,7 @@ def test_manual_refresh_bypasses_cache_and_preserves_old_snapshot_on_error(tmp_p
         def __enter__(self):return self
         def __exit__(self,*args):pass
         def raise_for_status(self):pass
-        def iter_content(self,size):yield Fernet(key).encrypt(json.dumps(value).encode())
+        def iter_content(self,size):yield json.dumps({'encoding':'base64','content':base64.b64encode(Fernet(key).encrypt(json.dumps(value).encode())).decode()}).encode()
     class Session:
         calls=[];failed=False
         def get(self,url,**kwargs):
