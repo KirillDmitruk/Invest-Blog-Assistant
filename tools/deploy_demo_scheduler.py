@@ -25,7 +25,8 @@ def main():
     call('PUT',base,files={'metadata':('metadata.json',json.dumps(metadata),'application/json'),
         'worker.mjs':('worker.mjs',code,'application/javascript+module')})
     call('PUT',base+'/schedules',json=[{'cron':'*/5 * * * *'}])
-    schedules=call('GET',base+'/schedules')['result']
+    result=call('GET',base+'/schedules')['result']
+    schedules=result if isinstance(result,list) else result.get('schedules',[])
     if not any(x.get('cron')=='*/5 * * * *' for x in schedules):raise ValueError('Five-minute schedule not verified')
     print('Independent Cloudflare PAPER monitor deployed. Cron verified: every 5 minutes. No broker keys or real workflows.')
 
