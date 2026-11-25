@@ -12,7 +12,7 @@
   <div class="lab-tabs" role="tablist" aria-label="Торговая лаборатория"><button type="button" role="tab" aria-selected="true" data-lab-tab="account" class="active">Счёт и позиции</button><button type="button" role="tab" aria-selected="false" data-lab-tab="contracts">Контракты</button><button type="button" role="tab" aria-selected="false" data-lab-tab="settings">Риск и ИИ</button><button type="button" role="tab" aria-selected="false" data-lab-tab="journal">Журнал</button></div>
   <div class="lab-panel" data-lab-panel="account"><div class="grid"><div class="card full"><div class="lab-heading"><h2>Открытые позиции</h2><span class="lab-pill">Только симуляция</span></div><div id="labPositions"></div></div>
     <div class="card full"><h2>Динамика виртуального счёта</h2><div id="labChart"></div><p class="lab-source">Фиолетовая линия — сохранённая оценка, пунктир — стартовый бюджет. Данные индекса и денежного рынка не подставляются.</p></div>
-    <div class="card full"><h2>История сделок</h2><div id="labClosed"></div><p class="lab-source">Последние 10 закрытых виртуальных сделок. Результат после комиссий входа и выхода; если вход вне доступного журнала, результат не подставляется.</p></div></div></div>
+    <div class="card full"><h2>История сделок</h2><div id="labClosed"></div><p class="lab-source">Последние 10 закрытых виртуальных сделок. Результат после комиссий входа и выхода. Процент — от ГО с запасом на входе; «% —» означает, что историческое ГО не сохранено.</p></div></div></div>
   <div class="lab-panel" data-lab-panel="contracts" hidden><div class="grid"><div class="card half"><h2>Найти контракт в Т-Инвестициях</h2><form id="labSearchForm"><label class="editor-label">Тикер или название конкретного фьючерса<input id="labSearchQuery" class="editor-input" minlength="2" maxlength="60" required placeholder="Введите тикер или название"></label><div class="editor-buttons"><button type="submit">Найти фьючерсы</button></div></form><div id="labSearchResults"></div><p class="lab-source">Поиск использует существующий read-only токен. При добавлении загружаются точный UID, экспирация, шаг цены, стоимость шага и ГО. Автоматического переноса на следующую серию нет.</p></div>
     <div class="card half"><h2>Наблюдаемые контракты</h2><div id="labWatchlist"></div><p class="lab-source">До пяти контрактов. Счёт 10 000 ₽ не означает, что любой фьючерс доступен: даже один контракт может не пройти ограничение ГО или риска.</p></div></div></div>
   <div class="lab-panel" data-lab-panel="settings" hidden><div class="card full"><h2>Подключения</h2><div class="lab-connection"><div><strong>Т-Инвестиции</strong><small>Только рыночные данные: свечи, цена, торговый статус и параметры контракта.</small><span class="lab-pill">Заявки недоступны</span></div><div><strong id="labAiTitle">ИИ · анализ рынка</strong><small id="labAiModel">Автоматическая проверка рыночных данных.</small></div><div><strong>Фоновый расчёт</strong><small id="labHeartbeat">Процесс ещё не отмечался.</small><code>.\\hub trade-start</code></div></div>
@@ -89,14 +89,17 @@
       if(['open_long','open_short'].includes(t.action)){pending.set(t.uid,t);continue}
       if(t.action!=='close')continue;const entry=pending.get(t.uid);pending.delete(t.uid);
       const fee=x=>x!=null&&Number.isFinite(Number(x))?Number(x):null;
-      const gross=fee(t.detail.pnl_before_exit_fee),exitFee=fee(t.detail.fee),entryFee=entry?fee(entry.detail.fee):null;
+      const gross=fee(t.detail.pnl_before_exit_fee),exitFee=fee(t.detail.fee),entryFee=fee(t.detail.entry_fee)??(entry?fee(entry.detail.fee):null);
       const net=gross!==null&&exitFee!==null&&entryFee!==null?gross-exitFee-entryFee:null;
-      closedRows.push({trade:t,net});
+      const margin=fee(t.detail.entry_margin)??(entry?fee(entry.detail.entry_margin):null);
+      const roi=net!==null&&margin!==null&&margin>0?net/margin*100:null;
+      closedRows.push({trade:t,net,roi});
     }
     const closed=el('labClosed');closed.replaceChildren();
-    for(const {trade:t,net} of closedRows.reverse().slice(0,10)){
+    for(const {trade:t,net,roi} of closedRows.reverse().slice(0,10)){
       const row=txt('div','');row.className='paper-closed-row '+(net===null?'lab-flat':net>=0?'paper-positive':'paper-negative');
       row.append(txt('strong',t.ticker+' · '+(t.detail.side==='long'?'лонг':'шорт')+' · '+(t.detail.reason||'закрытие')+' · '+(net===null?'результат не подтверждён':signed(net))));
+      const percentage=txt('span',roi===null?'% —':(roi>0?'+':'')+roi.toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2})+'%');percentage.className='paper-closed-roi';percentage.title=roi===null?'ГО на момент входа не сохранено; процент не рассчитывается.':'Чистый результат после комиссий / ГО с запасом на входе × 100%';row.append(percentage);
       const time=txt('small',stamp(t.at)+(net===null?' · нет полного набора комиссий в доступном журнале':''));time.style.display='block';time.className='lab-source';row.append(time);closed.append(row);
     }
     if(!closedRows.length)closed.append(txt('p','Закрытых виртуальных сделок пока нет.'));

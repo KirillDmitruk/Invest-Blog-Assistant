@@ -277,3 +277,22 @@ def test_all_api_writes_require_csrf_and_live_mode_is_rejected(tmp_path):
         assert client.post('/api/trading/orders',headers=headers,json={}).status_code==404
         assert client.get('/static/trading.js').status_code==200
         assert client.get('/static/hub-theme.css').status_code==200
+
+def test_closed_trade_keeps_entry_margin_when_current_margin_changes(lab):
+    market=Market();lab.cycle(market,CLOCK)
+    entry=lab.overview()['state']['positions']['a']
+    assert Decimal(entry['entry_margin'])==Decimal('625')
+    market.margin='600';market.clock=CLOCK+timedelta(minutes=5);lab.cycle(market,market.clock)
+    assert Decimal(lab.overview()['state']['positions']['a']['reserved_margin'])==Decimal('750')
+    lab.close_position('a',market,market.clock)
+    detail=lab.overview()['trades'][0]['detail']
+    assert Decimal(detail['entry_margin'])==Decimal('625')
+    assert detail['entry_fee']=='2.00'
+
+def test_legacy_trade_never_uses_current_margin_as_entry_margin(lab):
+    market=Market();lab.cycle(market,CLOCK)
+    with lab.db() as db:
+        state=lab._load(db);state['positions']['a'].pop('entry_margin');state['positions']['a'].pop('entry_fee');lab._save(db,state)
+    lab.close_position('a',market,CLOCK+timedelta(minutes=1))
+    detail=lab.overview()['trades'][0]['detail']
+    assert detail['entry_margin'] is None and detail['entry_fee'] is None

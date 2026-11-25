@@ -57,3 +57,5 @@
 :is(#page-paper,#page-trading) .paper-position-result .paper-position-pnl{white-space:normal;overflow-wrap:anywhere}
 @media(max-width:1100px){.demo-account-split{grid-template-columns:minmax(0,1fr)}.demo-account-split .demo-chart-panel{position:static}:is(#page-paper,#page-trading) .demo-account-split :is(#labPositions,#paperPositions){max-height:none;overflow:visible;scrollbar-gutter:auto;padding-right:0}}
 @media(max-width:500px){.demo-account-split{gap:14px}.demo-account-split .demo-equity-chart{height:215px}.paper-position-roi{font-size:12px}}
+
+.paper-closed-roi{display:inline-block;margin-left:10px;padding:3px 7px;border:1px solid currentColor;border-radius:8px;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}.paper-closed-row small{margin-top:5px}
