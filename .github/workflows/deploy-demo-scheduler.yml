@@ -23,6 +23,7 @@ jobs:
       - name: Deploy independent virtual account clock
         env:
           TRADING_MODE: ${{ vars.TRADING_MODE }}
+          CLOUD_NEWS_ENABLED: ${{ vars.CLOUD_NEWS_ENABLED }}
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
           CF_WORKERS_DEPLOY_TOKEN: ${{ secrets.CF_WORKERS_DEPLOY_TOKEN }}
           WALT_GH_DISPATCH_TOKEN: ${{ secrets.WALT_GH_DISPATCH_TOKEN }}

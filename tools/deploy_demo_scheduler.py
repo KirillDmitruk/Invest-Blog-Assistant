@@ -19,7 +19,8 @@ def main():
         {'type':'secret_text','name':'GH_DISPATCH_TOKEN','text':os.environ['WALT_GH_DISPATCH_TOKEN']},
         {'type':'plain_text','name':'GITHUB_REPOSITORY','text':repo},
         {'type':'plain_text','name':'TRADING_MODE','text':'paper'},
-        {'type':'plain_text','name':'DEMO_MONITOR_ENABLED','text':'true'}],
+        {'type':'plain_text','name':'DEMO_MONITOR_ENABLED','text':'true'},
+        {'type':'plain_text','name':'CLOUD_NEWS_ENABLED','text':os.environ.get('CLOUD_NEWS_ENABLED','false')}],
         'observability':{'enabled':False},'logpush':False}
     code=(Path(__file__).resolve().parents[1]/'cloudflare/demo-scheduler/worker.mjs').read_bytes()
     call('PUT',base,files={'metadata':('metadata.json',json.dumps(metadata),'application/json'),
