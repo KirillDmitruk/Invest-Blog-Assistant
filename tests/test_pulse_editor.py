@@ -11,6 +11,8 @@ def test_issuer_news_does_not_match_a_generic_cash_flow_word():
     assert not issuer_matches('Группа Позитив','На рынке появился позитив')
     assert issuer_matches('Группа Позитив','Группа Позитив представила отчёт')
     assert issuer_matches('ВУШ 001Р-01','ВУШ МСФО: результаты компании')
+    assert issuer_matches('ООО «СФО ТБ-6»','СФО ТБ-6 раскрывает информацию')
+    assert not issuer_matches('ООО «СФО ТБ-6»','СФО ТБ-5 раскрывает информацию')
 from invest_blog.model import Instrument
 
 def prose(facts,news):
