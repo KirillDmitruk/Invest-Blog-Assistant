@@ -13,6 +13,8 @@ from .tinvest import TInvest,TInvestError
 READS={('UsersService','GetAccounts'),('OperationsService','GetPortfolio'),('OperationsService','GetOperationsByCursor'),
        ('InstrumentsService','GetInstrumentBy'),('InstrumentsService','BondBy'),('InstrumentsService','GetBondCoupons'),
        ('InstrumentsService','GetDividends')}
+READS|={('MarketDataService','GetLastPrices'),('MarketDataService','GetTradingStatus')}
+READS.add(('InstrumentsService','FindInstrument'))
 
 
 class BrokerReadError(TInvestError):
@@ -104,18 +106,21 @@ class PrivateTelegram:
         if not value.get('ok') or type(value.get('result',{}).get('message_id')) is not int:raise ValueError('Telegram не подтвердил отправку. Повтор заблокирован.')
 
 
-def send_due(kinds,day,state_store,sender,generator_factory,recipient):
+def send_due(kinds,day,state_store,sender,generator_factory,recipient,edition=None):
     state=state_store.load();result={}
     for kind in kinds:
         key=kind+':'+period(kind,day)+':'+hashlib.sha256(recipient.encode()).hexdigest()[:16]
+        if edition:key+=':'+edition
         if key in state['deliveries']:result[kind]='already_attempted';continue
         generator=generator_factory(state)
         draft=generator.generate(kind,day)
         if draft.kind!=kind or draft.period!=period(kind,day) or not draft.body.strip():raise ValueError('Генератор вернул неподтверждённый черновик.')
         state['deliveries'][key]={'kind':kind,'period':draft.period,'status':'attempted','created_at':datetime.now(timezone.utc).isoformat()}
+        if kind=='paper' and hasattr(generator,'editorial_status'):state['deliveries'][key]['editorial_status']=generator.editorial_status
         topic=generator.selected_paper_uid if kind=='paper' else generator.selected_glossary_topic if kind=='glossary' else None
         if topic:
             field='papers' if kind=='paper' else 'glossary';state[field]=[topic]+[t for t in state[field] if t!=topic]
+        if kind=='paper' and hasattr(generator,'editorial_status'):state['paper_ai_version']=2
         state_store.save(state)  # Before any send, including multipart documents.
         sender.send(draft)
         state['deliveries'][key]['status']='sent';state_store.save(state);result[kind]='sent'
@@ -123,12 +128,13 @@ def send_due(kinds,day,state_store,sender,generator_factory,recipient):
 
 
 def main():
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--kind',choices=['auto',*DEFAULT_TIMES],default='auto');p.add_argument('--send',action='store_true');p.add_argument('--check',action='store_true');args=p.parse_args()
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--kind',choices=['auto',*DEFAULT_TIMES],default='auto');p.add_argument('--send',action='store_true');p.add_argument('--check',action='store_true');p.add_argument('--example',action='store_true');args=p.parse_args()
     # Never allow broker/HTTP debug logs or tracebacks into this public workflow.
     logging.disable(logging.CRITICAL)
     phase='configuration'
     try:
         now=datetime.now(ZoneInfo('Europe/Moscow'));kinds=due(now) if args.kind=='auto' else [args.kind]
+        if args.example and (args.kind!='paper' or not args.send):raise ValueError('Example is only a private paper draft')
         if not args.send and not args.check:print('Schedule check only. Due rubrics: '+(', '.join(kinds) or 'none'));return
         if not kinds and not args.check:print('No rubrics due in the three-hour window.');return
         token=os.environ['PULSE_TINVEST_TOKEN'];accounts=tuple(x.strip() for x in os.environ['PULSE_ACCOUNT_IDS'].split(',') if x.strip())
@@ -137,7 +143,8 @@ def main():
         phase='private_recipient'
         sender=PrivateTelegram(os.environ['SIGNALS_BOT_TOKEN'],os.environ['SIGNALS_CHAT_ID'])
         api=BrokerReadOnly(token,ZoneInfo('Europe/Moscow'))
-        def factory(saved):return PostGenerator(api,accounts,Path('data/cbr_events.json'),tuple(saved['papers']),tuple(saved['glossary']))
+        from .pulse_editor import EditorialPostGenerator
+        def factory(saved):return EditorialPostGenerator(api,accounts,Path('data/cbr_events.json'),tuple(saved['papers']),tuple(saved['glossary']),avoid_tickers=('SBER','SBERP') if saved.get('paper_ai_version')!=2 else ())
         if args.check:
             phase='encrypted_state';saved=state.load();print('Encrypted state: verified.')
             phase='broker_accounts';available=api.accounts()
@@ -153,7 +160,7 @@ def main():
                 if not draft.body.strip():raise ValueError
             print('Selected drafts generated in memory. No sends or draft artifacts.');return
         phase='generate_claim_send'
-        result=send_due(kinds,now.date(),state,sender,factory,os.environ['SIGNALS_CHAT_ID'])
+        result=send_due(kinds,now.date(),state,sender,factory,os.environ['SIGNALS_CHAT_ID'],edition='editorial-v2-example' if args.example else None)
         for kind,status in result.items():print(kind+': '+status)
     except Exception as exc:
         detail=(' method='+exc.method+' http='+str(exc.status)) if isinstance(exc,BrokerReadError) else ''
