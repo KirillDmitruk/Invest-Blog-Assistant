@@ -27,3 +27,9 @@ def test_prompt_treats_source_as_data_and_contains_no_secrets(monkeypatch):
     assert generate({'title':'Новость компании о квартальной выручке','summary':SOURCE,'category':'russia'},provider='ollama',session=Session())==draft()
 def test_source_link_does_not_accept_embedded_credentials():
     with pytest.raises(ValueError):compose({'category':'russia','url':'https://secret@host/path','source':'Example'},draft())
+
+def test_numeric_scales_translate_without_changing_amounts():
+    assert number_facts('$4 billion')==number_facts('4 млрд долларов')
+    assert number_facts('4 млрд руб.')==number_facts('4 млрд рублей')
+    assert number_facts('10 percent')==number_facts('10%')
+    assert number_facts('$4 billion')!=number_facts('4 млн долларов')

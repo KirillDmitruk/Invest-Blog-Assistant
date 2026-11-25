@@ -120,7 +120,7 @@ class ChannelSender:
         return 'https://t.me/' + CHANNEL[1:] + '/' + str(result['result']['message_id'])
 
 
-def publish(store, sender, items, *, editor=generate, now=None, send=False):
+def publish(store, sender, items, *, editor=generate, now=None, send=False, enricher=None):
     clock = now or datetime.now(timezone.utc)
     key = slot(clock)
     if key is None:
@@ -138,6 +138,11 @@ def publish(store, sender, items, *, editor=generate, now=None, send=False):
     # Bounded AI calls: two attempts per run. If no suitable draft, skip rather than invent filler.
     for item in candidates[:2]:
         try:
+            if enricher is not None:
+                item = enricher(item)
+            from difflib import SequenceMatcher
+            if SequenceMatcher(None,item['title'].casefold(),item['summary'].casefold()).ratio()>.9:
+                continue
             value = editor(item, provider='cloudflare')
             text = compose(item, value)
             if len(text) > 3500:
@@ -180,7 +185,9 @@ def main():
     store = NewsState(os.environ['GITHUB_REPOSITORY'], os.environ['GH_STATE_TOKEN'], os.environ['GITHUB_SHA'], os.environ['PULSE_STATE_KEY'].encode())
     items, sources = collect(requests.Session(), now)
     sender = ChannelSender(os.environ['SIGNALS_BOT_TOKEN']) if args.send else None
-    result = publish(store, sender, items, send=args.send)
+    from .news_article import enrich
+    article_session = requests.Session()
+    result = publish(store, sender, items, send=args.send, enricher=lambda item: enrich(item,article_session))
     if args.send:
         try:
             store.status(result, sources)

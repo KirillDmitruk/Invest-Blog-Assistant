@@ -38,8 +38,19 @@ def configured():
 def number_facts(text):
     """Preserve numeric value together with nearby scale/currency/percent markers."""
     text = text.lower().replace('\u00a0', ' ').replace('ё', 'е')
-    pattern = r'(?<![\w])(?:[$€₽]\s*)?[-+−]?\d+(?:[.,]\d+)*(?:\s*(?:млрд|млн|тыс)(?:\.)?)?(?:\s*(?:%|₽|\$|€|руб(?:лей|ля|ль)?\.?|доллар(?:ов|а)?))?'
-    return {re.sub(r'\s+', '', x).replace(',', '.').replace('−', '-') for x in re.findall(pattern, text)}
+    pattern = r'(?<![\w])(?:[$€₽]\s*)?[-+−]?\d+(?:[.,]\d+)*(?:\s*(?:млрд|млн|тыс|billion|million|thousand)(?:\.)?)?(?:\s*(?:%|percent|₽|\$|€|руб(?:лей|ля|ль)?\.?|доллар(?:ов|а)?|dollars?|usd|euros?|eur))?'
+    result = set()
+    for match in re.findall(pattern, text):
+        value = re.sub(r'\s+', '', match).replace(',', '.').replace('−', '-').lstrip('+')
+        for original, replacement in [('billion','млрд'),('million','млн'),('thousand','тыс'),('percent','%')]:
+            value = value.replace(original, replacement)
+        value = re.sub(r'руб(?:лей|ля|ль)?\.?', '₽', value)
+        value = re.sub(r'доллар(?:ов|а)?|dollars?|usd', '$', value)
+        value = re.sub(r'euros?|eur', '€', value)
+        if value[:1] in ('$', '€', '₽'):
+            value = value[1:] + value[0]
+        result.add(value)
+    return result
 
 
 def validate(value, source):
@@ -67,7 +78,7 @@ def validate(value, source):
 def generate(news, *, session=None, provider=None):
     provider = provider or configured()
     title = clean_text(news['title'], 250)
-    summary = clean_text(news.get('summary') or '', 900)
+    summary = clean_text(news.get('summary') or '', 3000)
     if len(summary) < 60:
         raise ValueError('Недостаточно фактов для редакторского пересказа')
     source = title + '\n' + summary
