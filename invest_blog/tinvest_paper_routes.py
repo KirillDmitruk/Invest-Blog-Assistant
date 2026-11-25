@@ -15,7 +15,7 @@ from .demo_snapshot import encrypted_snapshot
 
 class FuturesDashboard:
     def __init__(self,path,session=None):
-        self.key=Path(path).parent/'tinvest-paper-key.dpapi'
+        self.key=Path(path).parent/'tinvest-paper-key.dpapi';self.entry_bases=Path(path).parent/'tinvest-entry-bases.dpapi'
         self.session=session or requests.Session();self.cached=None;self.checked=0;self.lock=threading.Lock()
 
     def overview(self,force=False):
@@ -26,7 +26,16 @@ class FuturesDashboard:
                 encrypted=encrypted_snapshot(self.session,'automation/tinvest-paper-state','tinvest-paper.enc',force)
                 raw=validate_envelope(json.loads(Fernet(key).decrypt(encrypted)))
                 with tempfile.TemporaryDirectory() as folder:
-                    path=Path(folder)/'virtual.db';path.write_bytes(raw);value=TradingLab(path).overview()
+                    path=Path(folder)/'virtual.db';path.write_bytes(raw);lab=TradingLab(path);basis_warning=False
+                    if self.entry_bases.exists():
+                        try:
+                            from .trading_entry_basis import apply_entry_bases
+                            if self.entry_bases.stat().st_size>1_000_000:raise ValueError('Large archive')
+                            bases=json.loads(protect(self.entry_bases.read_bytes(),True))
+                            with lab.db() as db:apply_entry_bases(db,bases)
+                        except Exception:basis_warning=True
+                    value=lab.overview()
+                    if basis_warning:value['notes'].append('Архив исходного ГО недоступен: неизвестная доходность не подставляется.')
                 if value['state'].get('cloud_managed') is not True or value['state']['budget']!='1000000':raise ValueError('Wrong virtual account')
                 value.update(cloud_mode=True,sync='ok',ai={'provider':'Cloudflare','model':value['state']['cloud'].get('model','Gemma'), 'configured':True})
                 value['notes']+=['Облако: мониторинг примерно раз в 5 минут, анализ ИИ раз в 2 часа. Запуски могут задерживаться.',

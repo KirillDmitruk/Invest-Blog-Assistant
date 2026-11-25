@@ -12,7 +12,7 @@
   <div class="lab-tabs" role="tablist" aria-label="Торговая лаборатория"><button type="button" role="tab" aria-selected="true" data-lab-tab="account" class="active">Счёт и позиции</button><button type="button" role="tab" aria-selected="false" data-lab-tab="contracts">Контракты</button><button type="button" role="tab" aria-selected="false" data-lab-tab="settings">Риск и ИИ</button><button type="button" role="tab" aria-selected="false" data-lab-tab="journal">Журнал</button></div>
   <div class="lab-panel" data-lab-panel="account"><div class="grid"><div class="card full"><div class="lab-heading"><h2>Открытые позиции</h2><span class="lab-pill">Только симуляция</span></div><div id="labPositions"></div></div>
     <div class="card full"><h2>Динамика виртуального счёта</h2><div id="labChart"></div><p class="lab-source">Фиолетовая линия — сохранённая оценка, пунктир — стартовый бюджет. Данные индекса и денежного рынка не подставляются.</p></div>
-    <div class="card full"><div class="lab-heading"><h2>История сделок</h2><button type="button" class="editor-btn" id="labHistoryRefresh">Обновить историю</button><label class="lab-history-filter">Показать<select class="editor-input" id="labHistoryFilter"><option value="all">Все операции</option><option value="close">Закрытия</option><option value="open">Открытия</option></select></label></div><p id="labHistoryMeta" class="lab-source"></p><div id="labClosed"></div><button type="button" id="labHistoryExpand" class="editor-btn" hidden>Показать больше</button><p class="lab-source">Последние открытия и закрытия виртуальных позиций (до 50 записей). Результат закрытия — после комиссий входа и выхода. Процент — от ГО с запасом на входе; «% —» означает, что историческое ГО не сохранено.</p></div></div></div>
+    <div class="card full"><div class="lab-heading"><h2>История сделок</h2><button type="button" class="editor-btn" id="labHistoryRefresh">Обновить историю</button></div><p id="labHistoryMeta" class="lab-source"></p><div id="labClosed"></div><button type="button" id="labHistoryExpand" class="editor-btn" hidden>Показать больше</button><p class="lab-source">Только закрытые виртуальные позиции. Результат закрытия — после комиссий входа и выхода. Процент — от ГО с запасом на входе; «% —» означает, что историческое ГО не сохранено.</p></div></div></div>
   <div class="lab-panel" data-lab-panel="contracts" hidden><div class="grid"><div class="card half"><h2>Найти контракт в Т-Инвестициях</h2><form id="labSearchForm"><label class="editor-label">Тикер или название конкретного фьючерса<input id="labSearchQuery" class="editor-input" minlength="2" maxlength="60" required placeholder="Введите тикер или название"></label><div class="editor-buttons"><button type="submit">Найти фьючерсы</button></div></form><div id="labSearchResults"></div><p class="lab-source">Поиск использует существующий read-only токен. При добавлении загружаются точный UID, экспирация, шаг цены, стоимость шага и ГО. Автоматического переноса на следующую серию нет.</p></div>
     <div class="card half"><h2>Наблюдаемые контракты</h2><div id="labWatchlist"></div><p class="lab-source">До пяти контрактов. Счёт 10 000 ₽ не означает, что любой фьючерс доступен: даже один контракт может не пройти ограничение ГО или риска.</p></div></div></div>
   <div class="lab-panel" data-lab-panel="settings" hidden><div class="card full"><h2>Подключения</h2><div class="lab-connection"><div><strong>Т-Инвестиции</strong><small>Только рыночные данные: свечи, цена, торговый статус и параметры контракта.</small><span class="lab-pill">Заявки недоступны</span></div><div><strong id="labAiTitle">ИИ · анализ рынка</strong><small id="labAiModel">Автоматическая проверка рыночных данных.</small></div><div><strong>Фоновый расчёт</strong><small id="labHeartbeat">Процесс ещё не отмечался.</small><code>.\\hub trade-start</code></div></div>
@@ -62,35 +62,27 @@
       const gross=amount(t.detail.pnl_before_exit_fee),exitFee=amount(t.detail.fee),entryFee=amount(t.detail.entry_fee)??(entry?amount(entry.detail.fee):null);
       const net=gross!==null&&exitFee!==null&&entryFee!==null?gross-exitFee-entryFee:null;
       const margin=amount(t.detail.entry_margin)??(entry?amount(entry.detail.entry_margin):null);
-      settled.set(t.id,{net,roi:net!==null&&margin!==null&&margin>0?net/margin*100:null});
+      settled.set(t.id,{net,margin,roi:net!==null&&margin!==null&&margin>0?net/margin*100:null});
     }
-    const filter=el('labHistoryFilter').value;
-    const rows=[...chronological].reverse().filter(t=>['open_long','open_short','close'].includes(t.action)&&(filter==='all'||filter==='close'&&t.action==='close'||filter==='open'&&t.action!=='close'));
+    const rows=[...chronological].reverse().filter(t=>t.action==='close');
     const shown=historyExpanded?rows:rows.slice(0,10),closed=el('labClosed');closed.replaceChildren();
     const time=v=>new Date(v).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})+' МСК';
     for(const t of shown){
       const row=txt('div','');row.className='paper-closed-row';row.dataset.tradeId=t.id;row.dataset.tradeAction=t.action;
       const side=({long:'лонг',short:'шорт'}[t.detail.side]||({open_long:'лонг',open_short:'шорт'}[t.action]))||'направление не указано';
       if(t.action==='close'){
-        const {net,roi}=settled.get(t.id);row.classList.add(net===null?'lab-flat':net>=0?'paper-positive':'paper-negative');
-        row.append(txt('strong','Закрытие · '+t.ticker+' · '+side+' · '+(t.detail.reason||'закрытие')+' · '+(net===null?'результат не подтверждён':signed(net))));
-        const percentage=txt('span',roi===null?'% —':(roi>0?'+':'')+roi.toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2})+'%');percentage.className='paper-closed-roi';percentage.title=roi===null?'ГО на момент входа не сохранено; процент не рассчитывается.':'Чистый результат после комиссий / ГО с запасом на входе × 100%';row.append(percentage);
+        const {net,roi,margin}=settled.get(t.id);row.classList.add(net===null?'lab-flat':net>=0?'paper-positive':'paper-negative');
+        row.append(txt('strong',t.ticker+' · '+side+' · '+(t.detail.reason||'закрытие')+' · '+(net===null?'результат не подтверждён':signed(net))));
+        const percentage=txt('span',roi===null?'% —':(roi>0?'+':'')+roi.toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2})+'%');percentage.className='paper-closed-roi';percentage.title=roi===null?'ГО на момент входа не сохранено; процент не рассчитывается.':'Чистый результат после комиссий / ГО с запасом на входе ('+rub(margin)+') × 100%';row.append(percentage);
         if(net===null)row.append(txt('p','Нет полного набора комиссий в доступном журнале.'));
-      }else{
-        row.classList.add('lab-flat');const current=overview.state.positions[t.uid];
-        const active=current&&Date.parse(current.opened_at)===Date.parse(t.at);
-        row.append(txt('strong','Открытие · '+t.ticker+' · '+side+' · '+t.detail.contracts+' контр. · '+price(t.detail.price)+' пт.'));
-        if(active){const tag=txt('span','Позиция открыта');tag.className='lab-pill lab-history-open';row.append(tag)}
-        const fee=amount(t.detail.fee);row.append(txt('p',fee===null?'Комиссия входа не подтверждена.':'Комиссия входа: '+rub(fee)+'. Итог сделки появится в записи закрытия.'));
       }
       const date=txt('small',time(t.at));date.style.display='block';date.className='lab-source';row.append(date);closed.append(row);
     }
-    if(!rows.length)closed.append(txt('p',filter==='close'?'Закрытых виртуальных сделок пока нет.':'Операций по выбранному фильтру нет.'));
-    el('labHistoryMeta').textContent='Показано '+shown.length+' из '+rows.length+' операций'+(rows.length?' · последняя: '+time(rows[0].at):'')+(overview.state.last_cycle?' · облачный снимок: '+time(overview.state.last_cycle):'')+'.';
-    const expand=el('labHistoryExpand');expand.hidden=rows.length<=10;expand.textContent=historyExpanded?'Свернуть до 10 операций':'Показать все '+rows.length+' операций';
+    if(!rows.length)closed.append(txt('p','Закрытых виртуальных сделок пока нет.'));
+    el('labHistoryMeta').textContent='Показано '+shown.length+' из '+rows.length+' закрытых сделок'+(rows.length?' · последняя: '+time(rows[0].at):'')+(overview.state.last_cycle?' · облачный снимок: '+time(overview.state.last_cycle):'')+'.';
+    const expand=el('labHistoryExpand');expand.hidden=rows.length<=10;expand.textContent=historyExpanded?'Свернуть до 10 сделок':'Показать все '+rows.length+' закрытых сделок';
   }
   el('labHistoryRefresh').onclick=()=>refresh(true);
-  el('labHistoryFilter').onchange=()=>{historyExpanded=false;renderTradeHistory()};
   el('labHistoryExpand').onclick=()=>{historyExpanded=!historyExpanded;renderTradeHistory()};
   function render(){const {state:s,account:a,ai}=overview;calendar.update(overview.daily_results||[]);
     el('labCycle').textContent=s.strategy==='connector'?'Проверить позиции и стопы':'Рассчитать виртуальный цикл';
