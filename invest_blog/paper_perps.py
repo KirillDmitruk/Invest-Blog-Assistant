@@ -119,12 +119,19 @@ class PaperEngine:
         equity,free=self.values();risk_cap=equity*num(limits['risk_pct'])/100
         held_risk=sum((num(p['risk']) for p in s['positions'].values()),Decimal(0))
         risk_cap=min(risk_cap,equity*num(limits['portfolio_risk_pct'])/100-held_risk)
+        direction_budget=None
         if 'direction_risk_pct' in limits:
-            risk_cap=min(risk_cap,equity*num(limits['direction_risk_pct'])/100-sum((num(p['risk']) for p in same_side),Decimal(0)))
+            direction_fraction=num(limits['direction_risk_pct'])/100
+            direction_budget=equity*direction_fraction-sum((num(p['risk']) for p in same_side),Decimal(0))
+            risk_cap=min(risk_cap,direction_budget)
         stop_fill=stop*(1-direction*num(limits['slippage']))
         funding_reserve=num(quote.get('hour_funding_value','0'))*24 if quote.get('funding_payer')==side else Decimal(0)
         per_unit=abs(entry-stop_fill)+(entry+stop_fill)*num(limits['fee_rate'])+funding_reserve
-        qty=(min(risk_cap/per_unit,free*leverage/entry/(1+leverage*num(limits['fee_rate'])),
+        risk_quantity=risk_cap/per_unit
+        if direction_budget is not None:
+            entry_loss=entry*num(limits['fee_rate'])+abs(entry-price)
+            risk_quantity=min(risk_quantity,direction_budget/(per_unit+direction_fraction*entry_loss))
+        qty=(min(risk_quantity,free*leverage/entry/(1+leverage*num(limits['fee_rate'])),
             equity*num(limits['max_margin_pct'])/100*leverage/entry)/step).to_integral_value(rounding=ROUND_FLOOR)*step
         if qty<num(quote['min_quantity']) or qty*entry<num(quote['min_notional']) or qty<=0:return False
         margin=qty*entry/leverage;fee=qty*entry*num(limits['fee_rate'])

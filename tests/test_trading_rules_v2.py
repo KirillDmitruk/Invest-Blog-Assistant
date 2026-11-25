@@ -70,4 +70,9 @@ def test_walt_same_side_count_and_risk_caps():
             if p['side']=='short':p['risk']='200'
         e.state['limits']['max_same_side']=4
         assert not open_(5,'short') # Existing same-direction risk already exceeds 2.5%.
+        del e.state['positions']['2']
+        assert open_(6,'short')
+        equity,_=e.values()
+        total=sum((num(p['risk']) for p in e.state['positions'].values() if p['side']=='short'),Decimal(0))
+        assert total<=equity*Decimal('.025') and num(e.state['positions']['6']['risk'])<Decimal('51')
     finally:module.group=original
