@@ -90,6 +90,7 @@
       for(const control of el('labSettingsForm').querySelectorAll('input,select,button'))control.disabled=true;
       const conn=el('labAiTitle').closest('.card');for(const d of conn.querySelectorAll('details,code'))d.hidden=true;
       el('labAiTitle').textContent='Cloudflare · автоматический анализ';el('labAiModel').textContent=ai.model+' · при недоступности ИИ новые входы пропускаются';
+      if(s.strategy_version==='t-futures-v2-20261125')el('labAssumptions').append(txt('p','Правила v2: новые входы требуют подтверждения закрытыми часовыми свечами. После стопа по контракту — часовая пауза. Старые позиции продолжают сопровождаться; история не сбрасывается.'));
       el('labHeartbeat').textContent='Облако работает без ноутбука. Мониторинг ≈5 мин, анализ ≈2 ч. Последняя проверка: '+stamp(s.worker_heartbeat);
       const watchNote=el('labWatchlist').nextElementSibling;if(watchNote)watchNote.textContent=s.cloud.coverage?.selection||'Каталог загружается из Т-Инвестиций.';
       const runNote=el('labRuns').nextElementSibling;if(runNote)runNote.textContent='Проверки примерно раз в 5 минут, анализ ИИ раз в 2 часа. Расписание может задерживаться. Стопы и цели проверяются по минутной истории.';
