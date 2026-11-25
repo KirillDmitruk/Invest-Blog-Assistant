@@ -97,3 +97,23 @@ def test_entire_cycle_contains_no_secret_or_real_execution_dependencies():
     import invest_blog.paper_perps as module
     source=inspect.getsource(module)
     assert 'requests' not in source and 'perps_execute' not in source and 'WaltAgent' not in source
+
+def test_equity_history_uses_saved_net_values_and_deduplicates_cycles():
+    e,m=opened();p=e.state['equity_history'][-1]
+    assert p['at']==NOW and p['equity']==e.state['equity'] and num(p['equity'])<10000
+    e.cycle(None,m,NOW)
+    assert len([r for r in e.state['equity_history'] if r['at']==NOW])==1
+
+def test_history_is_bounded_and_preserves_partial_data_flag():
+    from invest_blog.paper_perps import record_equity
+    s=initial();s['warnings']=['Missing quote'];s['equity_history']=[{'at':i,'equity':'10000'} for i in range(1,2020)]
+    record_equity(s,2020)
+    assert len(s['equity_history'])==2016
+    assert s['equity_history'][-1]['partial'] is True
+    assert s['equity_history'][-1]['at']==2020
+
+def test_saved_cycle_value_wins_over_earlier_strategy_baseline():
+    from invest_blog.paper_perps import record_equity
+    s=initial();s['strategy_baseline']={'at':100,'equity':'10000'};s['equity_history']=[{'at':100,'equity':'9990'}]
+    record_equity(s,200)
+    assert next(r for r in s['equity_history'] if r['at']==100)['equity']=='9990'

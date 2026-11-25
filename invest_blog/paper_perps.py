@@ -1,5 +1,5 @@
 """Autonomous dollar PAPER ledger. Pure simulation: no transport or broker tools."""
-from decimal import Decimal,ROUND_FLOOR
+from decimal import Decimal,ROUND_FLOOR,InvalidOperation
 import copy,hashlib,math
 
 def num(x):
@@ -9,6 +9,21 @@ def num(x):
     return d
 
 def amount(x):return format(num(x),'f')
+
+def record_equity(state,now):
+    """Bounded saved estimates, never inferred prices or a reconstructed trading path."""
+    points={}
+    rows=list(state.get('equity_history',[]))
+    baseline=state.get('strategy_baseline')
+    if baseline:rows.insert(0,{'at':baseline.get('at'),'equity':baseline.get('equity')})
+    rows.append({'at':now,'equity':state['equity'],'partial':bool(state.get('warnings'))})
+    for row in rows:
+        try:
+            stamp=float(row['at']);value=amount(row['equity'])
+            if not math.isfinite(stamp) or not 0<stamp<=now:continue
+            points[stamp]={'at':stamp,'equity':value,'partial':bool(row.get('partial'))}
+        except (ValueError,TypeError,KeyError,InvalidOperation):continue
+    state['equity_history']=[points[t] for t in sorted(points)][-2016:]
 
 def activate_v2(state,now):
     if state.get('strategy_version')=='walt-v2-20261125':return False
@@ -176,4 +191,4 @@ class PaperEngine:
             if eligible:reason=f'Подтверждённых кандидатов: {eligible}. Новых виртуальных входов: {opened}.'
         else:reason='Ожидаю свежий отчёт с успешной проверкой ИИ; старые сигналы не исполняются.'
         s.update(last_cycle=now,reason=reason,warnings=warnings,eligible=eligible);s['seen']=s['seen'][-1000:]
-        self.values();return s
+        self.values();record_equity(s,now);return s
