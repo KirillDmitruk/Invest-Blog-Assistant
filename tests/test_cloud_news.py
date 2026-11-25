@@ -58,3 +58,10 @@ def test_failed_reservation_prevents_telegram_request():
     store=Broken();sender=Sender(store)
     with pytest.raises(ValueError):publish(store,sender,[item()],editor=editor,now=NOW,send=True)
     assert not sender.sent
+
+def test_politics_and_advertising_without_market_facts_are_skipped():
+    store=Store();sender=Sender(store)
+    political=item();political.update(title='Переговоры государств продолжатся завтра',summary='Делегации обсудили дипломатические предложения и договорились продолжить переговоры на следующей встрече.')
+    ad=item(2);ad['summary']+=' Партнёрский материал.'
+    assert publish(store,sender,[political,ad],editor=editor,now=NOW,send=True)['status']=='no_suitable_news'
+    assert not sender.sent

@@ -4,6 +4,7 @@ import base64
 import hashlib
 import json
 import os
+import re
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -56,6 +57,11 @@ def fresh(items, clock):
                 continue
             if item['category'] not in ('russia', 'world', 'crypto') or len(item['summary']) < 60:
                 continue
+            text = item['title'] + ' ' + item['summary']
+            if re.search(r'sponsored|press release|промокод|розыгрыш|партн[её]рский материал', text, re.I):
+                continue
+            if not re.search(r'рын[окк]|бирж|акци[яийю]|облигац|дивиденд|купон|выруч|прибыл|убыт|отч[её]т|инфляц|ключев.{0,12}ставк|рубл|нефт|цен[аыу]|экономик|фрс|битко|крипт|эфириум|bitcoin|ethereum|crypto|stock|shares|earnings|revenue|inflation|interest rate|bond|yield|nasdaq|s&p|etf|oil price', text, re.I):
+                continue
             out.append(item)
         except (KeyError, TypeError, ValueError):
             continue
@@ -64,7 +70,6 @@ def fresh(items, clock):
 
 def fingerprint(item):
     # A normalized headline protects against identical stories syndicated at other URLs.
-    import re
     return hashlib.sha256(re.sub(r'\W+', ' ', item['title'].casefold()).strip().encode()).hexdigest()
 
 
