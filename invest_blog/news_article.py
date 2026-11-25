@@ -28,9 +28,12 @@ class Article(HTMLParser):
 
 def enrich(item,session):
     parts=urlsplit(item['url'])
-    if parts.scheme!='https' or parts.hostname!='smart-lab.ru' or parts.username or parts.password or parts.port not in (None,443) or parts.query or not re.fullmatch(r'/blog/\d+\.php',parts.path):
+    if parts.scheme!='https' or parts.hostname!='smart-lab.ru' or parts.username or parts.password or parts.port not in (None,443) or parts.query or not re.fullmatch(r'/blog/(?:news/)?\d+\.php',parts.path):
         return item
-    with session.get(item['url'],timeout=(5,15),allow_redirects=False,stream=True) as response:
+    # The news RSS uses /blog/id.php, which redirects to /blog/news/id.php.
+    # Construct the known canonical path; do not follow arbitrary Location headers.
+    request_url='https://smart-lab.ru/blog/news/'+parts.path.rsplit('/',1)[-1]
+    with session.get(request_url,timeout=(5,15),allow_redirects=False,stream=True) as response:
         if response.status_code!=200:raise ValueError('Статья недоступна')
         chunks=[];size=0
         for chunk in response.iter_content(65536):

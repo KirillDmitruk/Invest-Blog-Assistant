@@ -134,16 +134,20 @@ def publish(store, sender, items, *, editor=generate, now=None, send=False, enri
     counts = {category: sum(x.get('category') == category and x.get('day') == clock.astimezone(TZ).date().isoformat() for x in old)
               for category in ('russia', 'world', 'crypto')}
     candidates = [x for x in fresh(items, clock) if x['url'] not in urls and fingerprint(x) not in titles]
-    candidates.sort(key=lambda x: (counts[x['category']], -datetime.fromisoformat(x['published_at']).timestamp()))
+    candidates.sort(key=lambda x:-datetime.fromisoformat(x['published_at']).timestamp())
+    pools={c:[x for x in candidates if x['category']==c] for c in sorted(counts,key=counts.get)}
+    candidates=[pool[i] for i in range(3) for pool in pools.values() if len(pool)>i]
     # Bounded AI calls: two attempts per run. If no suitable draft, skip rather than invent filler.
-    rejected={}
-    for item in candidates[:2]:
+    rejected={};ai_attempts=0
+    for item in candidates:
+        if ai_attempts>=2:break
         try:
             if enricher is not None:
                 item = enricher(item)
             from difflib import SequenceMatcher
             if SequenceMatcher(None,item['title'].casefold(),item['summary'].casefold()).ratio()>.9:
                 continue
+            ai_attempts+=1
             value = editor(item, provider='cloudflare')
             text = compose(item, value)
             if len(text) > 3500:

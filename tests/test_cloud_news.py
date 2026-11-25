@@ -65,3 +65,11 @@ def test_politics_and_advertising_without_market_facts_are_skipped():
     ad=item(2);ad['summary']+=' Партнёрский материал.'
     assert publish(store,sender,[political,ad],editor=editor,now=NOW,send=True)['status']=='no_suitable_news'
     assert not sender.sent
+
+def test_missing_article_does_not_starve_other_categories():
+    store=Store();sender=Sender(store)
+    def enrich(news):
+        if news['category']=='russia':raise ValueError('Article unavailable')
+        return news
+    result=publish(store,sender,[item(),item(2,'world')],editor=editor,enricher=enrich,now=NOW,send=True)
+    assert result['status']=='sent' and result['category']=='world'
