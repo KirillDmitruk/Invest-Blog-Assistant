@@ -23,3 +23,6 @@ data/trading-worker/
 cloud-report/
 data/paper-state-key.dpapi
 *.dpapi
+
+# Local interface verification artifacts
+.paper-ui-check/

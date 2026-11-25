@@ -14,7 +14,7 @@ d.daily_results=[{date:'2026-11-20',net_pnl:'1250.50',closed:2,wins:2,losses:0,f
 await page.route('**/api/trading/overview?refresh=true*',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify(d)}));
 await page.locator('#labRefresh').click();await page.locator('.calendar-win').waitFor();assert.equal(await page.locator('.calendar-loss').count(),1);
 await page.locator('.calendar-win').click();assert.match(await page.locator('.calendar-detail').innerText(),/закрыто 2/);
-await page.locator('.lab-badge').evaluate(e=>e.textContent='ДЕМОНСТРАЦИЯ КАЛЕНДАРЯ · тестовые дни');
+await page.locator('#page-trading .lab-badge').evaluate(e=>e.textContent='ДЕМОНСТРАЦИЯ КАЛЕНДАРЯ · тестовые дни');
 await page.screenshot({path:'.paper-ui-check/trading-calendar-demo-desktop.png',fullPage:true});
 await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
 await page.screenshot({path:'.paper-ui-check/trading-calendar-demo-mobile.png',fullPage:true});

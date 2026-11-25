@@ -1,0 +1,20 @@
+const assert=require('node:assert/strict'),path=require('node:path');
+let chromium;try{({chromium}=require('playwright'))}catch{({chromium}=require(path.resolve(path.dirname(process.execPath),'..','node_modules','playwright')))}
+(async()=>{const browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true,args:['--proxy-server=direct://','--proxy-bypass-list=*']});
+try{const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];let writes=0;
+page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.method()!=='GET')writes++});
+await page.route('https://cdn.jsdelivr.net/**',r=>r.abort());await page.goto('http://127.0.0.1:8000/#paper');
+await page.locator('.paper-position').first().waitFor();await page.locator('#pageTitle').filter({hasText:'Walt демо'}).waitFor();
+assert.match(await page.locator('.nav').innerText(),/Т-инвестиции демо/);assert.match(await page.locator('.nav').innerText(),/Walt демо/);
+assert.equal(await page.locator('.paper-hero #paperStats .paper-stat').count(),4);
+assert.equal(await page.locator('.paper-position').first().locator('.paper-fields>div').count(),8);
+await page.screenshot({path:'.paper-ui-check/walt-redesign-desktop.png',fullPage:true});
+await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+await page.screenshot({path:'.paper-ui-check/walt-redesign-mobile.png',fullPage:true});
+await page.goto('http://127.0.0.1:8000/#trading');await page.locator('#labAsOf').filter({hasText:/1 000 000/}).waitFor();
+assert.equal(await page.locator('#labPrepare').count(),0);assert.equal(await page.locator('#labGrokPrompt').count(),0);
+await page.locator('[data-lab-tab=settings]').click();assert.doesNotMatch(await page.locator('#page-trading').innerText(),/Grok|xAI|Грок/i);
+assert.equal(await page.locator('#labSave').isDisabled(),true);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+await page.screenshot({path:'.paper-ui-check/tinvest-clean-settings.png',fullPage:true});
+assert.equal(writes,0);assert.deepEqual(errors,[]);console.log('Both demo names, Walt layout, mobile width, removed Grok, read-only controls and zero mutations verified.');
+}finally{await browser.close()}})().catch(e=>{console.error(e);process.exit(1)});
