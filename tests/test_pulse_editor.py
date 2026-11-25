@@ -3,7 +3,14 @@ from decimal import Decimal
 from zoneinfo import ZoneInfo
 from pathlib import Path
 import pytest
-from invest_blog.pulse_editor import EditorialPostGenerator,write_prose
+from invest_blog.pulse_editor import EditorialPostGenerator,write_prose,issuer_matches
+
+def test_issuer_news_does_not_match_a_generic_cash_flow_word():
+    assert not issuer_matches('Кредитный поток 4.2','ВУШ: выручка выросла, свободный денежный поток положительный')
+    assert issuer_matches('Кредитный поток 4.2','Кредитный поток опубликовал результаты')
+    assert not issuer_matches('Группа Позитив','На рынке появился позитив')
+    assert issuer_matches('Группа Позитив','Группа Позитив представила отчёт')
+    assert issuer_matches('ВУШ 001Р-01','ВУШ МСФО: результаты компании')
 from invest_blog.model import Instrument
 
 def prose(facts,news):
@@ -57,6 +64,18 @@ def test_ai_cannot_inject_unprovided_numbers(monkeypatch):
     value=prose({},[]);value['takeaway']='Доходность будет 99 процентов.'
     monkeypatch.setattr(module,'json_call',lambda *a,**k:{'result':{'response':json.dumps(value)}})
     with pytest.raises(ValueError):write_prose({'name':'Public paper'},[])
+
+
+def test_wrong_issuer_news_never_reaches_writer_or_post():
+    class Credit(Api):
+        def instrument(self,uid='',figi=''):return Instrument(uid,uid,'Кредитный поток 4.2','RU000TEST','BOND','share','RUB',{})
+    def writer(facts,news):
+        assert news==[]
+        return prose(facts,news)
+    g=EditorialPostGenerator(Credit(),('private',),Path('unused'),
+        news_loader=lambda *a:[{'title':'ВУШ: свободный денежный поток вырос','url':'https://example.test','source':'test','published_at':datetime.now(timezone.utc).isoformat()}],writer=writer)
+    body=g.paper(date.today()).body
+    assert 'ВУШ' not in body and 'Что нового' not in body and 'Почему стоит присмотреться' not in body
 
 
 def test_bond_quote_is_percent_and_only_future_coupon_is_displayed():
