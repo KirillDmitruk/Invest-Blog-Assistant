@@ -121,15 +121,19 @@ class ChannelSender:
         self.chat = result['id']
 
     def send(self, text, *, photo=None, source_url=None):
-        from .news_article import source_image
+        from .news_article import source_image,download_photo
         photo=source_image(photo)
         lines=text.split('\n')
         html='\n'.join('<b>'+self.escape(line)+'</b>' if i==0 else self.escape(line) for i,line in enumerate(lines))
         result=None;self.media_mode='text'
+        image=None
         if photo and len(text.encode('utf-16-le'))//2<=1024:
+            try:image=download_photo(photo)
+            except Exception:pass
+        if image is not None:
             try:
-                result=json_call(self.session,'POST',self.url+'sendPhoto',json={
-                    'chat_id':self.chat,'photo':photo,'caption':html,'parse_mode':'HTML'})
+                result=json_call(self.session,'POST',self.url+'sendPhoto',data={
+                    'chat_id':self.chat,'caption':html,'parse_mode':'HTML'},files={'photo':(image[1],image[0],image[2])})
                 if result.get('ok') is False and result.get('error_code')==400:result=None
                 else:self.media_mode='photo'
             except ServiceCallError as exc:

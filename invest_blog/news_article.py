@@ -58,3 +58,22 @@ def enrich(item,session):
     text=parser.text()
     if len(text)<80:raise ValueError('В статье недостаточно текста')
     return {**item,'summary':text[:3000], 'image_url':parser.images[0] if parser.images else None}
+
+
+def download_photo(url,session=None):
+    """Fetch a bounded source image for multipart upload; Telegram need not fetch the site."""
+    import requests
+    url=source_image(url)
+    if not url:raise ValueError('Источник изображения не подтверждён')
+    session=session or requests.Session()
+    with session.get(url,timeout=(4,20),allow_redirects=False,stream=True) as response:
+        if response.status_code!=200:raise ValueError('Изображение недоступно')
+        chunks=[];size=0
+        for chunk in response.iter_content(65536):
+            size+=len(chunk)
+            if size>8_000_000:raise ValueError('Изображение слишком большое')
+            chunks.append(chunk)
+    raw=b''.join(chunks)
+    if raw.startswith(b'\x89PNG\r\n\x1a\n'):return raw,'news.png','image/png'
+    if raw.startswith(b'\xff\xd8\xff'):return raw,'news.jpg','image/jpeg'
+    raise ValueError('Формат изображения не подтверждён')

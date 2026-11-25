@@ -21,3 +21,41 @@ def test_rss_article_uses_fixed_canonical_path_without_redirects():
             assert kwargs['allow_redirects'] is False
             return Reply()
     assert len(enrich({'url':'https://smart-lab.ru/blog/123.php'},Session())['summary'])>80
+
+def test_download_photo_validates_actual_image_bytes():
+    from invest_blog.news_article import download_photo
+    class Reply:
+        status_code=200
+        def __enter__(self):return self
+        def __exit__(self,*a):pass
+        def iter_content(self,n):yield b'\x89PNG\r\n\x1a\nactual-image'
+    class Session:
+        def get(self,url,**kw):
+            assert kw['allow_redirects'] is False
+            return Reply()
+    raw,name,mime=download_photo('https://smart-lab.ru/uploads/photo.png',Session())
+    assert raw.startswith(b'\x89PNG') and name=='news.png' and mime=='image/png'
+
+def test_html_is_not_uploaded_as_photo():
+    import pytest
+    from invest_blog.news_article import download_photo
+    class Reply:
+        status_code=200
+        def __enter__(self):return self
+        def __exit__(self,*a):pass
+        def iter_content(self,n):yield b'<html>Error</html>'
+    class Session:
+        def get(self,*a,**kw):return Reply()
+    with pytest.raises(ValueError,match='Формат'):download_photo('https://smart-lab.ru/uploads/photo.png',Session())
+
+def test_oversized_image_stops_download():
+    import pytest
+    from invest_blog.news_article import download_photo
+    class Reply:
+        status_code=200
+        def __enter__(self):return self
+        def __exit__(self,*a):pass
+        def iter_content(self,n):yield b'x'*8_000_001
+    class Session:
+        def get(self,*a,**kw):return Reply()
+    with pytest.raises(ValueError,match='слишком большое'):download_photo('https://smart-lab.ru/uploads/photo.png',Session())

@@ -4,6 +4,10 @@ from invest_blog.cloud_news import ChannelSender,target_channel
 from invest_blog.cloud_signals import ServiceCallError
 from invest_blog.news_article import source_image,Article
 
+@pytest.fixture(autouse=True)
+def mock_download(monkeypatch):
+    monkeypatch.setattr('invest_blog.news_article.download_photo',lambda photo:(b'png-data','news.png','image/png'))
+
 PHOTO='https://smart-lab.ru/uploads/2026/images/news.png'
 def sender():
     s=ChannelSender.__new__(ChannelSender);s.escape=escape;s.session=object();s.url='https://example.test/bot/';s.chat=-1001;s.channel='@investdemo';return s
@@ -20,7 +24,7 @@ def test_only_article_images_are_selected():
 
 def test_photo_sent_as_one_post_with_bold_first_line(monkeypatch):
     calls=[]
-    def call(*args,**kw):calls.append((args[2],kw['json']));return {'ok':True,'result':{'message_id':9}}
+    def call(*args,**kw):calls.append((args[2],kw.get('json') or kw.get('data')));return {'ok':True,'result':{'message_id':9}}
     monkeypatch.setattr('invest_blog.cloud_news.json_call',call)
     s=sender();assert s.send('Заголовок новости\n\nТекст.',photo=PHOTO,source_url='https://smart-lab.ru/blog/123.php')=='https://t.me/investdemo/9'
     assert len(calls)==1 and calls[0][0].endswith('sendPhoto')
@@ -29,7 +33,7 @@ def test_photo_sent_as_one_post_with_bold_first_line(monkeypatch):
 
 def test_long_post_not_cut_to_photo_caption(monkeypatch):
     calls=[]
-    def call(*args,**kw):calls.append((args[2],kw['json']));return {'ok':True,'result':{'message_id':9}}
+    def call(*args,**kw):calls.append((args[2],kw.get('json') or kw.get('data')));return {'ok':True,'result':{'message_id':9}}
     monkeypatch.setattr('invest_blog.cloud_news.json_call',call)
     text='Заголовок\n\n'+'Полный текст. '*120
     sender().send(text,photo=PHOTO,source_url='https://smart-lab.ru/blog/123.php')
