@@ -59,3 +59,5 @@
 @media(max-width:500px){.demo-account-split{gap:14px}.demo-account-split .demo-equity-chart{height:215px}.paper-position-roi{font-size:12px}}
 
 .paper-closed-roi{display:inline-block;margin-left:10px;padding:3px 7px;border:1px solid currentColor;border-radius:8px;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}.paper-closed-row small{margin-top:5px}
+
+.lab-history-filter{display:flex;align-items:center;gap:9px;font-size:12px;color:#b9c5dc}.lab-history-filter select{min-width:145px}.lab-history-open{display:inline-flex;margin-left:10px;color:#80e7cb;background:#1c514e!important}.paper-closed-row p{font-size:12px;color:#b9c5dc;margin:7px 0}

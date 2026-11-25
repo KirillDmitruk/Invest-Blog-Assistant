@@ -12,7 +12,7 @@
   <div class="lab-tabs" role="tablist" aria-label="Торговая лаборатория"><button type="button" role="tab" aria-selected="true" data-lab-tab="account" class="active">Счёт и позиции</button><button type="button" role="tab" aria-selected="false" data-lab-tab="contracts">Контракты</button><button type="button" role="tab" aria-selected="false" data-lab-tab="settings">Риск и ИИ</button><button type="button" role="tab" aria-selected="false" data-lab-tab="journal">Журнал</button></div>
   <div class="lab-panel" data-lab-panel="account"><div class="grid"><div class="card full"><div class="lab-heading"><h2>Открытые позиции</h2><span class="lab-pill">Только симуляция</span></div><div id="labPositions"></div></div>
     <div class="card full"><h2>Динамика виртуального счёта</h2><div id="labChart"></div><p class="lab-source">Фиолетовая линия — сохранённая оценка, пунктир — стартовый бюджет. Данные индекса и денежного рынка не подставляются.</p></div>
-    <div class="card full"><h2>История сделок</h2><div id="labClosed"></div><p class="lab-source">Последние 10 закрытых виртуальных сделок. Результат после комиссий входа и выхода. Процент — от ГО с запасом на входе; «% —» означает, что историческое ГО не сохранено.</p></div></div></div>
+    <div class="card full"><div class="lab-heading"><h2>История сделок</h2><button type="button" class="editor-btn" id="labHistoryRefresh">Обновить историю</button><label class="lab-history-filter">Показать<select class="editor-input" id="labHistoryFilter"><option value="all">Все операции</option><option value="close">Закрытия</option><option value="open">Открытия</option></select></label></div><p id="labHistoryMeta" class="lab-source"></p><div id="labClosed"></div><button type="button" id="labHistoryExpand" class="editor-btn" hidden>Показать больше</button><p class="lab-source">Последние открытия и закрытия виртуальных позиций (до 50 записей). Результат закрытия — после комиссий входа и выхода. Процент — от ГО с запасом на входе; «% —» означает, что историческое ГО не сохранено.</p></div></div></div>
   <div class="lab-panel" data-lab-panel="contracts" hidden><div class="grid"><div class="card half"><h2>Найти контракт в Т-Инвестициях</h2><form id="labSearchForm"><label class="editor-label">Тикер или название конкретного фьючерса<input id="labSearchQuery" class="editor-input" minlength="2" maxlength="60" required placeholder="Введите тикер или название"></label><div class="editor-buttons"><button type="submit">Найти фьючерсы</button></div></form><div id="labSearchResults"></div><p class="lab-source">Поиск использует существующий read-only токен. При добавлении загружаются точный UID, экспирация, шаг цены, стоимость шага и ГО. Автоматического переноса на следующую серию нет.</p></div>
     <div class="card half"><h2>Наблюдаемые контракты</h2><div id="labWatchlist"></div><p class="lab-source">До пяти контрактов. Счёт 10 000 ₽ не означает, что любой фьючерс доступен: даже один контракт может не пройти ограничение ГО или риска.</p></div></div></div>
   <div class="lab-panel" data-lab-panel="settings" hidden><div class="card full"><h2>Подключения</h2><div class="lab-connection"><div><strong>Т-Инвестиции</strong><small>Только рыночные данные: свечи, цена, торговый статус и параметры контракта.</small><span class="lab-pill">Заявки недоступны</span></div><div><strong id="labAiTitle">ИИ · анализ рынка</strong><small id="labAiModel">Автоматическая проверка рыночных данных.</small></div><div><strong>Фоновый расчёт</strong><small id="labHeartbeat">Процесс ещё не отмечался.</small><code>.\\hub trade-start</code></div></div>
@@ -52,6 +52,46 @@
   page.querySelectorAll('[data-lab-tab]').forEach(b=>b.onclick=()=>selectTab(b.dataset.labTab));
   function populateForm(){if(!overview)return;const s=overview.state,r=s.risk;const values=[s.budget,s.strategy,String(s.enabled),r.risk_pct,r.daily_loss_pct,r.max_drawdown_pct,r.max_margin_pct,r.max_positions,r.max_contracts,r.commission,r.slippage_ticks,r.margin_buffer_pct];inputs.forEach((id,i)=>el(id).value=values[i]);formRevision=s.config_revision;formSaved=formSnapshot()}
   function renderChart(){window.DemoEquityChart.draw(el('labChart'),overview.history,{budget:overview.state.budget,currency:'RUB',label:'История виртуального капитала Т-Инвестиций в рублях'})}
+  let historyExpanded=false;
+  function renderTradeHistory(){
+    if(!overview)return;const chronological=[...overview.trades].sort((a,b)=>a.id-b.id),pending=new Map(),settled=new Map();
+    const amount=x=>x!=null&&Number.isFinite(Number(x))?Number(x):null;
+    for(const t of chronological){
+      if(['open_long','open_short'].includes(t.action)){pending.set(t.uid,t);continue}
+      if(t.action!=='close')continue;const entry=pending.get(t.uid);pending.delete(t.uid);
+      const gross=amount(t.detail.pnl_before_exit_fee),exitFee=amount(t.detail.fee),entryFee=amount(t.detail.entry_fee)??(entry?amount(entry.detail.fee):null);
+      const net=gross!==null&&exitFee!==null&&entryFee!==null?gross-exitFee-entryFee:null;
+      const margin=amount(t.detail.entry_margin)??(entry?amount(entry.detail.entry_margin):null);
+      settled.set(t.id,{net,roi:net!==null&&margin!==null&&margin>0?net/margin*100:null});
+    }
+    const filter=el('labHistoryFilter').value;
+    const rows=[...chronological].reverse().filter(t=>['open_long','open_short','close'].includes(t.action)&&(filter==='all'||filter==='close'&&t.action==='close'||filter==='open'&&t.action!=='close'));
+    const shown=historyExpanded?rows:rows.slice(0,10),closed=el('labClosed');closed.replaceChildren();
+    const time=v=>new Date(v).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})+' МСК';
+    for(const t of shown){
+      const row=txt('div','');row.className='paper-closed-row';row.dataset.tradeId=t.id;row.dataset.tradeAction=t.action;
+      const side=({long:'лонг',short:'шорт'}[t.detail.side]||({open_long:'лонг',open_short:'шорт'}[t.action]))||'направление не указано';
+      if(t.action==='close'){
+        const {net,roi}=settled.get(t.id);row.classList.add(net===null?'lab-flat':net>=0?'paper-positive':'paper-negative');
+        row.append(txt('strong','Закрытие · '+t.ticker+' · '+side+' · '+(t.detail.reason||'закрытие')+' · '+(net===null?'результат не подтверждён':signed(net))));
+        const percentage=txt('span',roi===null?'% —':(roi>0?'+':'')+roi.toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2})+'%');percentage.className='paper-closed-roi';percentage.title=roi===null?'ГО на момент входа не сохранено; процент не рассчитывается.':'Чистый результат после комиссий / ГО с запасом на входе × 100%';row.append(percentage);
+        if(net===null)row.append(txt('p','Нет полного набора комиссий в доступном журнале.'));
+      }else{
+        row.classList.add('lab-flat');const current=overview.state.positions[t.uid];
+        const active=current&&Date.parse(current.opened_at)===Date.parse(t.at);
+        row.append(txt('strong','Открытие · '+t.ticker+' · '+side+' · '+t.detail.contracts+' контр. · '+price(t.detail.price)+' пт.'));
+        if(active){const tag=txt('span','Позиция открыта');tag.className='lab-pill lab-history-open';row.append(tag)}
+        const fee=amount(t.detail.fee);row.append(txt('p',fee===null?'Комиссия входа не подтверждена.':'Комиссия входа: '+rub(fee)+'. Итог сделки появится в записи закрытия.'));
+      }
+      const date=txt('small',time(t.at));date.style.display='block';date.className='lab-source';row.append(date);closed.append(row);
+    }
+    if(!rows.length)closed.append(txt('p',filter==='close'?'Закрытых виртуальных сделок пока нет.':'Операций по выбранному фильтру нет.'));
+    el('labHistoryMeta').textContent='Показано '+shown.length+' из '+rows.length+' операций'+(rows.length?' · последняя: '+time(rows[0].at):'')+(overview.state.last_cycle?' · облачный снимок: '+time(overview.state.last_cycle):'')+'.';
+    const expand=el('labHistoryExpand');expand.hidden=rows.length<=10;expand.textContent=historyExpanded?'Свернуть до 10 операций':'Показать все '+rows.length+' операций';
+  }
+  el('labHistoryRefresh').onclick=()=>refresh(true);
+  el('labHistoryFilter').onchange=()=>{historyExpanded=false;renderTradeHistory()};
+  el('labHistoryExpand').onclick=()=>{historyExpanded=!historyExpanded;renderTradeHistory()};
   function render(){const {state:s,account:a,ai}=overview;calendar.update(overview.daily_results||[]);
     el('labCycle').textContent=s.strategy==='connector'?'Проверить позиции и стопы':'Рассчитать виртуальный цикл';
     el('labEquity').textContent=rub(n(a.equity));el('labPnl').textContent=signed(a.net_pnl)+' · '+(100*n(a.net_pnl)/n(s.budget)).toFixed(2)+'% от виртуального старта';polarity(el('labPnl'),a.net_pnl);
@@ -84,25 +124,7 @@
     el('labHeartbeat').textContent=s.worker_heartbeat?'Последний сигнал: '+stamp(s.worker_heartbeat)+'. Проверка процесса: .\\hub trade-status':'Процесс ещё не отмечался. Запуск: .\\hub trade-start';
     if(!formSaved||formSnapshot()===formSaved)populateForm();
     el('labAssumptions').replaceChildren(...overview.notes.map(t=>txt('p',t)));
-    const pending=new Map(),closedRows=[];
-    for(const t of [...overview.trades].sort((a,b)=>a.id-b.id)){
-      if(['open_long','open_short'].includes(t.action)){pending.set(t.uid,t);continue}
-      if(t.action!=='close')continue;const entry=pending.get(t.uid);pending.delete(t.uid);
-      const fee=x=>x!=null&&Number.isFinite(Number(x))?Number(x):null;
-      const gross=fee(t.detail.pnl_before_exit_fee),exitFee=fee(t.detail.fee),entryFee=fee(t.detail.entry_fee)??(entry?fee(entry.detail.fee):null);
-      const net=gross!==null&&exitFee!==null&&entryFee!==null?gross-exitFee-entryFee:null;
-      const margin=fee(t.detail.entry_margin)??(entry?fee(entry.detail.entry_margin):null);
-      const roi=net!==null&&margin!==null&&margin>0?net/margin*100:null;
-      closedRows.push({trade:t,net,roi});
-    }
-    const closed=el('labClosed');closed.replaceChildren();
-    for(const {trade:t,net,roi} of closedRows.reverse().slice(0,10)){
-      const row=txt('div','');row.className='paper-closed-row '+(net===null?'lab-flat':net>=0?'paper-positive':'paper-negative');
-      row.append(txt('strong',t.ticker+' · '+(t.detail.side==='long'?'лонг':'шорт')+' · '+(t.detail.reason||'закрытие')+' · '+(net===null?'результат не подтверждён':signed(net))));
-      const percentage=txt('span',roi===null?'% —':(roi>0?'+':'')+roi.toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2})+'%');percentage.className='paper-closed-roi';percentage.title=roi===null?'ГО на момент входа не сохранено; процент не рассчитывается.':'Чистый результат после комиссий / ГО с запасом на входе × 100%';row.append(percentage);
-      const time=txt('small',stamp(t.at)+(net===null?' · нет полного набора комиссий в доступном журнале':''));time.style.display='block';time.className='lab-source';row.append(time);closed.append(row);
-    }
-    if(!closedRows.length)closed.append(txt('p','Закрытых виртуальных сделок пока нет.'));
+    renderTradeHistory();
     table('labTrades',['Когда','Контракт','Действие','Контрактов','Цена, пункты','Комиссия, ₽','PnL до комиссии выхода'],overview.trades.map(t=>[stamp(t.at),t.ticker,({open_long:'Вход в лонг',open_short:'Вход в шорт',close:'Закрытие'}[t.action]||t.action),t.detail.contracts,t.detail.price,rub(n(t.detail.fee)),t.action==='close'?signed(t.detail.pnl_before_exit_fee):'—']));
     el('labRuns').replaceChildren(...overview.runs.map(r=>{const card=txt('div','');card.className='lab-decision';card.append(txt('strong',stamp(r.at)+' · '+r.status),txt('p',r.note));return card}));
     if(overview.cloud_mode){
@@ -123,12 +145,12 @@
     }
     if(s.auto_pause_reason)message(s.auto_pause_reason,true);
   }
-  async function refresh(manual=false){const b=el('labRefresh');if(b.disabled)return;const id=++requestId,before=overview?.state.last_cycle;b.disabled=true;b.textContent='Получаем снимок…';if(manual)message('Проверяем сохранённый результат в облаке…');try{const next=await getJson('/api/trading/overview'+(manual?'?refresh=true&t='+Date.now():''));if(id!==requestId)return;overview=next;render();
+  async function refresh(manual=false){const b=el('labRefresh');if(b.disabled)return;const id=++requestId,before=overview?.state.last_cycle;b.disabled=true;b.textContent='Получаем снимок…';el('labHistoryRefresh').disabled=true;el('labHistoryRefresh').textContent='Проверяем облако…';if(manual)message('Проверяем сохранённый результат в облаке…');try{const next=await getJson('/api/trading/overview'+(manual?'?refresh=true&t='+Date.now():''));if(id!==requestId)return;overview=next;render();
     const f=el('labFreshness'),cycle=next.state.last_cycle?new Date(next.state.last_cycle).getTime():0,age=cycle?Math.max(0,Math.floor((Date.now()-cycle)/60000)):null;f.replaceChildren();f.className='demo-freshness'+(age===null||age>10?' demo-stale':'');
     for(const [label,value] of [['Последний расчёт',stamp(next.state.last_cycle)],['Снимок получен',next.fetched_at?new Date(next.fetched_at*1000).toLocaleTimeString('ru-RU'):'—'],['Возраст данных',age===null?'Нет расчёта':age+' мин']]){const d=txt('div','');d.append(txt('span',label),txt('strong',value));f.append(d)}
     if(age===null||age>10){const warning=txt('p','⚠ Расчёт задерживается. Это сохранённая оценка, не текущая цена. Кнопка загружает снимок и не запускает торговый цикл.');warning.className='demo-stale-note';f.append(warning)}
     if(manual)message(next.sync==='unavailable'?'Облако недоступно. Показан прежний снимок.':before===next.state.last_cycle?'Облако проверено. Нового расчёта пока нет; суммы остались прежними.':'Получен новый облачный расчёт. Позиции и суммы обновлены.',next.sync==='unavailable');
-  }catch(e){message('Не удалось загрузить симулятор: '+e.message,true)}finally{b.disabled=false;b.textContent='Обновить снимок'}}
+  }catch(e){message('Не удалось загрузить симулятор: '+e.message,true)}finally{b.disabled=false;b.textContent='Обновить снимок';el('labHistoryRefresh').disabled=false;el('labHistoryRefresh').textContent='Обновить историю'}}
   el('labRefresh').onclick=()=>refresh(true);
   el('labCycle').onclick=async()=>{const b=el('labCycle');b.disabled=true;message('Получаем рыночные данные и рассчитываем виртуальный цикл…');try{const result=await request('/cycle');await refresh();message(result.note)}catch(e){message(e.message,true)}finally{b.disabled=false}};
   el('labPause').onclick=async()=>{try{await request('/pause');await refresh();message('Новые входы остановлены. Виртуальные позиции и история сохранены.')}catch(e){message(e.message,true)}};
