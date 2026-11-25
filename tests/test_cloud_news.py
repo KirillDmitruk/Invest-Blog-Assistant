@@ -79,3 +79,7 @@ def test_target_channels_have_distinct_slot_reservations():
     assert publish(store,first,[item()],editor=editor,now=NOW,send=True)['status']=='sent'
     assert publish(store,second,[item(2)],editor=editor,now=NOW,send=True)['status']=='sent'
     assert {r['channel'] for r in store.state['deliveries'].values()}=={'@firstinvest','@secondinvest'}
+
+def test_preview_can_use_new_channel_with_old_slot_present():
+    store=Store();store.state['deliveries'][str(int(NOW.timestamp())//1800)]={'period':'old','status':'sent','source_url':'https://old.example/news','title_key':'old','day':NOW.date().isoformat(),'category':'russia'}
+    assert publish(store,None,[item()],editor=editor,now=NOW,target='@newinvest')['status']=='preview'

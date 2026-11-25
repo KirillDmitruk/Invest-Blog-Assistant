@@ -151,10 +151,10 @@ class ChannelSender:
         return 'https://t.me/'+self.channel[1:]+'/'+str(result['result']['message_id'])
 
 
-def publish(store, sender, items, *, editor=generate, now=None, send=False, enricher=None):
+def publish(store, sender, items, *, editor=generate, now=None, send=False, enricher=None, target=None):
     clock = now or datetime.now(timezone.utc)
     raw_slot=slot(clock)
-    channel=getattr(sender,'channel',None)
+    channel=getattr(sender,'channel',None) or target
     prefix=hashlib.sha256(channel.encode()).hexdigest()[:12]+':' if channel else ''
     key=prefix+raw_slot if raw_slot is not None else None
     if key is None:
@@ -233,7 +233,7 @@ def main():
     sender = ChannelSender(os.environ['SIGNALS_BOT_TOKEN']) if args.send else None
     from .news_article import enrich
     article_session = requests.Session()
-    result = publish(store, sender, items, send=args.send, enricher=lambda item: enrich(item,article_session))
+    result = publish(store, sender, items, send=args.send, enricher=lambda item: enrich(item,article_session),target=target_channel())
     if args.send:
         try:
             store.status(result, sources)
