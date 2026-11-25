@@ -338,6 +338,7 @@ class TradingLab:
                 try:
                     features = indicators(s['candles'])
                     features['uid'] = uid
+                    if 'trend_1h' in s:features['trend_1h']=s['trend_1h']
                 except ValueError as exc:
                     errors.append(s['contract']['ticker']+': '+str(exc))
                     continue
@@ -412,7 +413,7 @@ class TradingLab:
                                 result = self._open(db, state, uid, s, features, action, clock)
                         else:
                             result = 'Без новой сделки.'
-                    detail = {'ticker': s['contract']['ticker'], 'strategy': strategy, **proposal,
+                    detail = {'ticker': s['contract']['ticker'], 'strategy': strategy, 'strategy_version':state.get('strategy_version','legacy'), **proposal,
                               'result': result, 'features': features, 'status': 'complete', 'model': state.get('cloud',{}).get('model') or (ai_configuration()['model'] if strategy == 'ai' else 'rules-v1')}
                     db.execute('UPDATE lab_decisions SET payload=? WHERE id=?', (json.dumps(detail, ensure_ascii=False), decision_id))
                     self._save(db, state)
