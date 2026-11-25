@@ -11,11 +11,17 @@ from zoneinfo import ZoneInfo
 import requests
 
 from .cloud_pulse import PrivateState
-from .cloud_signals import json_call
+from .cloud_signals import json_call, ServiceCallError
 from .news_editor import generate, compose
 from .tech_news import FEEDS, parse_feed
 
-CHANNEL = '@kirintechnews'
+LEGACY_CHANNEL = '@kirintechnews'
+
+def target_channel():
+    value=os.getenv('NEWS_TELEGRAM_CHANNEL','').strip()
+    if not re.fullmatch(r'@[A-Za-z][A-Za-z0-9_]{4,31}',value):
+        raise ValueError('Инвестиционный канал не настроен. Отправка заблокирована.')
+    return value.lower()
 TZ = ZoneInfo('Europe/Moscow')
 
 
@@ -25,12 +31,13 @@ class NewsState(PrivateState):
 
     def status(self, result, sources):
         state = self.load()
-        rows = list(state['deliveries'].values())
+        channel=target_channel()
+        rows = [r for r in state['deliveries'].values() if r.get('channel',LEGACY_CHANNEL)==channel]
         sent = sorted((r for r in rows if r['status'] == 'sent'), key=lambda r: r['created_at'])
         now = datetime.now(timezone.utc)
-        payload = {'checked_at': now.isoformat(), 'result': result['status'], 'channel': CHANNEL,
+        payload = {'checked_at': now.isoformat(), 'result': result['status'], 'channel': channel,
                    'today_sent': sum(r['day'] == now.astimezone(TZ).date().isoformat() for r in sent),
-                   'last_post': ({k: sent[-1].get(k) for k in ('headline', 'message_url', 'created_at')} if sent else None),
+                   'last_post': ({k: sent[-1].get(k) for k in ('headline', 'message_url', 'created_at','media_mode')} if sent else None),
                    'sources': sources}
         path = self.url + '/contents/news-status.json'
         reply = self.session.get(path, headers=self.headers, params={'ref': self.branch}, timeout=20, allow_redirects=False)
@@ -94,15 +101,18 @@ def collect(session, clock):
 
 
 class ChannelSender:
-    def __init__(self, token, session=None):
+    def __init__(self, token, session=None, channel=None):
         from html import escape
         self.escape = escape
+        self.channel=channel or target_channel()
+        if not re.fullmatch(r'@[A-Za-z][A-Za-z0-9_]{4,31}',self.channel):raise ValueError('Неверный канал')
+        self.channel=self.channel.lower()
         self.session = session or requests.Session()
         self.url = 'https://api.telegram.org/bot' + token + '/'
         me = json_call(self.session, 'POST', self.url + 'getMe', json={})
-        chat = json_call(self.session, 'POST', self.url + 'getChat', json={'chat_id': CHANNEL})
+        chat = json_call(self.session, 'POST', self.url + 'getChat', json={'chat_id': self.channel})
         result = chat.get('result', {})
-        if not me.get('ok') or not chat.get('ok') or result.get('type') != 'channel' or result.get('username', '').lower() != CHANNEL[1:]:
+        if not me.get('ok') or not chat.get('ok') or result.get('type') != 'channel' or result.get('username', '').lower() != self.channel[1:]:
             raise ValueError('Канал не подтверждён')
         member = json_call(self.session, 'POST', self.url + 'getChatMember', json={'chat_id': result['id'], 'user_id': me['result']['id']})
         rights = member.get('result', {})
@@ -110,19 +120,43 @@ class ChannelSender:
             raise ValueError('Право публикации не подтверждено')
         self.chat = result['id']
 
-    def send(self, text):
-        lines = text.split('\n')
-        html = '\n'.join('<b>' + self.escape(line) + '</b>' if i == 2 else self.escape(line) for i, line in enumerate(lines))
-        result = json_call(self.session, 'POST', self.url + 'sendMessage', json={
-            'chat_id': self.chat, 'text': html, 'parse_mode': 'HTML', 'disable_web_page_preview': True})
-        if not result.get('ok') or type(result.get('result', {}).get('message_id')) is not int:
+    def send(self, text, *, photo=None, source_url=None):
+        from .news_article import source_image
+        photo=source_image(photo)
+        lines=text.split('\n')
+        html='\n'.join('<b>'+self.escape(line)+'</b>' if i==0 else self.escape(line) for i,line in enumerate(lines))
+        result=None;self.media_mode='text'
+        if photo and len(text.encode('utf-16-le'))//2<=1024:
+            try:
+                result=json_call(self.session,'POST',self.url+'sendPhoto',json={
+                    'chat_id':self.chat,'photo':photo,'caption':html,'parse_mode':'HTML'})
+                if result.get('ok') is False and result.get('error_code')==400:result=None
+                else:self.media_mode='photo'
+            except ServiceCallError as exc:
+                if exc.http_status!=400:raise
+                # Explicit rejection means no photo was sent. An ambiguous error never retries.
+                result=None
+        if result is None:
+            preview={'is_disabled':True}
+            if photo and source_url:
+                from urllib.parse import urlsplit
+                p=urlsplit(source_url)
+                if p.scheme=='https' and p.hostname=='smart-lab.ru' and not p.username and not p.password:
+                    preview={'is_disabled':False,'url':source_url,'prefer_large_media':True,'show_above_text':True}
+                    self.media_mode='link_preview'
+            result=json_call(self.session,'POST',self.url+'sendMessage',json={
+                'chat_id':self.chat,'text':html,'parse_mode':'HTML','link_preview_options':preview})
+        if not result.get('ok') or type(result.get('result',{}).get('message_id')) is not int:
             raise ValueError('Отправка не подтверждена')
-        return 'https://t.me/' + CHANNEL[1:] + '/' + str(result['result']['message_id'])
+        return 'https://t.me/'+self.channel[1:]+'/'+str(result['result']['message_id'])
 
 
 def publish(store, sender, items, *, editor=generate, now=None, send=False, enricher=None):
     clock = now or datetime.now(timezone.utc)
-    key = slot(clock)
+    raw_slot=slot(clock)
+    channel=getattr(sender,'channel',None)
+    prefix=hashlib.sha256(channel.encode()).hexdigest()[:12]+':' if channel else ''
+    key=prefix+raw_slot if raw_slot is not None else None
     if key is None:
         return {'status': 'outside_hours'}
     state = store.load()
@@ -131,7 +165,7 @@ def publish(store, sender, items, *, editor=generate, now=None, send=False, enri
     old = list(state['deliveries'].values())
     urls = {x.get('source_url') for x in old}
     titles = {x.get('title_key') for x in old}
-    counts = {category: sum(x.get('category') == category and x.get('day') == clock.astimezone(TZ).date().isoformat() for x in old)
+    counts = {category: sum((channel is None or x.get('channel',LEGACY_CHANNEL)==channel) and x.get('category') == category and x.get('day') == clock.astimezone(TZ).date().isoformat() for x in old)
               for category in ('russia', 'world', 'crypto')}
     candidates = [x for x in fresh(items, clock) if x['url'] not in urls and fingerprint(x) not in titles]
     candidates.sort(key=lambda x:-datetime.fromisoformat(x['published_at']).timestamp())
@@ -158,28 +192,32 @@ def publish(store, sender, items, *, editor=generate, now=None, send=False, enri
             rejected[code]=rejected.get(code,0)+1
             continue
         if not send:
-            return {'status': 'preview', 'text': text, 'category': item['category']}
+            return {'status': 'preview', 'text': text, 'category': item['category'], 'image_url':item.get('image_url')}
         # Check the actual clock after AI latency, but injected clocks keep tests deterministic.
         actual = now or datetime.now(timezone.utc)
-        current = slot(actual)
+        actual_slot=slot(actual)
+        current=prefix+actual_slot if actual_slot is not None else None
         if not fresh([item], actual):
             continue
         if current is None or current in state['deliveries']:
             return {'status': 'outside_hours' if current is None else 'already_attempted'}
         row = {'period': current, 'created_at': actual.isoformat(), 'day': actual.astimezone(TZ).date().isoformat(),
                'category': item['category'], 'source_url': item['url'], 'title_key': fingerprint(item),
-               'headline': value['headline'], 'status': 'attempted'}
+               'headline': value['headline'], 'status': 'attempted', 'channel':channel}
         state['deliveries'][current] = row
         store.save(state)  # A durable reservation MUST precede the Telegram request.
         try:
-            row['message_url'] = sender.send(text)
+            if item.get('image_url'):
+                row['message_url']=sender.send(text,photo=item['image_url'],source_url=item['url'])
+            else:row['message_url']=sender.send(text)
+            row['media_mode']=getattr(sender,'media_mode','text')
             row['status'] = 'sent'
         except Exception:
             row['status'] = 'uncertain'
             store.save(state)
             return {'status': 'uncertain'}
         store.save(state)
-        return {'status': 'sent', 'message_url': row['message_url'], 'category': row['category']}
+        return {'status': 'sent', 'message_url': row['message_url'], 'category': row['category'], 'media_mode':row['media_mode']}
     return {'status': 'no_suitable_news', 'rejected':rejected}
 
 

@@ -6,7 +6,7 @@ from urllib.parse import urlsplit
 
 import requests
 
-from .tech_news import CATEGORY_LABELS, clean_text
+from .tech_news import clean_text
 
 class EditorialError(ValueError):
     def __init__(self,code):
@@ -133,5 +133,4 @@ def compose(news, value):
     parts = urlsplit(url)
     if parts.scheme != 'https' or not parts.hostname or parts.username or parts.password:
         raise ValueError('Нет безопасной ссылки на источник')
-    label = CATEGORY_LABELS.get(news['category'], 'Новости рынка')
-    return label + '\n\n' + value['headline'] + '\n\n' + '\n\n'.join(value['paragraphs']) + '\n\nИсточник: ' + news['source'] + '\n' + url
+    return value['headline'] + '\n\n' + '\n\n'.join(value['paragraphs']) + '\n\nИсточник: ' + news['source'] + '\n' + url

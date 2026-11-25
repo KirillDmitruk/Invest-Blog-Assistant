@@ -36,3 +36,8 @@ def test_numeric_scales_translate_without_changing_amounts():
 
 def test_grouped_thousands_preserve_value():
     assert number_facts('58 000 рублей')==number_facts('58000 руб.')
+
+def test_post_starts_with_headline_without_category_label():
+    result=compose({'category':'russia','url':'https://example.org/news','source':'Источник'},draft())
+    assert result.startswith(draft()['headline']+'\n\n')
+    assert not result.startswith('🇷🇺')

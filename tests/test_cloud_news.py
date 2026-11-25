@@ -73,3 +73,9 @@ def test_missing_article_does_not_starve_other_categories():
         return news
     result=publish(store,sender,[item(),item(2,'world')],editor=editor,enricher=enrich,now=NOW,send=True)
     assert result['status']=='sent' and result['category']=='world'
+
+def test_target_channels_have_distinct_slot_reservations():
+    store=Store();first=Sender(store);first.channel='@firstinvest';second=Sender(store);second.channel='@secondinvest'
+    assert publish(store,first,[item()],editor=editor,now=NOW,send=True)['status']=='sent'
+    assert publish(store,second,[item(2)],editor=editor,now=NOW,send=True)['status']=='sent'
+    assert {r['channel'] for r in store.state['deliveries'].values()}=={'@firstinvest','@secondinvest'}
