@@ -97,6 +97,7 @@ class EditorialPostGenerator(PostGenerator):
                 if len(quotes)!=1:continue
                 q=quotes[0];stamp=iso_dt(q['time']);price=quotation(q['price'])
                 status=self.api.call('MarketDataService','GetTradingStatus',{'instrumentId':info.uid})
+                if not isinstance(status.get('tradingStatus'),str) or status['tradingStatus'].endswith('UNSPECIFIED'):continue
                 normal=status.get('tradingStatus')=='SECURITY_TRADING_STATUS_NORMAL_TRADING'
                 if not price.is_finite() or price<=0 or not timedelta(seconds=-30)<=now-stamp<=(timedelta(minutes=20) if normal else timedelta(days=4)):continue
                 bond=self.api.bond(info.uid) if info.kind=='bond' else None
@@ -107,7 +108,7 @@ class EditorialPostGenerator(PostGenerator):
         quote_time=stamp.astimezone(self.api.tz).strftime('%d.%m.%Y %H:%M МСК')
         facts={'name':info.name,'kind':info.kind,'currency':info.currency,'quote':str(price),'quote_at':stamp.isoformat()}
         lines=['Тип: '+('облигация' if bond is not None else 'акция'),
-            ('Котировка: '+fmt_num(price)+'% от номинала, без НКД') if bond is not None else 'Цена: '+fmt_money(price,info.currency),
+            ('Котировка: '+fmt_num(price)+'% от номинала; накопленный купон не включён') if bond is not None else 'Цена: '+fmt_money(price,info.currency),
             'Котировка на '+quote_time]
         if bond is not None:
             nominal,currency=money(bond.get('nominal'));maturity=iso_day(bond.get('maturityDate'),self.api.tz)
@@ -115,7 +116,7 @@ class EditorialPostGenerator(PostGenerator):
                          floating_coupon=bond.get('floatingCouponFlag'),amortization=bond.get('amortizationFlag'))
             if nominal>0:lines.append('Текущий номинал: '+fmt_money(nominal,currency))
             if maturity:lines.append('Погашение: '+d(maturity))
-            for key,label in [('floatingCouponFlag','Плавающий купон'),('amortizationFlag','Амортизация')]:
+            for key,label in [('floatingCouponFlag','Купон может меняться'),('amortizationFlag','Возврат номинала частями')]:
                 if type(bond.get(key)) is bool:lines.append(label+(': да' if bond[key] else ': нет'))
             try:
                 coupons=self.api.coupons(info.uid,today,today+timedelta(days=180))

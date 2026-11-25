@@ -3,6 +3,7 @@ from datetime import datetime,timedelta,timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 import argparse,base64,hashlib,json,logging,os,re
+from html import escape
 import requests
 from cryptography.fernet import Fernet
 from .cloud_signals import json_call
@@ -99,7 +100,14 @@ class PrivateTelegram:
         label=f"Черновик для Пульса · {LABELS[draft.kind]} · {draft.period}\nПроверь текст; публикация в Т-Инвестициях вручную.\n\n"
         text=label+draft.body
         if len(text)<=3900:
-            value=json_call(self.session,'POST',self.url+'sendMessage',json={'chat_id':self.chat,'text':text,'disable_web_page_preview':True})
+            payload={'chat_id':self.chat,'text':text,'disable_web_page_preview':True}
+            if draft.kind=='paper':
+                lines=[]
+                for line in draft.body.splitlines():
+                    safe=escape(line)
+                    lines.append('<b>'+safe+'</b>' if line.startswith(('📊','💰','🔎','🗞','⚠️','👀','📌')) else safe)
+                payload.update(text=escape(label)+'\n'.join(lines),parse_mode='HTML')
+            value=json_call(self.session,'POST',self.url+'sendMessage',json=payload)
         else:
             value=json_call(self.session,'POST',self.url+'sendDocument',data={'chat_id':self.chat,'caption':label.strip()},
                 files={'document':('pulse-draft.txt',draft.body.encode('utf-8'),'text/plain; charset=utf-8')})

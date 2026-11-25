@@ -108,6 +108,21 @@ def test_long_post_goes_as_private_document_with_no_truncation(monkeypatch):
     assert calls[-1][1]['files']['document'][1].decode()==body
 
 
+def test_paper_headings_are_bold_and_external_text_is_escaped(monkeypatch):
+    import invest_blog.cloud_pulse as module
+    calls=[]
+    def call(session,method,url,**kw):
+        calls.append(kw)
+        if url.endswith('getMe'):return {'ok':True,'result':{'id':99}}
+        if url.endswith('getChat'):return {'ok':True,'result':{'id':12345,'type':'private'}}
+        return {'ok':True,'result':{'message_id':1}}
+    monkeypatch.setattr(module,'json_call',call)
+    PrivateTelegram('SECRET','12345').send(Draft('paper','week','📊 Бумага\n\nНазвание <script> & текст'))
+    payload=calls[-1]['json']
+    assert payload['parse_mode']=='HTML' and '<b>📊 Бумага</b>' in payload['text']
+    assert '&lt;script&gt;' in payload['text'] and '<script>' not in payload['text']
+
+
 @pytest.mark.parametrize('new',[True,False])
 def test_missing_state_is_initialized_only_on_new_branch(monkeypatch,new):
     import invest_blog.cloud_pulse as module

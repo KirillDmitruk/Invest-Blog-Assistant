@@ -57,3 +57,19 @@ def test_ai_cannot_inject_unprovided_numbers(monkeypatch):
     value=prose({},[]);value['takeaway']='Доходность будет 99 процентов.'
     monkeypatch.setattr(module,'json_call',lambda *a,**k:{'result':{'response':json.dumps(value)}})
     with pytest.raises(ValueError):write_prose({'name':'Public paper'},[])
+
+
+def test_bond_quote_is_percent_and_only_future_coupon_is_displayed():
+    class Bonds(Api):
+        def instrument(self,uid='',figi=''):return Instrument(uid,uid,'Тестовый выпуск','RU000TEST','BOND','bond','RUB',{})
+        def bond(self,uid):return {'nominal':{'units':'1000','currency':'RUB'},'maturityDate':'2028-12-01T00:00:00Z','floatingCouponFlag':False,'amortizationFlag':True}
+        def coupons(self,uid,start,end):return [{'couponDate':(start-timedelta(days=1)).isoformat()+'T00:00:00Z','payOneBond':{'units':'10','currency':'RUB'}},
+            {'couponDate':(start+timedelta(days=7)).isoformat()+'T00:00:00Z','payOneBond':{'units':'20','currency':'RUB'}}]
+        def call(self,s,m,p):
+            v=super().call(s,m,p)
+            if m=='GetLastPrices':v['lastPrices'][0]['price']={'units':'99','nano':500000000}
+            return v
+    g=EditorialPostGenerator(Bonds(),('private',),Path('unused'),news_loader=lambda *a:[],writer=prose)
+    body=g.paper(date.today()).body
+    assert '99,50% от номинала' in body and '1 000,00 ₽' in body and '20,00 ₽ на бумагу' in body
+    assert '10,00 ₽ на бумагу' not in body and 'Возврат номинала частями: да' in body
