@@ -51,7 +51,7 @@
 @media(max-width:760px){.creator-projects{grid-template-columns:1fr}.creator-entry{align-items:flex-start;flex-direction:column}}
 </style>
 <link rel="stylesheet" href="/static/hub-theme.css">
-</head>
+<link rel="stylesheet" href="/static/daily-calendar.css?v=20261123-1"></head>
 <body>
 <div class="shell">
 <aside class="sidebar">
@@ -74,7 +74,7 @@
  <button data-page="tech"><span>⚙</span>Обзор и редактор</button>
  <button data-page="creator"><span>🎬</span>Creator Studio</button>
  </nav>
- <div class="sidebar-foot">Локальный read-only дашборд.<br>Никаких торговых поручений.</div>
+ <div class="sidebar-foot">Локальный хаб.<br>Портфель, редакция и демо-торговля.</div>
 </aside>
 <main class="main">
 <header class="top"><div><div class="eyebrow">Long-term investing / портфель</div><h1 id="pageTitle">Обзор портфеля</h1><p class="desc" id="pageDesc">Долгосрочная структура, фактический денежный поток и ожидаемые выплаты</p></div><span class="status"><i class="dot"></i><span id="status">Ожидаем данные</span></span></header>
@@ -82,24 +82,25 @@
 <section class="section active" id="page-home">
  <div class="hub-welcome"><h2>Твои проекты</h2><p class="hint">Выбери направление. Черновики и данные проектов хранятся раздельно.</p></div>
  <div class="hub-projects">
-  <button class="hub-project" type="button" data-target="overview"><strong>◈ Инвестиции</strong><span>Портфель, доходность, новые облигации и публикации</span><em>Перейти к аналитике →</em></button>
+  <button class="hub-project" type="button" data-target="iis"><strong>◎ ИИС · долгосрочный портфель</strong><span>20% акции · 70% облигации · 10% золото. Состав, компании и понятный план действий</span><em>Разобрать портфель →</em></button>
+  <button class="hub-project" type="button" data-target="overview"><strong>◈ Инвестиции</strong><span>Состав портфеля, доходность и денежные потоки</span><em>Перейти к аналитике →</em></button>
   <button class="hub-project" type="button" data-target="tech"><strong>⚙ Tech &amp; Gadgets</strong><span>Технологический блог, собственные проекты и отдельная редакторская очередь</span><em>Открыть редактор →</em></button>
-  <button class="hub-project" type="button" data-target="trading"><strong>◈ Торговый бот</strong><span>Виртуальные фьючерсы, Grok, ограничения риска и журнал решений</span><em>Открыть лабораторию →</em></button>
+  <button class="hub-project" type="button" data-target="trading"><strong>◈ Т-инвестиции демо</strong><span>Виртуальные фьючерсы, статистика и журнал решений</span><em>Открыть лабораторию →</em></button>
  </div>
  <div class="note">Аналитика, новости и единая редакционная очередь. Создавай материалы, проверяй текст и управляй публикацией из одного пространства.</div>
 </section>
 <section class="section" id="page-tech">
  <div class="grid">
   <div class="card full"><h2>Tech &amp; Gadgets · редакция</h2><p class="hint">Отдельная очередь постов о робототехнике, гаджетах, AI и собственных проектах. Новости собираются каждые 2 часа при запущенном боте. Публикации в VK и Telegram управляются отдельно. AI-редактор пока отключён.</p></div>
-  <div class="card full"><div class="toolbar"><h2>Kir in Tech News · публикация новостей</h2><button type="button" id="techPublishRefresh">Обновить статусы</button></div>
-   <p class="hint">Расписание работает при запущенном издателе Tech или основном боте. После изменения настроек перезапусти соответствующий процесс.</p>
+  <div class="card full"><div class="toolbar"><h2>Инвестиционные новости · Telegram</h2><button type="button" id="techPublishRefresh">Обновить статусы</button></div>
+   <p class="hint">Российский рынок, зарубежные рынки и криптовалюты. Тот же Telegram-канал, одна новость каждые полчаса. Пауза и направления меняются здесь без перезапуска.</p>
    <div id="techPublishStatus" class="hint">Загрузка статуса...</div>
    <div class="goal-actions"><button type="button" id="techPublishNow">Опубликовать сейчас (1 новость)</button></div>
-   <div class="editor-buttons"><button type="button" id="techTgPreview">Предпросмотр Telegram</button><button type="button" id="techTgPublishNow">Опубликовать только в Telegram</button></div><p class="hint" id="techTgSchedule"></p><textarea id="techTgPreviewText" class="editor-input" rows="7" readonly hidden aria-label="Предпросмотр новости Telegram"></textarea><div id="techPublishFeedback"></div><h3>История отправок и проблем</h3><div id="techPublishHistory"></div>
+   <div class="editor-buttons"><button type="button" id="techTgPreview">Посмотреть следующий пост</button><button type="button" id="techTgPublishNow">Опубликовать сейчас</button></div><p class="hint" id="techTgSchedule"></p><textarea id="techTgPreviewText" class="editor-input" rows="7" readonly hidden aria-label="Предпросмотр новости Telegram"></textarea><div id="techPublishFeedback"></div><h3>История отправок и проблем</h3><div id="techPublishHistory"></div>
   </div>
-  <div class="card full"><h2>Лента технологических новостей</h2>
-   <p class="hint">Новости из RSS-источников. Выбор категории и создание черновика для ручной проверки.</p>
-   <label>Категория <select id="techNewsCategory"><option value="">Все категории</option><option value="tech">Технологии</option><option value="ai">AI</option><option value="market">Рынок и IPO</option><option value="robotics">Робототехника</option><option value="gadgets">Гаджеты и прототипы</option><option value="diy">DIY и электроника</option><option value="printing">3D-печать</option><option value="space">Космос</option></select></label>
+  <div class="card full"><h2>Очередь инвестиционных новостей</h2>
+   <p class="hint">Автоматический сбор из инвестиционных RSS. Проверь оригинал, скрой ненужное или добавь свой материал.</p>
+   <label>Категория <select id="techNewsCategory"><option value="">Все категории</option><option value="russia">Российский рынок</option><option value="world">Зарубежные рынки</option><option value="crypto">Криптовалюты</option></select></label>
    <button type="button" id="techNewsRefresh">Обновить список</button>
    <div id="techNewsStats" class="hint"></div><div id="techNewsList"></div>
    <details><summary>Состояние RSS-источников</summary><div id="techNewsSources"></div></details>
@@ -1048,7 +1049,7 @@ async function refreshEditorial(id){
  if(results[0].status==='rejected')throw results[0].reason;
  if(id)await openDraft(id);else renderContent();
 }
-async function editorRequest(url,method,payload){const res=await fetch(url,{method,headers:{'Content-Type':'application/json','X-CSRF-Token':state.editorToken},body:JSON.stringify(payload)});
+async function editorRequest(url,method,payload){if(!state.editorToken)state.editorToken=(await getJson('/api/editor-token')).token;const res=await fetch(url,{method,headers:{'Content-Type':'application/json','X-CSRF-Token':state.editorToken},body:JSON.stringify(payload)});
  const json=await res.json().catch(()=>({}));if(!res.ok)throw Error(json.detail||('HTTP '+res.status));return json}
 async function performAction(action){const d=state.editorDraft;if(!d)return;
  const payload={action,revision:d.revision};
@@ -1205,12 +1206,13 @@ async function refreshTechPublishing(){
   const data=await getJson('/api/tech/publishing');
   status.textContent=`VK: ${data.vk_enabled?'включён':'выключен'} · Telegram: ${data.telegram_enabled?'включён':'выключен'}${!data.telegram_configured?' (канал не настроен)':''} · Сегодня VK: ${data.today.vk}/4, TG: ${data.today.telegram} · Занято слотов VK: ${data.vk_daily_reserved}/4 · Ожидают TG: ${data.tg_pending} · Следующий слот VK: ${data.next_at?new Date(data.next_at).toLocaleString('ru-RU'):'не запланирована'} · Часовой пояс: ${data.timezone}`;
   const direct=data.telegram_mode==='direct',cfg=data.telegram_schedule;
+  if(direct)status.textContent='Канал: '+(data.telegram_channel||'не указан')+' · Автопубликация: '+(data.telegram_enabled&&data.news_controls?.enabled?'включена':'на паузе')+' · Сегодня отправлено: '+data.today.telegram+' · В очереди: '+data.tg_pending;
   el('techTgPreview').hidden=el('techTgPublishNow').hidden=!direct;
   el('techTgPublishNow').disabled=!data.telegram_enabled||!data.telegram_configured;
   el('techPublishNow').hidden=direct;
   const last=data.telegram_last_run;
   el('techTgSchedule').textContent=direct
-    ?'Telegram: '+(data.telegram_channel||'канал не указан')+' · '+(cfg?'каждые 30 минут, '+String(cfg.start_hour).padStart(2,'0')+':00–'+String(cfg.end_hour).padStart(2,'0')+':00 (окончание не включается), максимум '+cfg.daily_limit+' в день':'ошибка расписания')+' · следующий плановый слот: '+(data.telegram_next_at?new Date(data.telegram_next_at).toLocaleString('ru-RU'):'выключен')+' · последняя проверка: '+(last?new Date(last.checked_at).toLocaleString('ru-RU')+' — '+last.note:'пока не было')+'. Для расписания должен работать '+(data.telegram_runner==='worker'?'фоновый издатель Tech':'основной бот')+'.'
+    ?'Telegram: '+(data.telegram_channel||'канал не указан')+' · '+(cfg?'каждые 30 минут, '+String(cfg.start_hour).padStart(2,'0')+':00–'+String(cfg.end_hour).padStart(2,'0')+':00 (окончание не включается), максимум '+cfg.daily_limit+' в день':'ошибка расписания')+' · следующий плановый слот: '+(data.telegram_next_at?new Date(data.telegram_next_at).toLocaleString('ru-RU'):'выключен')+' · последняя проверка: '+(last?new Date(last.checked_at).toLocaleString('ru-RU')+' — '+last.note:'пока не было')+'. Для расписания должен работать '+(data.telegram_runner==='worker'?'фоновый издатель новостей':'основной бот')+'.'
     :'Telegram получает уже опубликованные новости VK.';
   if(data.telegram_schedule_error)el('techTgSchedule').textContent+=' '+data.telegram_schedule_error;
   history.replaceChildren();if(!data.history.length){history.append(txt('p','Публикаций пока нет.'));return}
@@ -1244,7 +1246,7 @@ async function refreshTechNews(){
  try {const cat=el('techNewsCategory').value;const data=await getJson('/api/tech/news'+(cat?'?category='+encodeURIComponent(cat):''));host.replaceChildren();sources.replaceChildren();
  el('techNewsStats').textContent=`Всего новостей: ${data.stats.total}; новых: ${data.stats.new}; показано: ${data.items.length}.`;
  for(const f of data.sources){const line=document.createElement('p');line.textContent=`${f.source}: ${f.status} · ${f.checked_at?new Date(f.checked_at).toLocaleString('ru-RU'):'не проверялся'}${f.error?' · '+f.error:''}`;sources.append(line)}
- if(!data.items.length){host.append(txt('p','Новостей пока нет. Выполни make tech-news или дождись фоновой проверки при запущенном боте.'));return}
+ if(!data.items.length){host.append(txt('p','Новостей пока нет. Нажми «Собрать свежие новости» или добавь свой материал ниже.'));return}
  for(const n of data.items){const card=document.createElement('div');card.className='tech-entry';const title=txt('strong',n.title);const meta=txt('p',`${data.categories[n.category]||n.category} · ${n.source} · ${n.published_at?new Date(n.published_at).toLocaleString('ru-RU'):'дата не указана'} · ${n.status}`);card.append(title,meta);
  if(n.summary)card.append(txt('p',n.summary.slice(0,400)));
  const link=txt('a','Читать оригинал');link.href=n.url;link.target='_blank';link.rel='noopener noreferrer';card.append(link,txt('span','  '));
@@ -1283,7 +1285,7 @@ async function load(){try{
     ['goals','/api/goals'],['editorToken','/api/editor-token'],
     ['drafts','/api/drafts'],['topics','/api/topics'],
     ['contentPlan','/api/content-plan'],['routine','/api/publication-routine'],
-    ['performance','/api/performance'],['placements','/api/placements']
+    ['performance','/api/performance']
   ];
   const responses=await Promise.allSettled(endpoints.map(([,url])=>getJson(url)));
   const failed=[];
@@ -1319,4 +1321,4 @@ async function load(){try{
   }}
 window.addEventListener('load',load);
 setInterval(()=>{if(state.page==='placements')refreshPlacements()},60000);
-</script><script src="/static/assets.js"></script><script src="/static/trading.js"></script><script src="/static/workspace.js"></script></body></html>
+</script><script src="/static/assets.js"></script><script src="/static/daily-calendar.js?v=20261123-1"></script><script src="/static/demo-equity.js?v=20261125-split"></script><script src="/static/trading.js?v=20261125-history-returns"></script><script src="/static/news-ui.js"></script><script src="/static/paper-perps.js?v=20261125-closed-roi"></script><script src="/static/workspace.js?v=20261125-portfolio"></script></body></html>

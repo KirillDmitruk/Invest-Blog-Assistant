@@ -9,10 +9,10 @@ ATOM=b'''<feed xmlns="http://www.w3.org/2005/Atom"><entry><title>3D printing roc
 def test_rss_parse_and_categories():
     row=parse_feed(RSS,'Demo')[0]
     assert row['url']=='https://example.org/robot'
-    assert row['category']=='robotics'
+    assert row['category']=='world'
     assert '<' not in row['summary']
     assert row['published_at'].startswith('2026-10-30')
-    assert parse_feed(ATOM,'Other')[0]['category']=='printing'
+    assert parse_feed(ATOM,'Other')[0]['category']=='world'
     assert canonical_url('http://bad.com')==''
 
 def test_store_dedup_and_status(tmp_path):
@@ -21,7 +21,7 @@ def test_store_dedup_and_status(tmp_path):
     assert st.save(rows)==1
     assert st.save(rows)==0
     news=st.list_news()[0]
-    assert news['category']=='robotics'
+    assert news['category']=='world'
     assert st.mark(news['id'],'dismissed')
     assert st.list_news(status='dismissed')[0]['id']==news['id']
     assert st.stats()['new']==0

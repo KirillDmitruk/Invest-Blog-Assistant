@@ -21,8 +21,8 @@ function Get-TechWorker {
 $techWorker = Get-TechWorker
 switch ($techAction) {
     'status' {
-        if ($techWorker) { Write-Output "Tech publisher is running (PID $($techWorker.Id)). Logs: $techStateDir" }
-        else { Write-Output 'Tech publisher is not running in the background. Start: .\hub news-start' }
+        if ($techWorker) { Write-Output "News publisher is running (PID $($techWorker.Id)). Logs: $techStateDir" }
+        else { Write-Output 'News publisher is not running in the background. Start: .\hub news-start' }
         exit 0
     }
     'stop' {
@@ -30,8 +30,8 @@ switch ($techAction) {
             & taskkill.exe /PID $techWorker.Id /T /F
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             Remove-Item -LiteralPath $techStateFile -ErrorAction SilentlyContinue
-            Write-Output 'Tech publisher stopped. News and delivery history are preserved.'
-        } else { Write-Output 'No background Tech publisher to stop.' }
+            Write-Output 'News publisher stopped. News and delivery history are preserved.'
+        } else { Write-Output 'No background News publisher to stop.' }
         exit 0
     }
     'start' {
@@ -51,8 +51,8 @@ switch ($techAction) {
             @{processId=$techStarted.Id; startTicks=$techTicks; channel=$techReady.channel; nextAt=$techReady.next_at} |
                 ConvertTo-Json | Set-Content -LiteralPath $techStateFile -Encoding UTF8
             Start-Sleep -Seconds 2
-            if (-not (Get-TechWorker)) { throw "Tech publisher exited. See $techStderr" }
-            Write-Output "Tech publisher started for $($techReady.channel). Next slot: $($techReady.next_at)"
+            if (-not (Get-TechWorker)) { throw "News publisher exited. See $techStderr" }
+            Write-Output "News publisher started for $($techReady.channel). Next slot: $($techReady.next_at)"
             Write-Output 'It runs while this computer is awake. Status: .\hub news-status; stop: .\hub news-stop'
         } finally { Pop-Location }
         exit 0

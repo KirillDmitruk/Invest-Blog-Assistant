@@ -12,6 +12,7 @@ from .config import Settings
 from .iis_review import ReviewStore, analyze_iis, run_review
 from .placements import PlacementStore
 from .portfolio_store import PortfolioStore
+from .iis_portfolio import ResearchAPI, view
 
 
 def register_iis_routes(app, db_path, require_editor):
@@ -58,12 +59,15 @@ def register_iis_routes(app, db_path, require_editor):
             report.update(account=saved.get('account'), created_at=saved['created_at'], run_id=saved['run_id'],
                           sync_warnings=saved.get('sync_warnings', []), placement_sources=saved.get('placement_sources', []))
         next_at = (datetime.fromisoformat(saved['created_at']) + timedelta(days=settings.iis_review_interval_days)).isoformat() if saved else None
-        return dict(report, **common, account_id=aid, history=reviews.history(aid), next_at=next_at,
+        portfolio = view(PortfolioStore(db_path), aid, report, today=datetime.now(settings.timezone).date(),
+                         evidence=reviews.evidence(), references=reviews.issuer_data(datetime.now(settings.timezone).date()))
+        return dict(report, **common, portfolio=portfolio, account_id=aid, history=reviews.history(aid), next_at=next_at,
                     last_changes=(saved or {}).get('changes', []))
 
     def update(settings, aid):
         try:
-            run_review(settings, account_id=aid)
+            run_review(settings, account_id=aid, api=ResearchAPI(settings.invest_token, settings.timezone),
+                       scan=False, enrich_portfolio=True)
         except Exception as exc:
             logging.getLogger(__name__).warning('IIS review failed: %s', type(exc).__name__)
 

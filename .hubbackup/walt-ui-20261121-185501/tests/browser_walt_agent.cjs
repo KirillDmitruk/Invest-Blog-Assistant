@@ -1,0 +1,21 @@
+const assert=require('node:assert/strict'),fs=require('node:fs');
+const {chromium}=require(process.env.CONTENT_HUB_PLAYWRIGHT_PATH||'playwright');
+(async()=>{const browser=await chromium.launch({executablePath:process.env.CONTENT_HUB_BROWSER,headless:true});try{
+ const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.route('https://cdn.jsdelivr.net/**',r=>r.abort());
+ await page.route('**/api/walt-agent/model-check',r=>r.fulfill({json:{available:true,models:['qwen3:4b'],selected_installed:true}}));
+ await page.goto('http://127.0.0.1:8766/#walt-agent');
+ await page.locator('#waConnection').filter({hasText:'ещё не подключён'}).waitFor();
+ assert.equal(await page.locator('#waAnalyze').isEnabled(),false);
+ assert.equal(await page.locator('#waDiscover').isEnabled(),false);
+ assert.equal(await page.locator('#waAuthLink').isVisible(),false);
+ await page.locator('#waModelCheck').click();await page.locator('#waModelState').filter({hasText:'доступна локально'}).waitFor();
+ await page.locator('#waSave').click();await page.locator('#waFeedback').filter({hasText:'Настройки сохранены'}).waitFor();
+ await page.reload();await page.locator('#waConnection').filter({hasText:'ещё не подключён'}).waitFor();
+ assert.equal(await page.locator('#waModel').inputValue(),'qwen3:4b');
+ assert.equal(await page.locator('#waHistory details').count(),0);
+ fs.mkdirSync('docs/previews',{recursive:true});await page.screenshot({path:'docs/previews/walt-local-agent.png',fullPage:true});
+ await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+ await page.screenshot({path:'docs/previews/walt-local-agent-mobile.png',fullPage:true});
+ assert.deepEqual(errors,[]);console.log('Walt agent UI: dedicated page, local model status (mocked), persisted settings, disconnected states, no fake history, mobile passed. No wallet authorization or trades.');
+}finally{await browser.close()}})().catch(e=>{console.error(e);process.exit(1)});

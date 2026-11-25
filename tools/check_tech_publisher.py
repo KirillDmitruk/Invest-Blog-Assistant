@@ -5,7 +5,6 @@ import sys
 from invest_blog.config import Settings
 from invest_blog.tech_direct import DirectSchedule, direct_mode
 from invest_blog.tech_telegram import TechTelegramPublisher, _enabled
-from invest_blog.vk_news import LocalTranslator
 import os
 
 
@@ -17,9 +16,8 @@ def main():
         schedule = DirectSchedule.from_env()
         info = TechTelegramPublisher(os.getenv('TELEGRAM_BOT_TOKEN', ''),
                                      os.getenv('TECH_TELEGRAM_CHANNEL_ID', '')).check_channel()
-        LocalTranslator()
     except Exception:
-        raise SystemExit('Не готово: проверь токен, права канала и модель EN→RU (.\\hub translation-model).') from None
+        raise SystemExit('Не готово: проверь токен и права бота в существующем Telegram-канале.') from None
     from datetime import datetime
     print(json.dumps({'python': sys.executable, 'channel': info['title'],
                       'next_at': schedule.next_at(datetime.now(settings.timezone)).isoformat()}, ensure_ascii=True))

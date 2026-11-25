@@ -51,6 +51,13 @@ def market():
 def register_trading_routes(app, path, require_editor):
     lab = TradingLab(path)
     router = APIRouter(prefix='/api/trading')
+    from .tinvest_paper_routes import FuturesDashboard
+    cloud = FuturesDashboard(path)
+    original_editor = require_editor
+    def require_editor(request):
+        original_editor(request)
+        if os.getenv('TINVEST_PAPER_CLOUD_ENABLED') == 'true':
+            raise HTTPException(409, 'Виртуальным счётом управляет облако. Локальные команды отключены.')
 
     from .trading_connector import AnalysisDesk, Prepare
     desk = AnalysisDesk(path)
@@ -68,7 +75,10 @@ def register_trading_routes(app, path, require_editor):
             raise HTTPException(409, str(exc)) from exc
 
     @router.get('/overview')
-    def overview():
+    def overview(refresh:bool=False):
+        if os.getenv('TINVEST_PAPER_CLOUD_ENABLED') == 'true':
+            try:return cloud.overview(force=refresh)
+            except ValueError as exc:raise HTTPException(503,str(exc)) from exc
         return lab.overview()
 
     @router.put('/settings')
@@ -153,6 +163,8 @@ def register_trading_routes(app, path, require_editor):
 
 def serve(path):
     """Periodic paper analysis. Start does not enable the account or any broker trading."""
+    if os.getenv('TINVEST_PAPER_CLOUD_ENABLED') == 'true':
+        raise SystemExit('Торговый бот работает в облаке. Локальный процесс не требуется.')
     from apscheduler.schedulers.blocking import BlockingScheduler
     import logging
     lab = TradingLab(path)

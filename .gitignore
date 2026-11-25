@@ -17,3 +17,9 @@ data/tech-publisher/
 
 # PAPER trading worker process identity and logs
 data/trading-worker/
+
+# Ephemeral public market reports and cache
+.cloud-signals/
+cloud-report/
+data/paper-state-key.dpapi
+*.dpapi

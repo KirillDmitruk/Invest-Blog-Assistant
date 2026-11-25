@@ -15,3 +15,13 @@ th{color:#adc1e1}td{color:#e0e8f9}td,th{border-color:#364159}tr:nth-child(even) 
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
 
 .hub-projects{grid-template-columns:repeat(3,minmax(0,1fr))}.hub-project:nth-child(3){background:radial-gradient(ellipse at top right,#ac792434,transparent 75%),linear-gradient(135deg,#3a284f,#25213b);border-color:#9c7b9a}.hub-project:nth-child(3) em{color:#ffd492}@media(max-width:1100px){.hub-projects{grid-template-columns:1fr}}
+
+/* Portfolio refresh: quieter surfaces, colour used to guide attention. */
+#page-placements,#page-walt-agent{display:none!important}
+.hub-projects{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.hub-project{border-radius:24px;padding:26px;min-height:192px;text-align:left;transition:transform .18s,border-color .18s}
+.hub-project:hover{transform:translateY(-3px)}.hub-project:first-child{background:radial-gradient(at top right,#60d4c126,transparent 70%),linear-gradient(130deg,#292442,#142e37);border-color:#528f91}
+.hub-project strong{font-size:21px}.card{border-radius:22px}.card h2{letter-spacing:-.25px}.workspace-tabs{gap:9px}.workspace-tabs button{border-radius:18px}.nav button{border-radius:13px}
+button:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid #8be8dc;outline-offset:4px}
+body[data-workspace=paper]{--accent:#72e4cd;--accent-rgb:114,228,205}
+@media(max-width:750px){.hub-projects{grid-template-columns:1fr}.hub-project{padding:21px;min-height:160px}}

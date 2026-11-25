@@ -1,0 +1,7 @@
+INFO:     Started server process [8828]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+2026-11-23 19:33:12,382 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"
+2026-11-23 19:33:33,897 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"
+2026-11-23 19:35:10,475 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"

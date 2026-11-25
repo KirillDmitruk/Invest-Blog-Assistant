@@ -2,6 +2,7 @@
 from __future__ import annotations
 import hashlib
 import sqlite3
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from .tech_news import TechNewsStore, clean_text
@@ -32,6 +33,29 @@ def compose(news, translator):
     if len(translated_title) < 12 or len(translated_summary) < 35 or translated_title.casefold() == title.casefold() or translated_summary.casefold() == summary.casefold():
         raise ValueError('Некорректный или неполный перевод')
     return f'{translated_title}\n\n{translated_summary}\n\nИсточник: {news["source"]}\n{news["url"]}'
+
+
+def compose_investment(news, translator=None):
+    """Brief RSS headline/snippet or owner's note; never generate financial advice."""
+    from .tech_news import CATEGORY_LABELS
+    title=clean_text(news['title'],250)
+    summary=clean_text(news.get('summary') or '',350)
+    if len(title)<12 or (summary and len(summary)<60) or (not summary and len(title)<30):
+        raise ValueError('Недостаточно содержательных данных для новости.')
+    letters=re.findall(r'[A-Za-zА-Яа-яЁё]',title+' '+summary)
+    russian=sum(bool(re.match(r'[А-Яа-яЁё]',c)) for c in letters)/max(1,len(letters))>.35
+    if not russian:
+        translator=translator or LocalTranslator()
+        translated=clean_text(translator(title),300)
+        brief=clean_text(translator(summary),450) if summary else ''
+        if len(translated)<12 or translated.casefold()==title.casefold() or (summary and (len(brief)<35 or brief.casefold()==summary.casefold())):
+            raise ValueError('Перевод не подтверждён; новость пропущена.')
+        title,summary=translated,brief
+    label=CATEGORY_LABELS.get(news['category'],'Новости рынка')
+    body=f'{label}\n\n{title}'
+    if summary and summary.casefold()!=title.casefold():
+        body+='\n\n'+summary
+    return body+f'\n\nИсточник: {news["source"]}\n{news["url"]}'
 
 class VKNewsQueue:
     def __init__(self, path):

@@ -1,0 +1,25 @@
+const assert=require('node:assert/strict');const path=require('node:path');
+let chromium;try{({chromium}=require('playwright'))}catch{({chromium}=require(path.resolve(path.dirname(process.execPath),'..','node_modules','playwright')))}
+require('node:fs').mkdirSync('.paper-ui-check',{recursive:true});
+(async()=>{const browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true,args:['--proxy-server=direct://','--proxy-bypass-list=*']});
+try{const page=await browser.newPage({viewport:{width:1440,height:1000}});let writes=0;const errors=[];
+page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.method()!=='GET')writes++});
+await page.route('https://cdn.jsdelivr.net/**',r=>r.abort());
+await page.goto('http://127.0.0.1:8778/#paper');
+await page.locator('#paperPositions').getByText(/Пока открытых виртуальных позиций нет/).waitFor();
+assert.equal(await page.locator('#paperStats .paper-stat').count(),4);
+await page.screenshot({path:'.paper-ui-check/paper-desktop.png',fullPage:true});
+await page.setViewportSize({width:390,height:844});await page.screenshot({path:'.paper-ui-check/paper-mobile.png',fullPage:true});
+assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+const demo=await (await page.request.get('http://127.0.0.1:8778/api/paper/overview')).json();
+demo.real_execution_disabled=true;demo.state.reason='ДЕМОНСТРАЦИОННЫЕ ДАННЫЕ. Позиция для проверки интерфейса.';
+demo.state.positions={'1':{symbol:'BTC',side:'long',leverage:3,quantity:'.01',margin:'200',entry:'60000',mark:'60700',stop:'57900',take:'66000',funding_paid:'0.12',opened_at:Date.now()/1000}};
+const active=JSON.stringify(demo);
+await page.route('**/api/paper/overview',r=>r.fulfill({status:200,contentType:'application/json',body:active}));
+await page.locator('#paperRefresh').click();await page.locator('.paper-position').waitFor();
+assert.equal(await page.locator('.paper-position .paper-fields>div').count(),8);
+await page.screenshot({path:'.paper-ui-check/paper-active-mobile.png',fullPage:true});
+assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+await page.setViewportSize({width:1440,height:1000});await page.screenshot({path:'.paper-ui-check/paper-active-desktop.png',fullPage:true});
+assert.equal(writes,0);assert.deepEqual(errors,[]);console.log('PAPER page: empty state, four account cards, mobile width and zero mutation requests verified.');
+}finally{await browser.close()}})().catch(e=>{console.error(e);process.exit(1)});

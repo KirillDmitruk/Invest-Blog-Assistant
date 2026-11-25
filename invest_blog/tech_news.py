@@ -1,7 +1,8 @@
-"""Curated read-only RSS/Atom collector for Tech & Gadgets. No auto publishing."""
+"""Curated read-only RSS/Atom collector for investment news. Publication lives in a separate worker."""
 from __future__ import annotations
 
 import hashlib
+import json
 import html
 import logging
 import re
@@ -17,30 +18,26 @@ import requests
 
 log = logging.getLogger(__name__)
 ATOM = '{http://www.w3.org/2005/Atom}'
-CATEGORIES = ('tech', 'ai', 'market', 'robotics', 'gadgets', 'diy', 'printing', 'space')
-CATEGORY_LABELS = {'tech':'Технологии', 'ai':'AI', 'market':'Рынок и IPO',
-                   'robotics':'Робототехника','gadgets':'Гаджеты и прототипы',
-                   'diy':'DIY и электроника','printing':'3D-печать','space':'Космос'}
+CATEGORIES = ('russia', 'world', 'crypto')
+CATEGORY_LABELS = {'russia': '🇷🇺 Российский рынок', 'world': '🌍 Зарубежные рынки', 'crypto': '₿ Криптовалюты'}
 
-# Fixed allowlist of feeds; no user-controlled HTTP target or open proxy.
+# Curated fixed endpoints; no HTTP fetching from user-submitted URLs.
 FEEDS = (
-    ('The Verge', 'https://www.theverge.com/rss/index.xml'),
-    ('Ars Technica', 'https://feeds.arstechnica.com/arstechnica/index'),
-    ('TechCrunch', 'https://techcrunch.com/feed/'),
-    ('Engadget', 'https://www.engadget.com/rss.xml'),
-    ('IEEE Spectrum', 'https://spectrum.ieee.org/feed'),
-    ('MIT Technology Review', 'https://www.technologyreview.com/feed/'),
-    ('NASA', 'https://www.nasa.gov/feed/'),
+    ('Банк России', 'https://www.cbr.ru/rss/eventrss'),
+    ('Смартлаб · новости', 'https://smart-lab.ru/news/rss/'),
+    ('CNBC', 'https://www.cnbc.com/id/10000664/device/rss/rss.html'),
+    ('ФРС США', 'https://www.federalreserve.gov/feeds/press_all.xml'),
+    ('CoinDesk', 'https://www.coindesk.com/arc/outboundfeeds/rss/'),
+    ('Cointelegraph', 'https://cointelegraph.com/rss'),
 )
-KEYWORDS = {
-    'ai': r'\b(ai|artificial intelligence|machine learning|llm|openai|chatgpt|gemini|anthropic|neural|генеративн)\b',
-    'market': r'\b(ipo|stock market|nasdaq|earnings|shares|stocks|valuation|funding|investors|acquisition|merger|wall street|market cap|бирж|акци[йи]|рынок)\b',
-    'robotics': r'\b(robot|robotics|humanoid|automation|actuator|quadruped|робот)\b',
-    'gadgets': r'\b(gadget|device|prototype|smartphone|wearable|headset|smartwatch|chip|laptop|hardware|гаджет|прототип)\b',
-    'diy': r'\b(diy|arduino|raspberry pi|esp32|microcontroller|maker|electronics|microchip|электрон)\b',
-    'printing': r'\b(3d.print(?:ing)?|additive manufacturing|filament|resin printer|3d-печать)\b',
-    'space': r'\b(space|nasa|spacex|rocket|satellite|moon|mars|orbital|launch|космос|спутник)\b',
-}
+TELEGRAM_SOURCES = (
+    ('ne_investor', 'https://t.me/ne_investor'),
+    ('crypton_off', 'https://t.me/crypton_off'),
+    ('roflpuls', 'https://t.me/roflpuls'),
+    ('kokorevinvest', 'https://t.me/kokorevinvest'),
+)
+SOURCE_CATEGORIES = {'Банк России': 'russia', 'CNBC': 'world', 'ФРС США': 'world',
+                     'CoinDesk': 'crypto', 'Cointelegraph': 'crypto'}
 
 
 def clean_text(value: str, max_length: int = 900) -> str:
@@ -68,10 +65,17 @@ def parse_date(value: str) -> str | None:
 
 def category_for(title: str, summary: str, source: str) -> str:
     text = (title + ' ' + summary[:350]).lower()
-    # Explicit keyword categories have precedence over generic source labels.
-    for category in ('printing','robotics','space','diy','ai','market','gadgets'):
-        if re.search(KEYWORDS[category], text, re.I): return category
-    return 'tech'
+    if source == 'Смартлаб · новости':
+        if re.search(r'bitcoin|ethereum|crypto|битко|крипт|эфириум',text): return 'crypto'
+        if re.search(r'сша|европ|кита[йя]|американ|зарубеж|nasdaq|s&p|wall street|revolut|tesla|nvidia|apple',text): return 'world'
+        return 'russia'
+    if source in SOURCE_CATEGORIES:
+        return SOURCE_CATEGORIES[source]
+    if re.search(r'bitcoin|ethereum|crypto|blockchain|битко|крипт|блокчейн|эфириум', text):
+        return 'crypto'
+    if re.search(r'мосбирж|банк россии|рубл|рф|росси|дивиденд|облигац', text):
+        return 'russia'
+    return 'world'
 
 
 def parse_feed(content: bytes, source: str) -> list[dict]:
@@ -113,6 +117,22 @@ class TechNewsStore:
             db.execute('''CREATE TABLE IF NOT EXISTS tech_news_sources (
                 source TEXT PRIMARY KEY, checked_at TEXT NOT NULL, status TEXT NOT NULL,
                 found INTEGER NOT NULL DEFAULT 0, added INTEGER NOT NULL DEFAULT 0, error TEXT)''')
+            db.execute('CREATE TABLE IF NOT EXISTS news_controls(id INTEGER PRIMARY KEY CHECK(id=1), payload TEXT NOT NULL)')
+            db.execute('INSERT OR IGNORE INTO news_controls VALUES(1,?)', (json.dumps({'revision':1,'enabled':True,'categories':list(CATEGORIES)}),))
+    def controls(self):
+        with self._db() as db:
+            return json.loads(db.execute('SELECT payload FROM news_controls WHERE id=1').fetchone()[0])
+    def set_controls(self, enabled, categories, revision):
+        if type(enabled) is not bool or type(revision) is not int or not categories or any(c not in CATEGORIES for c in categories):
+            raise ValueError('Выбери хотя бы одно направление и корректное состояние публикации.')
+        with self._db() as db:
+            db.execute('BEGIN IMMEDIATE')
+            state=json.loads(db.execute('SELECT payload FROM news_controls WHERE id=1').fetchone()[0])
+            if state['revision']!=revision:
+                raise ValueError('Настройки уже изменились. Обнови страницу.')
+            state={'revision':revision+1,'enabled':enabled,'categories':list(dict.fromkeys(categories))}
+            db.execute('UPDATE news_controls SET payload=? WHERE id=1',(json.dumps(state),))
+            return state
     def _db(self):
         db=sqlite3.connect(self.path,timeout=20)
         db.row_factory=sqlite3.Row
@@ -139,7 +159,7 @@ class TechNewsStore:
     def list_news(self,category:str|None=None,status:str|None=None,limit:int=100):
         if category and category not in CATEGORIES: raise ValueError('Неизвестная категория')
         if status and status not in ('new','saved','dismissed'): raise ValueError('Неизвестный статус')
-        query='SELECT * FROM tech_news WHERE 1=1'; params=[]
+        query="SELECT * FROM tech_news WHERE category IN ('russia','world','crypto')"; params=[]
         if category: query+=' AND category=?';params.append(category)
         if status: query+=' AND status=?';params.append(status)
         query+=' ORDER BY COALESCE(published_at,discovered_at) DESC, id DESC LIMIT ?'; params.append(min(max(int(limit),1),200))
@@ -155,7 +175,7 @@ class TechNewsStore:
             return db.execute('UPDATE tech_news SET status=? WHERE id=?',(status,news_id)).rowcount==1
     def stats(self):
         with self._db() as db:
-            return dict(db.execute("SELECT count(*) total,count(CASE WHEN status='new' THEN 1 END) new FROM tech_news").fetchone())
+            return dict(db.execute("SELECT count(*) total,count(CASE WHEN status='new' THEN 1 END) new FROM tech_news WHERE category IN ('russia','world','crypto')").fetchone())
 
 
 class TechNewsCollector:
@@ -174,7 +194,7 @@ class TechNewsCollector:
                 self.store.record_source(source,'ok',len(items),added)
                 report.append({'source':source,'status':'ok','found':len(items),'added':added})
             except (requests.RequestException,ValueError,ET.ParseError) as exc:
-                log.warning('Tech RSS %s: %s',source,exc)
+                log.warning('Investment RSS %s: %s',source,exc)
                 self.store.record_source(source,'error',error=exc)
                 report.append({'source':source,'status':'error','error':str(exc)[:200]})
         return report

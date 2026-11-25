@@ -1,4 +1,5 @@
 requests<3,>=2.31
+cryptography<47,>=43
 python-telegram-bot<23,>=21.0
 APScheduler<4,>=3.10
 python-dotenv<2,>=1

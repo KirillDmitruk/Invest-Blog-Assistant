@@ -1,0 +1,17 @@
+INFO:     Started server process [11148]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+2026-11-23 20:04:47,637 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"
+2026-11-23 20:13:53,683 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"
+2026-11-23 20:18:00,257 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"
+2026-11-23 20:18:05,334 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"
+2026-11-23 20:45:41,102 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"
+2026-11-23 20:51:06,998 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"
+2026-11-23 20:54:06,820 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"
+2026-11-23 21:00:15,507 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"
+2026-11-23 21:20:09,083 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"
+2026-11-23 21:22:47,286 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"
+2026-11-23 21:28:38,623 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"
+2026-11-23 22:40:19,101 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"
+2026-11-23 23:22:56,109 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"

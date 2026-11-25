@@ -1,0 +1,40 @@
+INFO:     Started server process [18976]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+2026-11-25 16:10:37,543 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"
+2026-11-25 17:16:37,960 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"
+2026-11-25 17:20:04,920 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"
+2026-11-25 17:23:09,480 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"
+2026-11-25 17:24:22,484 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"
+2026-11-25 17:26:48,994 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"
+2026-11-25 17:32:29,903 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"
+2026-11-25 17:33:27,381 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"
+2026-11-25 17:34:27,161 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"
+2026-11-25 17:38:29,561 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"
+2026-11-25 17:38:44,478 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"
+2026-11-25 17:38:44,837 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"
+2026-11-25 17:54:06,760 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"
+2026-11-25 17:55:43,321 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"
+2026-11-25 17:58:24,093 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"
+2026-11-25 17:58:26,291 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"
+2026-11-25 17:58:27,282 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"
+2026-11-25 17:58:27,371 ERROR asyncio: Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
+Traceback (most recent call last):
+  File "C:\Users\Kirill\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\asyncio\events.py", line 94, in _run
+    self._context.run(self._callback, *self._args)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Kirill\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\asyncio\proactor_events.py", line 167, in _call_connection_lost
+    self._sock.shutdown(socket.SHUT_RDWR)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+ConnectionResetError: [WinError 10054] Удаленный хост принудительно разорвал существующее подключение
+2026-11-25 17:58:31,242 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"
+2026-11-25 17:58:55,939 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"
+2026-11-25 18:00:06,930 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"
+2026-11-25 18:00:08,630 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"
+2026-11-25 18:00:09,291 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"
+2026-11-25 18:00:53,136 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"
+2026-11-25 18:02:01,308 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"
+2026-11-25 18:02:52,797 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"
+2026-11-25 18:04:07,301 INFO httpx: HTTP Request: GET https://www.cbr.ru/scripts/XML_daily.asp "HTTP/1.1 200 OK"

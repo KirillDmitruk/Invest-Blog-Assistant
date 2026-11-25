@@ -453,7 +453,7 @@ def analyze_iis(store, account_id, *, today=None, policy=None, evidence=None, pl
                             'Доходность к погашению, дюрация и фундаментальная платёжеспособность не рассчитываются без необходимых данных. Купонная ставка не подменяет доходность.']}
 
 
-def run_review(settings, *, account_id=None, force=True, api=None, scan=True, now=None, enrich_issuers=True):
+def run_review(settings, *, account_id=None, force=True, api=None, scan=True, now=None, enrich_issuers=True, enrich_portfolio=False):
     from .placements import PlacementMonitor, PlacementStore
     from .sync import PortfolioSync
     from .tinvest import TInvest
@@ -483,6 +483,9 @@ def run_review(settings, *, account_id=None, force=True, api=None, scan=True, no
             raise ValueError('Настроенный счёт не найден среди открытых счетов API')
         portfolio = PortfolioStore(settings.db_path)
         synced = PortfolioSync(api, (account_id,), portfolio).run(today, days=14, force_metadata=True)
+        if enrich_portfolio:
+            from .iis_portfolio import collect_profiles
+            synced['warnings'].extend(collect_profiles(api, portfolio, account_id, today))
         placements = PlacementStore(settings.db_path)
         if scan:
             PlacementMonitor(placements, api, feed_url=settings.placements_feed_url,
@@ -505,6 +508,9 @@ def run_review(settings, *, account_id=None, force=True, api=None, scan=True, no
                 except (ValueError, TypeError):
                     pass
             isins.update(p.get('isin') for p in future)
+            if enrich_portfolio:
+                from .iis_portfolio import profiles
+                isins.update(p['data'].get('isin') for p in profiles(portfolio).values())
             failures = 0
             for isin in sorted(s for s in isins if isinstance(s, str) and s)[:200]:
                 if isin in known_issuers:

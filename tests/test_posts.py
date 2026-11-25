@@ -87,9 +87,9 @@ def test_weekly_no_weekend_or_purchases(tmp_path):
     gen, api = make(tmp_path)
     draft = gen.weekly(date(2026,10,31))
     assert 'Тестовая облигация $RU000TEST' in draft.body
-    assert 'Купоны — 400,00 ₽, $10,00' in draft.body  # separate currencies
-    assert 'Пополнения — 1 000,00 ₽' in draft.body
-    assert 'Погашения — 2 000,00 ₽' in draft.body
+    assert 'Всего купонов: 400,00 ₽, $10,00' in draft.body  # separate currencies
+    assert 'Пополнения: 1 000,00 ₽' in draft.body
+    assert 'Погашения: 2 000,00 ₽' in draft.body
     assert '900' not in draft.body
     assert api.operations_seen[0][1:] == (date(2026,10,26), date(2026,10,30))
 
@@ -222,9 +222,9 @@ def test_get_operations_by_cursor_real_type_and_monthly_summary(tmp_path):
     gen = PostGenerator(api, ('account1',), tmp_path / 'events.json')
     draft = gen.monthly(date(2026, 10, 28))
     assert '250,00 ₽' in draft.body
-    assert 'Купоны — 250,00 ₽' in draft.body
-    assert 'Дивиденды — 120,00 ₽' in draft.body
-    assert 'Пополнения — 3 000,00 ₽' in draft.body
+    assert 'Всего купонов: 250,00 ₽' in draft.body
+    assert 'Дивиденды: 120,00 ₽' in draft.body
+    assert 'Пополнения: 3 000,00 ₽' in draft.body
     assert '🛒 Покупки за месяц' in draft.body
     assert 'Количество операций — 1' in draft.body
     assert 'Сумма списаний — 1 020,00 ₽' in draft.body

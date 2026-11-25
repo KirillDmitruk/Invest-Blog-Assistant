@@ -48,6 +48,8 @@ def overview(db_path, tz):
             if next_time is None or candidate < next_time:
                 next_time = candidate
     from .tech_direct import direct_mode, DirectSchedule, DirectQueue
+    from .tech_news import TechNewsStore
+    controls=TechNewsStore(db_path).controls()
     direct = direct_mode()
     tg_next = None
     direct_config = None
@@ -58,13 +60,13 @@ def overview(db_path, tz):
             config = DirectSchedule.from_env()
             direct_config = {'start_hour':config.start_hour,'end_hour':config.end_hour,
                              'daily_limit':config.daily_limit,'max_age_hours':config.max_age_hours}
-            if enabled('TECH_TG_AUTO_PUBLISH'):
+            if enabled('TECH_TG_AUTO_PUBLISH') and controls['enabled']:
                 tg_next = config.next_at(now)
             last_run = DirectQueue(db_path).last_run()
         except ValueError as exc:
             schedule_error = str(exc)
     today = now.date().isoformat()
-    return {'telegram_runner':os.getenv('TECH_TG_RUNNER','bot'), 'telegram_mode':'direct' if direct else 'crosspost', 'telegram_schedule':direct_config,
+    return {'news_controls':controls, 'telegram_runner':os.getenv('TECH_TG_RUNNER','bot'), 'telegram_mode':'direct' if direct else 'crosspost', 'telegram_schedule':direct_config,
             'telegram_next_at':tg_next.isoformat() if tg_next else None, 'telegram_last_run':last_run,
             'telegram_schedule_error':schedule_error,
             'telegram_channel':os.getenv('TECH_TELEGRAM_CHANNEL_ID',''), 'vk_enabled':enabled('VK_AUTO_PUBLISH'), 'telegram_enabled':enabled('TECH_TG_AUTO_PUBLISH'),

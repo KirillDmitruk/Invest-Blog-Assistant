@@ -4,6 +4,7 @@ Version: 2.4
 Summary: Read-only T-Invest portfolio analytics and Telegram editorial drafts
 Requires-Python: >=3.11
 Requires-Dist: requests<3,>=2.31
+Requires-Dist: cryptography<47,>=43
 Requires-Dist: python-telegram-bot<23,>=21.0
 Requires-Dist: APScheduler<4,>=3.10
 Requires-Dist: python-dotenv<2,>=1

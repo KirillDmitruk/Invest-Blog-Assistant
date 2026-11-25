@@ -43,11 +43,18 @@ def create_app(db_path: Path, bond_target: float = 0.60, max_position: float = 0
                times: dict[str, tuple[int, int]] | None = None) -> FastAPI:
     app = FastAPI(title='Content Hub v2.4', docs_url=None, redoc_url=None, openapi_url=None)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=['127.0.0.1', 'localhost', 'testserver'])
+    @app.middleware('http')
+    async def fresh_interface(request, call_next):
+        response=await call_next(request)
+        if request.url.path=='/' or request.url.path.startswith('/static/'):
+            response.headers['Cache-Control']='no-store'
+        return response
     portfolio=PortfolioStore(db_path)
     drafts=DraftStore(db_path)
     tech_drafts=TechDraftStore(db_path)
     creator=CreatorStore(db_path)
     tech_news=TechNewsStore(db_path)
+    from .news_routes import register_news_routes
     placements=PlacementStore(db_path)
     goals=GoalStore(portfolio)
     planner=ContentPlanner(portfolio,drafts)
@@ -70,8 +77,13 @@ def create_app(db_path: Path, bond_target: float = 0.60, max_position: float = 0
     register_editor_tools(app, require_editor)
     from .walt_routes import register_walt_routes
     register_walt_routes(app, db_path, require_editor)
+    from .paper_routes import register_paper_routes
+    register_paper_routes(app, db_path)
     from .trading_routes import register_trading_routes
     register_trading_routes(app, db_path, require_editor)
+    register_news_routes(app, db_path, require_editor)
+    from .walt_agent_routes import register_walt_agent_routes
+    register_walt_agent_routes(app, db_path, require_editor)
     app.mount('/static', StaticFiles(directory=HTML_PATH.parent), name='static')
 
 

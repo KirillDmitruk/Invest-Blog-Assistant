@@ -86,6 +86,7 @@ class TradingLab:
         db.execute('UPDATE lab_state SET payload=? WHERE id=1', (json.dumps(state, ensure_ascii=False),))
 
     def overview(self):
+        from .trading_statistics import daily_results
         with self.db() as db:
             state = self._load(db)
             def rows(table, limit=50):
@@ -96,7 +97,7 @@ class TradingLab:
             for collection in (trades, decisions, history):
                 for row in collection:
                     row['detail'] = json.loads(row.pop('payload'))
-            return {'state': state, 'account': account_values(state), 'ai': ai_configuration(),
+            return {'state': state, 'account': account_values(state), 'ai': ai_configuration(), 'daily_results':daily_results(db),
                     'trades': trades, 'decisions': decisions, 'history': history, 'runs': rows('lab_runs', 15),
                     'live_orders_available': False,
                     'notes': ['Симулятор не отправляет заявки брокеру. Реальные деньги и ИИС не используются.',
@@ -175,8 +176,12 @@ class TradingLab:
         state['realized_pnl'] = str(D(state['realized_pnl'])+pnl-fee)
         self._trade(db, state, uid, 'close', {'ticker': c['ticker'], 'side': p['side'], 'contracts': p['contracts'],
                     'price': str(fill), 'pnl_before_exit_fee': cash(pnl), 'fee': cash(fee), 'reason': reason,
+                    'entry_margin':p.get('entry_margin'),'entry_fee':p.get('entry_fee'),
                     'quoted_at': snapshot['quoted_at']}, clock)
         del state['positions'][uid]
+        from .trading_rules_v2 import VERSION
+        if state.get('strategy_version')==VERSION and reason.startswith('Стоп'):
+            state.setdefault('cooldowns',{})[uid]=(clock+timedelta(hours=1)).isoformat()
 
     def _mark(self, db, state, snapshots, clock):
         closed = set()
@@ -190,6 +195,29 @@ class TradingLab:
                 continue
             c = s['contract']
             direction = 1 if p['side'] == 'long' else -1
+            # Optional cloud minute replay. Only bars fully after the entry minute;
+            # no fills before the position existed, no ideal stop fills through gaps.
+            replayed=False
+            if 'protection_candles' in s:
+                opened=datetime.fromisoformat(p['opened_at'].replace('Z','+00:00'))
+                first=opened.replace(second=0,microsecond=0)+timedelta(minutes=1)
+                checked=datetime.fromisoformat(p.get('protection_until',first.isoformat()).replace('Z','+00:00'))
+                for b in sorted(s['protection_candles'],key=lambda b:b['time']):
+                    stamp=datetime.fromisoformat(b['time'].replace('Z','+00:00'))
+                    if stamp<max(first,checked) or stamp+timedelta(minutes=1)>clock:continue
+                    o,h,l,close=(D(b[k]) for k in ('open','high','low','close'))
+                    if not 0<l<=min(o,close)<=max(o,close)<=h:raise ValueError('Некорректная минутная свеча защиты.')
+                    hit_stop=l<=D(p['stop']) if direction>0 else h>=D(p['stop'])
+                    hit_take=h>=D(p['target']) if direction>0 else l<=D(p['target'])
+                    if hit_stop or hit_take:
+                        fill=(min(o,D(p['stop'])) if direction>0 else max(o,D(p['stop']))) if hit_stop else D(p['target'])
+                        self._close(db,state,uid,{**s,'price':str(fill),'quoted_at':b['time']},'Стоп по минутной свече' if hit_stop else 'Цель по минутной свече',stamp)
+                        closed.add(uid);replayed=True;break
+                if replayed:continue
+                p['protection_until']=clock.replace(second=0,microsecond=0).isoformat()
+            expiry=c.get('expires_at')
+            if s['tradeable'] and expiry and datetime.fromisoformat(expiry.replace('Z','+00:00'))<=clock+timedelta(days=1):
+                self._close(db,state,uid,s,'Выход перед окончанием торгов контрактом',clock);closed.add(uid);continue
             delta = (D(s['price'])-D(p['last_price']))/D(c['tick'])*D(c['tick_value'])*direction*p['contracts']
             p['accrued_pnl'] = str(D(p['accrued_pnl'])+delta)
             p['last_price'] = s['price']
@@ -221,6 +249,11 @@ class TradingLab:
         return closed
 
     def _open(self, db, state, uid, s, features, side, clock):
+        from .trading_rules_v2 import VERSION,entry_block
+        block=entry_block(state,uid,s,clock)
+        if block:return block
+        if state.get('strategy_version')==VERSION and s.get('trend_1h',{}).get('direction')!=side:
+            return 'Направление входа не подтверждено часовым трендом; сделка пропущена.'
         risk = state['risk']
         c = s['contract']
         equity = D(account_values(state)['equity'])
@@ -232,7 +265,9 @@ class TradingLab:
         stop_ticks = max(2, int((D(features['atr'])*2/tick).to_integral_value(rounding=ROUND_CEILING)))
         fee = D(risk['commission'])
         loss_one = stop_ticks*tick_value+2*fee+2*risk['slippage_ticks']*tick_value
-        risk_budget = max(D(0), equity*D(risk['risk_pct'])/100)
+        held_risk=sum((max(D(0),(D(p['last_price'])-D(p['stop']))/D(p['tick'])*D(p['tick_value'])*(1 if p['side']=='long' else -1))*p['contracts']
+            +(2*D(risk['commission'])+2*risk['slippage_ticks']*D(p['tick_value']))*p['contracts'] for p in state['positions'].values()),D(0))
+        risk_budget = max(D(0),min(equity*D(risk['risk_pct'])/100,equity*D(risk.get('portfolio_risk_pct','5'))/100-held_risk))
         margin_one = D(c['margin_'+side])*(1+D(risk['margin_buffer_pct'])/100)
         used = D(account_values(state)['margin'])
         capacity = min(equity*D(risk['max_margin_pct'])/100-used, equity-used)
@@ -249,12 +284,13 @@ class TradingLab:
         state['cash'] = str(D(state['cash'])-paid)
         state['realized_pnl'] = str(D(state['realized_pnl'])-paid)
         state['positions'][uid] = {'uid': uid, 'ticker': c['ticker'], 'side': side, 'contracts': size,
+            'entry_margin':str(margin_one*size),'entry_fee':cash(paid),
             'entry': str(fill), 'last_price': s['price'], 'accrued_pnl': str((D(s['price'])-fill)/tick*tick_value*direction*size), 'reserved_margin': str(margin_one*size),
             'stop': str(fill-direction*stop_ticks*tick), 'target': str(fill+direction*stop_ticks*2*tick),
             'opened_at': clock.isoformat(), 'quoted_at': s['quoted_at'], 'tick': c['tick'], 'tick_value': c['tick_value']}
         self._trade(db, state, uid, 'open_'+side, {'ticker': c['ticker'], 'side': side, 'contracts': size,
                     'price': str(fill), 'fee': cash(paid), 'stop_ticks': stop_ticks,
-                    'risk_rub': cash(loss_one*size), 'quoted_at': s['quoted_at']}, clock)
+                    'risk_rub': cash(loss_one*size), 'entry_margin':str(margin_one*size), 'quoted_at': s['quoted_at']}, clock)
         return 'Открыта виртуальная позиция: '+side
 
     def _acquire(self, clock):
@@ -267,7 +303,7 @@ class TradingLab:
             db.execute('INSERT OR REPLACE INTO lab_lock VALUES(1,?,?)', (owner, (clock+timedelta(minutes=30)).isoformat()))
         return owner
 
-    def cycle(self, market, clock=None, ai=None):
+    def cycle(self, market, clock=None, ai=None, decisions=True):
         supplied_clock = clock
         clock = clock or utcnow()
         if clock.tzinfo is None:
@@ -280,7 +316,7 @@ class TradingLab:
             with self.db() as db:
                 state = self._load(db)
             snapshots = {}
-            for uid in state['watchlist']:
+            for uid in (state['watchlist'] if decisions else state['positions']):
                 try:
                     snapshots[uid] = market.snapshot(uid, supplied_clock)
                 except Exception as exc:
@@ -298,10 +334,13 @@ class TradingLab:
                     state['marks'][uid] = {'price': s['price'], 'quoted_at': s['quoted_at'], 'tradeable': s['tradeable']}
                 self._save(db, state)
             for uid, s in snapshots.items():
+                if not decisions:continue
                 if uid in closed:
                     continue
                 try:
                     features = indicators(s['candles'])
+                    features['uid'] = uid
+                    if 'trend_1h' in s:features['trend_1h']=s['trend_1h']
                 except ValueError as exc:
                     errors.append(s['contract']['ticker']+': '+str(exc))
                     continue
@@ -327,6 +366,8 @@ class TradingLab:
                     block = 'Рынок закрыт или торговля через API недоступна.'
                 elif clock-candle_dt > timedelta(minutes=90):
                     block = 'Последняя завершённая свеча устарела.'
+                elif clock-datetime.fromisoformat(s['quoted_at'].replace('Z','+00:00'))>timedelta(seconds=state.get('entry_quote_seconds',900)):
+                    block = 'Последняя котировка недостаточно свежая для нового входа.'
                 elif expiry and datetime.fromisoformat(expiry.replace('Z','+00:00')) <= clock+timedelta(days=1):
                     block = 'До экспирации меньше суток; автоматического переноса контракта нет.'
                 elif any(p not in snapshots for p in state['positions']):
@@ -340,10 +381,11 @@ class TradingLab:
                             db.execute('BEGIN IMMEDIATE')
                             day = clock.astimezone(TZ).date().isoformat()
                             count = db.execute('SELECT COUNT(*) FROM lab_ai_calls WHERE day=?', (day,)).fetchone()[0]
-                            if count >= 24:
+                            batch=bool(ai is not None and getattr(ai,'batch_verified',False))
+                            if count >= 24 and not batch:
                                 block = 'Лимит 24 запросов ИИ за день достигнут.'
                             else:
-                                db.execute('INSERT INTO lab_ai_calls(day,at,provider) VALUES(?,?,?)',
+                                if not batch:db.execute('INSERT INTO lab_ai_calls(day,at,provider) VALUES(?,?,?)',
                                            (day, clock.isoformat(), ai_configuration()['provider']))
                         if not block:
                             try:
@@ -359,7 +401,7 @@ class TradingLab:
                         result = 'Настройки изменены или включена пауза во время анализа.'
                     quoted = datetime.fromisoformat(s['quoted_at'].replace('Z','+00:00'))
                     execution_clock = supplied_clock or utcnow()
-                    if not result and execution_clock-quoted > timedelta(minutes=15):
+                    if not result and execution_clock-quoted > timedelta(seconds=state.get('entry_quote_seconds',900)):
                         result = 'Котировка устарела во время анализа; вход отменён.'
                     if not result:
                         action = proposal['action']
@@ -373,8 +415,8 @@ class TradingLab:
                                 result = self._open(db, state, uid, s, features, action, clock)
                         else:
                             result = 'Без новой сделки.'
-                    detail = {'ticker': s['contract']['ticker'], 'strategy': strategy, **proposal,
-                              'result': result, 'features': features, 'status': 'complete', 'model': ai_configuration()['model'] if strategy == 'ai' else 'rules-v1'}
+                    detail = {'ticker': s['contract']['ticker'], 'strategy': strategy, 'strategy_version':state.get('strategy_version','legacy'), **proposal,
+                              'result': result, 'features': features, 'status': 'complete', 'model': state.get('cloud',{}).get('model') or (ai_configuration()['model'] if strategy == 'ai' else 'rules-v1')}
                     db.execute('UPDATE lab_decisions SET payload=? WHERE id=?', (json.dumps(detail, ensure_ascii=False), decision_id))
                     self._save(db, state)
             with self.db() as db:

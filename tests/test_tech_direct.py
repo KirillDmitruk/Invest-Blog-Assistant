@@ -30,7 +30,7 @@ def configured(monkeypatch, tmp_path):
 def news(path, n=1, title=None, published=None, summary=None):
     TechNewsStore(path).save([dict(source='Example', title=title or f'New robot model number {n}',
         url=f'https://example.org/{n}', summary=summary if summary is not None else 'A company announced a new robotic device for factory workers with a range of features described in the announcement.',
-        category='robotics', published_at=(published or CLOCK-timedelta(hours=1)).astimezone(timezone.utc).isoformat())])
+        category='world', published_at=(published or CLOCK-timedelta(hours=1)).astimezone(timezone.utc).isoformat())])
 
 
 def translate(text):
@@ -186,16 +186,16 @@ def test_token_is_not_exposed_in_channel_check_errors():
     assert 'SECRET' not in str(error.value)
 
 
-def test_channel_must_differ_from_investment(configured,monkeypatch):
+def test_same_channel_is_allowed_for_investment_news(configured,monkeypatch):
     news(configured)
     monkeypatch.setenv('TELEGRAM_CHANNEL_ID','-100123')
     publisher=Publisher()
     publisher.check_channel=lambda:{'id':-100123}
     publisher.resolve_chat=lambda channel:{'id':-100123}
     monkeypatch.setattr('invest_blog.tech_direct.TechTelegramPublisher',lambda *args:publisher)
-    with pytest.raises(ValueError,match='совпадает'):
-        run(configured,TZ,publish=True,translator=translate,clock=CLOCK)
-    assert publisher.messages==[]
+    result=run(configured,TZ,publish=True,translator=translate,clock=CLOCK)
+    assert len(result['sent'])==1
+    assert len(publisher.messages)==1
 
 
 def test_vk_dispatch_never_crossposts_during_direct_mode(configured,monkeypatch):

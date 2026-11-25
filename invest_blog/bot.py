@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import io
 import logging
+import os
 from datetime import datetime, timezone
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -168,6 +169,8 @@ class InvestBot:
                 f'⚠️ Снимок портфеля не сохранён: {type(exc).__name__}')
 
     async def run_scheduled(self, kind: str, app: Application) -> None:
+        if os.getenv('PULSE_CLOUD_DRAFTS_ENABLED','false').lower() in ('true','1','yes'):
+            return  # Cloud owns recurring drafts; manual commands remain local.
         now=datetime.now(self.settings.timezone).date()
         if self.editorial_workflow.states().get((now.isoformat(),kind))=='done':
             return
@@ -554,6 +557,8 @@ class InvestBot:
         await msg.reply_text(f'✅ Текст #{did} обновлён. /show {did}')
 
     def run(self):
+        if os.getenv('WALT_TELEGRAM_CLOUD_ENABLED')=='true':
+            raise ValueError('Кнопки бота обслуживает облако. Локальный запуск бота отключён; веб-хаб можно использовать отдельно.')
         app=(ApplicationBuilder().token(self.settings.telegram_token)
              .post_init(self.post_init).post_shutdown(self.post_shutdown).build())
         app.add_handler(CommandHandler(('start','help'),self.help))

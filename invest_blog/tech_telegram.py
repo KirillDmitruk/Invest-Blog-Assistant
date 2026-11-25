@@ -49,7 +49,7 @@ class TechTelegramPublisher:
             raise ValueError('Нужен Telegram-канал, а не личный чат, группа или username бота.')
         member = self._check_call('getChatMember', {'chat_id': chat['id'], 'user_id': me['id']})
         if member.get('status') != 'creator' and not (member.get('status') == 'administrator' and member.get('can_post_messages')):
-            raise ValueError('Добавь бота в администраторы Tech-канала с правом публикации сообщений.')
+            raise ValueError('Добавь бота в администраторы канала новостей с правом публикации сообщений.')
         self.verified_chat_id = chat['id']
         return {'id': chat['id'], 'title': chat.get('title', ''), 'username': chat.get('username', ''), 'can_post': True}
 

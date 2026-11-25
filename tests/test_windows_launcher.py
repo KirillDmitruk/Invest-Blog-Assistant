@@ -43,7 +43,7 @@ function global:uv {
 }
 """ + '& ' + ps_quote(ROOT / 'tools' / 'hub.ps1') + ' ' + ' '.join(map(ps_quote, arguments)) + '; exit $LASTEXITCODE'
     result = subprocess.run([POWERSHELL, '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script],
-                            cwd=tmp_path, capture_output=True, text=True, timeout=20)
+                            cwd=tmp_path, capture_output=True, text=True, encoding='utf-8', timeout=20)
     assert result.returncode == 7, result.stderr
     data = json.loads(result.stdout)
     assert data['arguments'] == expected

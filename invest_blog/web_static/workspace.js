@@ -11,21 +11,20 @@
     ['portfolio', '▤ Портфель', ['assets', 'walt', 'bonds', 'risk', 'iis']],
     ['cashflow', '▦ Денежные потоки', ['income', 'calendar']],
     ['strategy', '◎ Стратегия', ['goals', 'allocation']],
-    ['placements', '🛰 Новые размещения', ['placements']],
-    ['trading', '◈ Торговый бот', ['trading']],
-    ['news', '⚙ Tech · Новости', ['news', 'publishing']],
+    ['trading', '◈ Т-инвестиции демо', ['trading']],
+    ['paper', '◈ Walt демо', ['paper']],
+    ['news', '◉ Новости', ['news']],
     ['editorial', '✎ Редакция', ['desk', 'content', 'tech', 'creator']],
   ];
-  const labels = {trading:'Торговый бот · виртуальный счёт',assets:'Все активы',walt:'Walt · Позиции',desk:'Общая очередь',content:'Инвестиции', tech:'Tech · Черновики', creator:'Creator Studio', news:'Лента новостей', publishing:'Публикация и история'};
+  const labels = {'walt-agent':'Walt · ИИ-агент',trading:'Т-инвестиции демо',paper:'Walt демо',assets:'Все активы',walt:'Walt · Позиции',desk:'Общая очередь',content:'Инвестиции', tech:'Tech · Черновики', creator:'Creator Studio', news:'Новости · рынки и криптовалюты', publishing:'Публикация и история'};
   const buttons = new Map(oldButtons.map(b => [b.dataset.page || 'iis', b]));
-  // Split the long Tech page without copying forms or event handlers.
-  for (const [page, anchor] of [['news','techNewsList'],['publishing','techPublishStatus']]) {
-    const section = txt('section',''); section.id = 'page-'+page; section.className='section';
-    section.append(el(anchor).closest('.card')); el('page-tech').after(section);
-    const button = txt('button', labels[page]); button.type='button';button.dataset.page=page;
-    button.addEventListener('click',()=>showPage(page)); buttons.set(page,button);
-  }
-  el('page-tech').querySelector('.hint').textContent='Черновики технологического блога. Лента новостей и управление отправкой доступны в разделе Tech · Новости.';
+  // One newsroom: schedule, preview, sources and queue without extra tabs.
+  const newsPage=txt('section','');newsPage.id='page-news';newsPage.className='section';
+  newsPage.append(el('techPublishStatus').closest('.card'),el('techNewsList').closest('.card'));
+  el('page-tech').after(newsPage);
+  buttons.set('news',Object.assign(txt('button','Новости'),{type:'button'}));
+  buttons.get('news').onclick=()=>showPage('news');
+  el('page-tech').querySelector('.hint').textContent='Черновики технологического блога. Лента новостей и управление отправкой доступны в разделе «Новости».';
   const desk=txt('section','');desk.id='page-desk';desk.className='section';
   desk.innerHTML='<div class="card"><div class="editor-toolbar"><h2>Редакционная очередь</h2><button type="button" class="editor-btn" id="deskRefresh">Обновить</button></div><p class="hint">Последние 100 материалов каждого блога и текущий Creator-план в одном списке. Открой материал для редактирования и проверки перед публикацией.</p><div class="editor-fields"><label>Найти материал<input class="editor-input" id="deskSearch" type="search" placeholder="Название или текст"></label><label>Направление<select class="editor-input" id="deskProject"><option value="">Все направления</option><option value="content">Инвестиции</option><option value="tech">Tech</option><option value="creator">Creator Studio</option></select></label></div><div id="deskFeedback" role="status"></div><div id="deskList"></div></div>';
   el('page-content').before(desk);
@@ -48,6 +47,8 @@
   }
   const originalShowPage = showPage;
   showPage = function(page) {
+    if(['placements','walt-agent'].includes(page))page='home';
+    if(page==='publishing')page='news';
     if (page==='iis') {window.location.href='/iis';return}
     if (!el('page-'+page)) page='home';
     originalShowPage(page);

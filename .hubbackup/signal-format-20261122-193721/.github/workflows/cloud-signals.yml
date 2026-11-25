@@ -1,0 +1,60 @@
+name: Cloud market signals
+
+on:
+  workflow_dispatch:
+    inputs:
+      send:
+        description: Send report to your private Telegram chat
+        type: boolean
+        default: false
+  schedule:
+    - cron: '17 */2 * * *'
+
+# State is committed before sending; all runs share one non-cancelling lock.
+concurrency:
+  group: cloud-market-signals
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    if: github.event_name == 'workflow_dispatch' || vars.CLOUD_SIGNALS_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+      - name: Install minimal dependencies
+        run: python -m pip install 'requests>=2.31,<3' 'pytest>=8,<10'
+      - name: Verify report and delivery boundaries
+        run: python -m pytest tests/test_cloud_signals.py -q
+      - name: Build report; optionally send once
+        env:
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_AI_TOKEN: ${{ secrets.CF_AI_TOKEN }}
+          SIGNALS_BOT_TOKEN: ${{ secrets.SIGNALS_BOT_TOKEN }}
+          SIGNALS_CHAT_ID: ${{ secrets.SIGNALS_CHAT_ID }}
+          GH_STATE_TOKEN: ${{ github.token }}
+          SEND_REPORT: ${{ (github.event_name == 'schedule' && vars.CLOUD_SIGNALS_NOTIFY == 'true') || inputs.send }}
+        run: |
+          if [ "$SEND_REPORT" = "true" ]; then
+            python -m invest_blog.cloud_signals --send
+          else
+            python -m invest_blog.cloud_signals
+          fi
+      - name: Save public market report only
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: cloud-market-report-${{ github.run_id }}-${{ github.run_attempt }}
+          path: cloud-report/
+          retention-days: 3
+          if-no-files-found: ignore

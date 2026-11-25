@@ -11,7 +11,7 @@ import re
 import sqlite3
 
 from .tech_telegram import TelegramNewsQueue, TechTelegramPublisher, _enabled
-from .vk_news import LocalTranslator, compose
+from .vk_news import LocalTranslator, compose_investment as compose
 
 
 def direct_mode():
@@ -73,6 +73,7 @@ class DirectQueue(TelegramNewsQueue):
             return [dict(r) for r in db.execute('''SELECT n.* FROM tech_news n
                 LEFT JOIN tech_telegram_publications t ON t.news_id=n.id
                 WHERE n.status='new' AND t.news_id IS NULL
+                AND n.category IN ('russia','world','crypto')
                 AND COALESCE(n.published_at,n.discovered_at) BETWEEN ? AND ?
                 ORDER BY COALESCE(n.published_at,n.discovered_at) DESC,n.id DESC LIMIT 60''', (cutoff, upper))]
 
@@ -110,6 +111,11 @@ class DirectQueue(TelegramNewsQueue):
             row = db.execute('SELECT checked_at,status,note FROM tech_tg_direct_runs ORDER BY id DESC LIMIT 1').fetchone()
             return dict(row) if row else None
 
+    def category_counts(self, day):
+        with self.connect() as db:
+            return {r['category']:r['amount'] for r in db.execute('''SELECT n.category,COUNT(*) amount
+                FROM tech_tg_direct_claims c JOIN tech_news n ON n.id=c.news_id WHERE c.day=? GROUP BY n.category''',(day,))}
+
 
 def run(db_path, tz, *, publish=False, translator=None, publisher=None, clock=None):
     clock = clock or datetime.now(tz)
@@ -117,6 +123,8 @@ def run(db_path, tz, *, publish=False, translator=None, publisher=None, clock=No
         raise ValueError('Для расписания нужен часовой пояс')
     config = DirectSchedule.from_env()
     queue = DirectQueue(db_path)
+    from .tech_news import TechNewsStore
+    controls = TechNewsStore(db_path).controls()
     result = {'prepared': [], 'sent': [], 'errors': []}
 
     def finish(status, note):
@@ -126,6 +134,8 @@ def run(db_path, tz, *, publish=False, translator=None, publisher=None, clock=No
         return result
 
     if publish:
+        if not controls['enabled']:
+            return finish('paused', 'Автопубликация на паузе в хабе.')
         if not direct_mode() or not _enabled('TECH_TG_AUTO_PUBLISH'):
             raise ValueError('Прямая публикация Telegram выключена. Нужны TECH_TG_MODE=direct и TECH_TG_AUTO_PUBLISH=true.')
         if not config.start_hour <= clock.hour < config.end_hour:
@@ -133,15 +143,21 @@ def run(db_path, tz, *, publish=False, translator=None, publisher=None, clock=No
     candidates = queue.candidates(clock, config.max_age_hours)
     if not candidates:
         return finish('skipped', 'Свежих неопубликованных новостей нет; слот пропущен.')
-    try:
-        translator = translator or LocalTranslator()
-    except RuntimeError as exc:
-        result['errors'].append({'error': str(exc)})
-        return finish('error', 'Переводчик недоступен. Проверь установку Argos и модели en-ru.')
-
+    cached_translator = [translator]
+    def translate(text):
+        if cached_translator[0] is None:
+            cached_translator[0] = LocalTranslator()
+        return cached_translator[0](text)
+    counts=queue.category_counts(clock.date().isoformat())
+    candidates.sort(key=lambda news:counts.get(news['category'],0))
     for news in candidates:
+        if news['category'] not in controls['categories']:
+            continue
         try:
-            text = compose(news, translator)
+            text = compose(news, translate)
+        except RuntimeError:
+            result['errors'].append({'error':'Локальный перевод EN→RU недоступен; зарубежная новость пропущена.'})
+            continue
         except ValueError:
             continue  # No empty summaries, failed translations or invented fallback text.
         if not text.strip() or len(text) > 4096:
@@ -149,13 +165,14 @@ def run(db_path, tz, *, publish=False, translator=None, publisher=None, clock=No
         if not publish:
             result['prepared'].append({'news_id': news['id'], 'text': text})
             return finish('preview', 'Предпросмотр одной новости. Отправки нет.')
+        fresh_controls=TechNewsStore(db_path).controls()
+        if not fresh_controls['enabled'] or news['category'] not in fresh_controls['categories']:
+            return finish('paused', 'Настройки изменились во время подготовки; отправка пропущена.')
         if publisher is None:
             publisher = TechTelegramPublisher(os.getenv('TELEGRAM_BOT_TOKEN', '').strip(),
                                                os.getenv('TECH_TELEGRAM_CHANNEL_ID', '').strip())
             channel_info = publisher.check_channel()
             investment = os.getenv('TELEGRAM_CHANNEL_ID', '').strip()
-            if investment and publisher.resolve_chat(investment)['id'] == channel_info['id']:
-                raise ValueError('Tech-канал совпадает с инвестиционным. Укажи отдельный TECH_TELEGRAM_CHANNEL_ID.')
         channel = str(getattr(publisher, 'verified_chat_id', publisher.channel_id))
         if not queue.claim(news, text, channel, clock, config.daily_limit):
             continue
@@ -168,6 +185,8 @@ def run(db_path, tz, *, publish=False, translator=None, publisher=None, clock=No
         queue.finish(news['id'], 'published', url)
         result['sent'].append({'news_id': news['id'], 'url': url})
         return finish('published', 'Одна новость опубликована в Telegram.')
+    if result['errors']:
+        return finish('error', 'Не удалось подготовить перевод. Русские новости продолжат выходить без переводчика.')
     return finish('skipped', 'Слот занят, лимит исчерпан либо подходящих новостей нет.')
 
 
@@ -201,12 +220,11 @@ def serve(db_path, tz):
     config = DirectSchedule.from_env()
     info = TechTelegramPublisher(os.getenv('TELEGRAM_BOT_TOKEN', '').strip(),
                                  os.getenv('TECH_TELEGRAM_CHANNEL_ID', '').strip()).check_channel()
-    LocalTranslator()  # Fail at startup if the model is absent, before scheduling anything.
     scheduler = BlockingScheduler(timezone=tz)
     scheduler.add_job(publish_cycle, CronTrigger(
         hour=','.join(str(h) for h in range(config.start_hour, config.end_hour)), minute='0,30', timezone=tz),
         args=[db_path, tz], id='tech-telegram-direct', max_instances=1, coalesce=True, misfire_grace_time=120)
-    logging.getLogger(__name__).info('Публикация Tech: %s; следующий слот %s',
+    logging.getLogger(__name__).info('Инвестиционные новости: %s; следующий слот %s',
                                      info['title'], config.next_at(datetime.now(tz)).isoformat())
     try:
         scheduler.start()
