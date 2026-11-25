@@ -10,7 +10,7 @@ import base64,json,os,re,time
 import requests
 from cryptography.fernet import Fernet
 from .cloud_signals import json_call,previous_public_report
-from .paper_perps import PaperEngine,initial,num,amount
+from .paper_perps import PaperEngine,initial,num,amount,activate_v2
 
 BASE='https://mainnet.zklighter.elliot.ai/api/v1/'
 
@@ -126,6 +126,7 @@ def main():
         previous=store.load()
         if previous.get('last_cycle') and 0<=now-float(previous['last_cycle'])<240:
             print('Recent virtual crypto cycle already saved; duplicate trigger skipped.');return
+        if activate_v2(previous,now):store.save(previous)
         engine=PaperEngine(previous);packet=latest_report(now)
         engine.cycle(packet,PublicPaperMarket(),now)
         notify=bool(engine.changes) or engine.state.get('warnings',[])!=previous.get('warnings',[]) or engine.state.get('paused')!=previous.get('paused');tag=str(int(now))

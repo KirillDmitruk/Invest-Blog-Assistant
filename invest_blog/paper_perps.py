@@ -10,6 +10,14 @@ def num(x):
 
 def amount(x):return format(num(x),'f')
 
+def activate_v2(state,now):
+    if state.get('strategy_version')=='walt-v2-20261125':return False
+    baseline={'at':now,'equity':state['equity'],'cash':state['cash'],'closed_count':len(state['closed'])}
+    state.update(strategy_version='walt-v2-20261125',strategy_baseline=baseline)
+    state.setdefault('strategy_changes',[]).append({'version':'walt-v2-20261125',**baseline})
+    state['limits'].update(max_same_side=2,direction_risk_pct='2.5')
+    return True
+
 def initial():
     return {'version':1,'mode':'paper','currency':'USD','initial_balance':'10000','cash':'10000',
         'positions':{},'closed':[],'events':[],'seen':[],'last_cycle':None,'last_report':None,
@@ -99,6 +107,8 @@ class PaperEngine:
     def open(self,row,quote,report_id,now):
         s=self.state;limits=s['limits'];key=str(row['market_id']);side=row['side'];symbol=row['symbol']
         if key in s['positions'] or len(s['positions'])>=limits['max_positions']:return False
+        same_side=[p for p in s['positions'].values() if p['side']==side]
+        if len(same_side)>=limits.get('max_same_side',limits['max_positions']):return False
         if sum(p['group']==group(symbol) for p in s['positions'].values())>=limits['group_positions']:return False
         if quote['symbol']!=symbol or quote.get('active') is not True or not -120<=now-quote['at']<=120:raise ValueError('Invalid entry quote')
         now=max(now,quote['at'])
@@ -109,6 +119,8 @@ class PaperEngine:
         equity,free=self.values();risk_cap=equity*num(limits['risk_pct'])/100
         held_risk=sum((num(p['risk']) for p in s['positions'].values()),Decimal(0))
         risk_cap=min(risk_cap,equity*num(limits['portfolio_risk_pct'])/100-held_risk)
+        if 'direction_risk_pct' in limits:
+            risk_cap=min(risk_cap,equity*num(limits['direction_risk_pct'])/100-sum((num(p['risk']) for p in same_side),Decimal(0)))
         stop_fill=stop*(1-direction*num(limits['slippage']))
         funding_reserve=num(quote.get('hour_funding_value','0'))*24 if quote.get('funding_payer')==side else Decimal(0)
         per_unit=abs(entry-stop_fill)+(entry+stop_fill)*num(limits['fee_rate'])+funding_reserve

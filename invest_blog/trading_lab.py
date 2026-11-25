@@ -178,6 +178,9 @@ class TradingLab:
                     'price': str(fill), 'pnl_before_exit_fee': cash(pnl), 'fee': cash(fee), 'reason': reason,
                     'quoted_at': snapshot['quoted_at']}, clock)
         del state['positions'][uid]
+        from .trading_rules_v2 import VERSION
+        if state.get('strategy_version')==VERSION and reason.startswith('Стоп'):
+            state.setdefault('cooldowns',{})[uid]=(clock+timedelta(hours=1)).isoformat()
 
     def _mark(self, db, state, snapshots, clock):
         closed = set()
@@ -245,6 +248,11 @@ class TradingLab:
         return closed
 
     def _open(self, db, state, uid, s, features, side, clock):
+        from .trading_rules_v2 import VERSION,entry_block
+        block=entry_block(state,uid,s,clock)
+        if block:return block
+        if state.get('strategy_version')==VERSION and s.get('trend_1h',{}).get('direction')!=side:
+            return 'Направление входа не подтверждено часовым трендом; сделка пропущена.'
         risk = state['risk']
         c = s['contract']
         equity = D(account_values(state)['equity'])

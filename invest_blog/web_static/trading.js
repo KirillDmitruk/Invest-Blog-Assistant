@@ -83,7 +83,7 @@
     el('labRuns').replaceChildren(...overview.runs.map(r=>{const card=txt('div','');card.className='lab-decision';card.append(txt('strong',stamp(r.at)+' · '+r.status),txt('p',r.note));return card}));
     if(overview.cloud_mode){
       el('labMode').textContent=s.enabled?'☁ Автоматически · виртуальный счёт':'☁ Пауза новых входов';
-      el('labAsOf').textContent='Старт 1 000 000 ₽ · облачный цикл '+stamp(s.last_cycle)+' · '+s.cloud.ai_status;
+      el('labAsOf').textContent='Старт 1 000 000 ₽ · облачный цикл '+stamp(s.last_cycle)+' · '+s.cloud.ai_status+(s.strategy_baseline?' · Правила v2 с '+stamp(s.strategy_baseline.at)+' · результат с обновления '+signed(n(a.equity)-n(s.strategy_baseline.equity)):'');
       el('pageTitle').textContent='Т-инвестиции демо';el('pageDesc').textContent='Т-Инвестиции · виртуальные фьючерсы · 1 000 000 ₽ · автономно в облаке';
       for(const id of ['labCycle','labPause'])el(id).hidden=true;
       el('labSearchForm').closest('.card').hidden=true;

@@ -88,6 +88,13 @@ class CloudMarket(FuturesMarket):
             return value
         try:
             value=super().snapshot(uid,self.clock,include_candles=self.analyze)
+            if self.analyze and value['tradeable']:
+                from .trading_rules_v2 import hour_trend
+                try:
+                    rows=self.read('MarketDataService','GetCandles',{'instrumentId':uid,'from':(self.clock-timedelta(days=14)).isoformat(),
+                        'to':self.clock.isoformat(),'interval':'CANDLE_INTERVAL_HOUR','limit':1000}).get('candles',[])
+                    value['trend_1h']=hour_trend(rows,self.clock)
+                except ValueError:value['trend_1h']={'direction':'unknown','reason':'Нет подтверждённой часовой истории.'}
             if uid in self.positions:
                 p=self.positions[uid]
                 start=iso_dt(p.get('protection_until',p['opened_at'])).replace(second=0,microsecond=0)
@@ -125,7 +132,7 @@ def review(candidates, session=None):
              'No news or weekly data is provided. Do not invent them. Prefer hold when evidence is weak. Never use past personal trade count to veto market analysis. '
              'Return JSON only: {"decisions":[{"uid":"provided uid","action":"long|short|close|hold","confidence":0.0,"reason":"Russian explanation"}]}. '
              'Each uid exactly once. close only for an existing position. Confidence is subjective, not a profit probability. '
-             'Trend uses SMA10/SMA30, volatility ATR14; explain continuation, reversal uncertainty or waiting using provided numbers.'},
+             'Trend uses SMA10/SMA30, volatility ATR14. New entries require matching trend_1h.direction; wait when unknown or wait. Explain using supplied data, distinguishing position last_price from closed candle prices.'},
             {'role':'user','content':json.dumps(candidates,ensure_ascii=False)}],
             'temperature':0,'max_completion_tokens':2200,'response_format':{'type':'json_object'},
             'chat_template_kwargs':{'enable_thinking':False}})
@@ -172,7 +179,7 @@ def cycle(lab,store,market,clock=None):
                 if not snap['tradeable'] or now-iso_dt(snap['quoted_at'])>timedelta(seconds=120):continue
                 f=indicators(snap['candles'])
                 if now-iso_dt(f['candle_at'])>timedelta(minutes=90):continue
-                candidates.append({'uid':uid,'contract':snap['contract'],'features':f,'position':s['positions'].get(uid)})
+                candidates.append({'uid':uid,'contract':snap['contract'],'features':f,'trend_1h':snap.get('trend_1h',{}),'position':s['positions'].get(uid)})
             except ValueError:continue
     proposals={};status='Мониторинг открытых позиций.'
     if analyze:
@@ -203,6 +210,8 @@ def main():
         now=datetime.now(timezone.utc);s=lab.overview()['state'];due=not s['cloud'].get('next_analysis') or iso_dt(s['cloud']['next_analysis'])<=now
         if s.get('last_cycle') and 0<=(now-iso_dt(s['last_cycle'])).total_seconds()<240:
             print('Recent virtual futures cycle already saved; duplicate trigger skipped.');return
+        from .trading_rules_v2 import activate
+        if activate(lab,now):store.save(pack(lab))
         market=CloudMarket(os.environ['TINVEST_MARKET_TOKEN'],s['positions'],now,due)
         result,before,after=cycle(lab,store,market)
         changes=[t for t in after['trades'] if t['id']>max([t['id'] for t in before['trades']]+[0])]
