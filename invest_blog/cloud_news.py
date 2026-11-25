@@ -136,6 +136,7 @@ def publish(store, sender, items, *, editor=generate, now=None, send=False, enri
     candidates = [x for x in fresh(items, clock) if x['url'] not in urls and fingerprint(x) not in titles]
     candidates.sort(key=lambda x: (counts[x['category']], -datetime.fromisoformat(x['published_at']).timestamp()))
     # Bounded AI calls: two attempts per run. If no suitable draft, skip rather than invent filler.
+    rejected={}
     for item in candidates[:2]:
         try:
             if enricher is not None:
@@ -147,7 +148,10 @@ def publish(store, sender, items, *, editor=generate, now=None, send=False, enri
             text = compose(item, value)
             if len(text) > 3500:
                 continue
-        except Exception:
+        except Exception as exc:
+            code=getattr(exc,'code','article_or_format')
+            if code not in ('schema','headline','paragraphs','length','content','language','numbers','unavailable'):code='article_or_format'
+            rejected[code]=rejected.get(code,0)+1
             continue
         if not send:
             return {'status': 'preview', 'text': text, 'category': item['category']}
@@ -172,7 +176,7 @@ def publish(store, sender, items, *, editor=generate, now=None, send=False, enri
             return {'status': 'uncertain'}
         store.save(state)
         return {'status': 'sent', 'message_url': row['message_url'], 'category': row['category']}
-    return {'status': 'no_suitable_news'}
+    return {'status': 'no_suitable_news', 'rejected':rejected}
 
 
 def main():

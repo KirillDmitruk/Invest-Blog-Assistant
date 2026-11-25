@@ -8,6 +8,12 @@ import requests
 
 from .tech_news import CATEGORY_LABELS, clean_text
 
+class EditorialError(ValueError):
+    def __init__(self,code):
+        self.code=code
+        super().__init__('Текст редактора отклонён: '+code)
+
+
 SYSTEM = '''Ты редактор русскоязычного канала о рынках: Россия, зарубежные рынки и криптовалюты.
 Напиши короткий самостоятельный пересказ переданной новости. Живой спокойный язык, конкретный заголовок,
 короткие абзацы. Иногда уместна лёгкая ирония, но не выдуманная цитата или шутка за счёт точности.
@@ -38,7 +44,7 @@ def configured():
 def number_facts(text):
     """Preserve numeric value together with nearby scale/currency/percent markers."""
     text = text.lower().replace('\u00a0', ' ').replace('ё', 'е')
-    pattern = r'(?<![\w])(?:[$€₽]\s*)?[-+−]?\d+(?:[.,]\d+)*(?:\s*(?:млрд|млн|тыс|billion|million|thousand)(?:\.)?)?(?:\s*(?:%|percent|₽|\$|€|руб(?:лей|ля|ль)?\.?|доллар(?:ов|а)?|dollars?|usd|euros?|eur))?'
+    pattern = r'(?<![\w])(?:[$€₽]\s*)?[-+−]?(?:\d{1,3}(?:\s\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)*)(?:\s*(?:млрд|млн|тыс|billion|million|thousand)(?:\.)?)?(?:\s*(?:%|percent|₽|\$|€|руб(?:лей|ля|ль)?\.?|доллар(?:ов|а)?|dollars?|usd|euros?|eur))?'
     result = set()
     for match in re.findall(pattern, text):
         value = re.sub(r'\s+', '', match).replace(',', '.').replace('−', '-').lstrip('+')
@@ -55,23 +61,23 @@ def number_facts(text):
 
 def validate(value, source):
     if not isinstance(value, dict) or set(value) != {'headline', 'paragraphs'}:
-        raise ValueError('Неполный ответ редактора')
+        raise EditorialError('schema')
     headline, paragraphs = value['headline'], value['paragraphs']
     if not isinstance(headline, str) or not 12 <= len(headline) <= 160:
-        raise ValueError('Неподходящий заголовок')
+        raise EditorialError('headline')
     if not isinstance(paragraphs, list) or not 1 <= len(paragraphs) <= 3:
-        raise ValueError('Неподходящее число абзацев')
+        raise EditorialError('paragraphs')
     for text in [headline, *paragraphs]:
         if not isinstance(text, str) or not 20 <= len(text) <= (160 if text == headline else 420):
-            raise ValueError('Неподходящая длина текста')
+            raise EditorialError('length')
         if re.search(r'https?://|t\.me/|[@<>*`#]|подписывай|покупайте|продавайте|гарантирован|инсайд|\bсрочно\b', text, re.I):
-            raise ValueError('Неподходящее содержание')
+            raise EditorialError('content')
     combined = ' '.join([headline, *paragraphs])
     letters = re.findall(r'[A-Za-zА-Яа-яЁё]', combined)
     if sum(bool(re.match('[А-Яа-яЁё]', c)) for c in letters) < len(letters) * .45:
-        raise ValueError('Редактор не вернул русский текст')
+        raise EditorialError('language')
     if not number_facts(combined) <= number_facts(source):
-        raise ValueError('Редактор изменил числовые факты')
+        raise EditorialError('numbers')
     return value
 
 
@@ -114,9 +120,11 @@ def generate(news, *, session=None, provider=None):
             raise ValueError('Редактор отключён')
         fence = re.fullmatch(r'```(?:json)?\s*(.*?)\s*```', raw.strip(), re.S)
         return validate(json.loads(fence[1] if fence else raw), source)
+    except EditorialError:
+        raise
     except Exception:
         # Never expose a token-bearing HTTP error or arbitrary model response.
-        raise ValueError('Редактор не подтвердил пригодный текст новости') from None
+        raise EditorialError('unavailable') from None
 
 
 def compose(news, value):

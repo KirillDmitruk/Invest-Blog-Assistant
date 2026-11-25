@@ -33,3 +33,6 @@ def test_numeric_scales_translate_without_changing_amounts():
     assert number_facts('4 млрд руб.')==number_facts('4 млрд рублей')
     assert number_facts('10 percent')==number_facts('10%')
     assert number_facts('$4 billion')!=number_facts('4 млн долларов')
+
+def test_grouped_thousands_preserve_value():
+    assert number_facts('58 000 рублей')==number_facts('58000 руб.')
