@@ -162,6 +162,11 @@ def main():
         phase='generate_claim_send'
         result=send_due(kinds,now.date(),state,sender,factory,os.environ['SIGNALS_CHAT_ID'],edition='editorial-v2-example' if args.example else None)
         for kind,status in result.items():print(kind+': '+status)
+        if args.example:
+            entries=[v for k,v in state.load()['deliveries'].items() if k.endswith(':editorial-v2-example')]
+            latest=max(entries,key=lambda v:v.get('created_at',''),default={})
+            status=latest.get('editorial_status','unknown')
+            print('paper_editor: '+(status if status in ('ai_verified','facts_only') else 'unknown'))
     except Exception as exc:
         detail=(' method='+exc.method+' http='+str(exc.status)) if isinstance(exc,BrokerReadError) else ''
         raise SystemExit('Pulse job stopped: phase='+phase+detail+'. Private response details withheld. No automatic send retry.') from None
