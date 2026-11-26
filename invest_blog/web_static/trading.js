@@ -121,13 +121,14 @@
     el('labRuns').replaceChildren(...overview.runs.map(r=>{const card=txt('div','');card.className='lab-decision';card.append(txt('strong',stamp(r.at)+' · '+r.status),txt('p',r.note));return card}));
     if(overview.cloud_mode){
       el('labMode').textContent=s.enabled?'☁ Автоматически · виртуальный счёт':'☁ Пауза новых входов';
-      el('labAsOf').textContent='Старт 1 000 000 ₽ · облачный цикл '+stamp(s.last_cycle)+' · '+s.cloud.ai_status+(s.strategy_baseline?' · Правила v2 с '+stamp(s.strategy_baseline.at)+' · результат с обновления '+signed(n(a.equity)-n(s.strategy_baseline.equity)):'');
+      el('labAsOf').textContent='Старт 1 000 000 ₽ · облачный цикл '+stamp(s.last_cycle)+' · '+s.cloud.ai_status+(s.strategy_baseline?' · Правила '+(s.strategy_version?.includes('-v3-')?'v3':'v2')+' с '+stamp(s.strategy_baseline.at)+' · результат с обновления '+signed(n(a.equity)-n(s.strategy_baseline.equity)):'');
       el('pageTitle').textContent='Т-инвестиции демо';el('pageDesc').textContent='Т-Инвестиции · виртуальные фьючерсы · 1 000 000 ₽ · автономно в облаке';
       for(const id of ['labCycle','labPause'])el(id).hidden=true;
       el('labSearchForm').closest('.card').hidden=true;
       for(const control of el('labSettingsForm').querySelectorAll('input,select,button'))control.disabled=true;
       const conn=el('labAiTitle').closest('.card');for(const d of conn.querySelectorAll('details,code'))d.hidden=true;
       el('labAiTitle').textContent='Cloudflare · автоматический анализ';el('labAiModel').textContent=ai.model+' · при недоступности ИИ новые входы пропускаются';
+      if(s.strategy_version==='t-futures-v3-20261126')el('labAssumptions').append(txt('p','Правила v3: часовой тренд с расстоянием средних от 0,2 ATR. После стопа — часовая пауза, после двух подряд за сутки — четыре часа. Для повторного входа нужны новая часовая свеча и пробой диапазона 20 свечей 15м. Числовые пояснения строятся кодом. Старые позиции и история сохранены. Перенос стопа в безубыток пока не включён.'));
       if(s.strategy_version==='t-futures-v2-20261125')el('labAssumptions').append(txt('p','Правила v2: новые входы требуют подтверждения закрытыми часовыми свечами. После стопа по контракту — часовая пауза. Старые позиции продолжают сопровождаться; история не сбрасывается.'));
       el('labHeartbeat').textContent='Облако работает без ноутбука. Мониторинг ≈5 мин, анализ ≈2 ч. Последняя проверка: '+stamp(s.worker_heartbeat);
       const watchNote=el('labWatchlist').nextElementSibling;if(watchNote)watchNote.textContent=s.cloud.coverage?.selection||'Каталог загружается из Т-Инвестиций.';

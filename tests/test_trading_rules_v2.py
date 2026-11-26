@@ -46,7 +46,7 @@ def test_cooldown_and_hourly_filter_cannot_be_overridden(tmp_path):
         lab._close(db,s,'x',snap,'Стоп',NOW)
         assert 'часовая пауза' in lab._open(db,s,'x',snap,{'atr':'2'},'long',NOW+timedelta(minutes=59))
         later=NOW+timedelta(hours=1);snap['trend_1h']['candle_at']=(later-timedelta(hours=1,minutes=15)).isoformat()
-        assert 'Открыта' in lab._open(db,s,'x',snap,{'atr':'2'},'long',later)
+        assert 'Открыта' in lab._open(db,s,'x',snap,{'atr':'2','last_close':'145','breakout_high':'144','candle_at':(later-timedelta(minutes=15)).isoformat()},'long',later)
 
 def test_walt_upgrade_keeps_existing_positions_and_history():
     state=initial();state['cash']='9900';state['positions']={'1':{'side':'short'}}
@@ -56,7 +56,7 @@ def test_walt_upgrade_keeps_existing_positions_and_history():
 def test_walt_same_side_count_and_risk_caps():
     state=initial();activate_v2(state,NOW.timestamp());e=PaperEngine(state)
     def open_(ident,side):
-        return e.open({'market_id':ident,'symbol':'X'+str(ident),'side':side},
+        return e.open({'market_id':ident,'symbol':'X'+str(ident),'side':side,'metrics':{'close':120 if side=='long' else 90,'ema20':110 if side=='long' else 100,'ema50':100 if side=='long' else 110,'atr14':2},'scenario':{'trend_1h':'up' if side=='long' else 'down','trend_4h':'up' if side=='long' else 'down'}},
             {'symbol':'X'+str(ident),'price':'100','at':NOW.timestamp(),'active':True,'max_leverage':3,'step':'.001','min_quantity':'.001','min_notional':'1','maintenance':'.03'},'report',NOW.timestamp())
     # Give each asset its own group so this test isolates the direction rule.
     import invest_blog.paper_perps as module

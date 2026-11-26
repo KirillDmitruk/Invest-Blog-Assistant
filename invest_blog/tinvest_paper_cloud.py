@@ -148,8 +148,8 @@ def review(candidates, session=None):
         p=Proposal.model_validate(row).model_dump();c=known[uid]
         if p['action']=='close' and not c['position']:raise ValueError('No position to close')
         f=c['features']
-        if (p['action']=='long' and float(f['sma_fast'])<=float(f['sma_slow'])) or (p['action']=='short' and float(f['sma_fast'])>=float(f['sma_slow'])):
-            p={'action':'hold','confidence':0,'reason':'Направление ИИ противоречит фильтру SMA10/SMA30. Вход пропущен.'}
+        from .trading_quality import checked_explanation
+        p=checked_explanation(p,f,c.get('trend_1h',{}))
         out[uid]=p
     if set(out)!=set(known):raise ValueError('Incomplete batch')
     return out

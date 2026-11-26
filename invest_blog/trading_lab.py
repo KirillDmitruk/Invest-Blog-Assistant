@@ -180,8 +180,9 @@ class TradingLab:
                     'quoted_at': snapshot['quoted_at']}, clock)
         del state['positions'][uid]
         from .trading_rules_v2 import VERSION
-        if state.get('strategy_version')==VERSION and reason.startswith('Стоп'):
-            state.setdefault('cooldowns',{})[uid]=(clock+timedelta(hours=1)).isoformat()
+        if state.get('strategy_version')==VERSION:
+            from .trading_quality import record_close
+            record_close(state,uid,clock.timestamp(),reason.startswith('Стоп'))
 
     def _mark(self, db, state, snapshots, clock):
         closed = set()
@@ -250,7 +251,7 @@ class TradingLab:
 
     def _open(self, db, state, uid, s, features, side, clock):
         from .trading_rules_v2 import VERSION,entry_block
-        block=entry_block(state,uid,s,clock)
+        block=entry_block(state,uid,s,clock,features,side)
         if block:return block
         if state.get('strategy_version')==VERSION and s.get('trend_1h',{}).get('direction')!=side:
             return 'Направление входа не подтверждено часовым трендом; сделка пропущена.'
@@ -280,6 +281,7 @@ class TradingLab:
             return 'Некорректная цена исполнения после проскальзывания.'
         if fill-direction*stop_ticks*tick <= 0 or fill+direction*stop_ticks*2*tick <= 0:
             return 'Защитные уровни выходят за допустимую положительную цену.'
+        if state.get('strategy_version')==VERSION:state.setdefault('reentry_required',{}).pop(uid,None)
         paid = fee*size
         state['cash'] = str(D(state['cash'])-paid)
         state['realized_pnl'] = str(D(state['realized_pnl'])-paid)

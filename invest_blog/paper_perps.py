@@ -1,6 +1,7 @@
 """Autonomous dollar PAPER ledger. Pure simulation: no transport or broker tools."""
 from decimal import Decimal,ROUND_FLOOR,InvalidOperation
 import copy,hashlib,math
+from .trading_quality import WALT_VERSION, record_close, walt_entry_block
 
 def num(x):
     if isinstance(x,bool):raise ValueError('Invalid number')
@@ -26,11 +27,19 @@ def record_equity(state,now):
     state['equity_history']=[points[t] for t in sorted(points)][-2016:]
 
 def activate_v2(state,now):
-    if state.get('strategy_version')=='walt-v2-20261125':return False
+    if state.get('strategy_version')==WALT_VERSION:return False
     baseline={'at':now,'equity':state['equity'],'cash':state['cash'],'closed_count':len(state['closed'])}
-    state.update(strategy_version='walt-v2-20261125',strategy_baseline=baseline)
-    state.setdefault('strategy_changes',[]).append({'version':'walt-v2-20261125',**baseline})
+    state.update(strategy_version=WALT_VERSION,strategy_baseline=baseline)
+    state.setdefault('strategy_changes',[]).append({'version':WALT_VERSION,**baseline})
     state['limits'].update(max_same_side=2,direction_risk_pct='2.5')
+    state['cooldowns']={};state['stop_history']={};state['reentry_required']={}
+    known={p['symbol']:str(p['market_id']) for p in [*state['closed'],*state['positions'].values()] if 'symbol' in p and 'market_id' in p}
+    events=sorted(state['events'],key=lambda e:e['at'])
+    for e in events:
+        if e['kind']=='open':state['reentry_required'].pop(str(e.get('market_id',known.get(e['symbol'],e['symbol']))),None)
+        elif e['kind']=='close' and 0<=now-e['at']<=86400:
+            trade=next((p for p in state['closed'] if p['symbol']==e['symbol'] and p['closed_at']==e['at']),None)
+            if trade:record_close(state,str(trade['market_id']),e['at'],e['reason'].startswith('stop'))
     return True
 
 def initial():
@@ -55,7 +64,7 @@ class PaperEngine:
         if state.get('version')!=1 or state.get('mode')!='paper' or num(state['initial_balance'])!=10000:raise ValueError('Wrong paper state')
     def event(self,kind,p,at,extra=None):
         e={'id':hashlib.sha256(f'{kind}:{p["id"]}:{at}'.encode()).hexdigest()[:20],
-            'kind':kind,'symbol':p['symbol'],'side':p['side'],'at':at,**(extra or {})}
+            'kind':kind,'market_id':p['market_id'],'symbol':p['symbol'],'side':p['side'],'at':at,**(extra or {})}
         self.state['events'].append(e);self.state['events']=self.state['events'][-300:];self.changes.append(e)
     def values(self):
         s=self.state
@@ -74,6 +83,7 @@ class PaperEngine:
         net=gross-fee-num(p['entry_fee'])-num(p['funding_paid'])
         trade={**p,'exit':amount(fill),'closed_at':at,'reason':reason,'net_pnl':amount(net),'exit_fee':amount(fee)}
         s['closed'].append(trade);s['closed']=s['closed'][-300:]
+        if s.get('strategy_version')==WALT_VERSION:record_close(s,key,at,reason.startswith('stop'))
         del s['positions'][key];self.event('close',p,at,{'reason':reason,'pnl':amount(net)})
     def monitor(self,key,observation,now):
         s=self.state;p=s['positions'][key];direction=1 if p['side']=='long' else -1
@@ -121,6 +131,7 @@ class PaperEngine:
         if equity<=num(p['quantity'])*quote*num(p['maintenance']):self.close(key,quote,now,'liquidation_model')
     def open(self,row,quote,report_id,now):
         s=self.state;limits=s['limits'];key=str(row['market_id']);side=row['side'];symbol=row['symbol']
+        if walt_entry_block(s,row,now):return False
         if key in s['positions'] or len(s['positions'])>=limits['max_positions']:return False
         same_side=[p for p in s['positions'].values() if p['side']==side]
         if len(same_side)>=limits.get('max_same_side',limits['max_positions']):return False
@@ -156,6 +167,7 @@ class PaperEngine:
             'quantity':amount(qty),'entry':amount(entry),'mark':amount(price),'margin':amount(margin),'entry_fee':amount(fee),
             'stop':amount(stop),'take':amount(take),'risk':amount(qty*per_unit),'funding_reserve':amount(qty*funding_reserve),'funding_paid':'0','maintenance':quote['maintenance'],
             'opened_at':now,'marked_at':now,'checked_until':int(now//60+1)*60,'funding_until':now,'source_report':report_id}
+        s.setdefault('reentry_required',{}).pop(key,None)
         s['cash']=amount(num(s['cash'])-fee);s['positions'][key]=p;self.event('open',p,now,{'margin':p['margin'],'entry':p['entry']});return True
     def cycle(self,packet,market,now):
         s=self.state;warnings=[];closed_markets=set()
@@ -175,7 +187,7 @@ class PaperEngine:
         draw=(num(s['high_water'])-equity)/num(s['high_water'])*100
         if draw>=num(s['limits']['drawdown_pct']):s['paused']=True;s['pause_reason']='drawdown'
         elif daily>=num(s['limits']['daily_loss_pct']):s['paused']=True;s['pause_reason']='daily_loss'
-        reason='Новых подтверждённых ИИ-сигналов нет.';eligible=0;opened=0
+        reason='Новых подтверждённых ИИ-сигналов нет.';eligible=0;opened=0;s['entry_rejections']=[]
         if s['paused']:reason='Новые входы приостановлены лимитом убытка; виртуальные стопы продолжают проверяться.'
         elif warnings:reason='Новые входы приостановлены: не все текущие позиции удалось проверить.'
         elif packet and packet.get('ai',{}).get('status')=='ok' and 0<=now-packet['created_epoch']<=10800:
@@ -185,10 +197,14 @@ class PaperEngine:
                 if row.get('side') not in ('long','short') or row.get('ai_review',{}).get('accept') is not True or row.get('entry_blockers'):continue
                 eligible+=1;signal=report_id+':'+str(row['market_id'])
                 if signal in s['seen'] or str(row['market_id']) in closed_markets:continue
+                block=walt_entry_block(s,row,now)
+                if block:
+                    s['entry_rejections'].append({'symbol':row['symbol'],'reason':block});continue
                 try:
                     if self.open(row,market.entry(row['market_id'],now),report_id,now):opened+=1;s['seen'].append(signal)
                 except Exception:warnings.append('Пропущен '+row['symbol']+': не подтверждены свежие данные.')
             if eligible:reason=f'Подтверждённых кандидатов: {eligible}. Новых виртуальных входов: {opened}.'
+            if s['entry_rejections']:reason+=' '+s['entry_rejections'][0]['symbol']+': '+s['entry_rejections'][0]['reason']
         else:reason='Ожидаю свежий отчёт с успешной проверкой ИИ; старые сигналы не исполняются.'
         s.update(last_cycle=now,reason=reason,warnings=warnings,eligible=eligible);s['seen']=s['seen'][-1000:]
         self.values();record_equity(s,now);return s
