@@ -14,6 +14,7 @@
   const cloudCard=txt('div','');cloudCard.className='note';cloudCard.hidden=true;controls.before(cloudCard);
   function renderCloud(info){if(!info?.enabled)return;cloudCard.hidden=false;controls.hidden=true;imports.hidden=true;el('techNewsList').closest('.card').hidden=true;
     cloudCard.replaceChildren(txt('strong',info.paused?'☁ Новости на паузе':'☁ Новости публикуются из облака'),txt('p',(info.channel||'Канал ожидает настройки')+' · Россия, зарубежные рынки и криптовалюты · сбор каждые 5 минут, публикации не чаще раза в 10 минут, 09:00–23:00 МСК. Ноутбук можно выключать.'));
+    if(info.vk){const labels={missing_credentials:'нужен пользовательский токен VK',authorization_failed:'проверь права VK',sent:'последний пост продублирован',idle:'ожидаем следующую новость',rate_limited:'ожидаем интервал публикации',uncertain:'ответ VK не подтверждён — повтор отключён',disabled:'дублирование выключено'};cloudCard.append(txt('p','VK · '+(labels[info.vk.status]||'проверяем подключение')+' · очередь '+(info.vk_pending||0)));}
     const checked=info.checked_at?new Date(info.checked_at).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})+' МСК':'ожидаем первый запуск';
     cloudCard.append(txt('p','Последняя проверка: '+checked+' · опубликовано сегодня: '+(info.today_sent??'нет данных')));
     if(info.sources?.length)cloudCard.append(txt('p','Источники: '+info.sources.filter(s=>s.ok).length+' из '+info.sources.length+' доступны'+(info.sources.some(s=>!s.ok)?'. Временно недоступны: '+info.sources.filter(s=>!s.ok).map(s=>s.source).join(', '):'')));

@@ -38,7 +38,8 @@ class NewsState(PrivateState):
         payload = {'checked_at': now.isoformat(), 'result': result['status'], 'channel': channel,
                    'today_sent': sum(r['day'] == now.astimezone(TZ).date().isoformat() for r in sent),
                    'last_post': ({k: sent[-1].get(k) for k in ('headline', 'message_url', 'created_at','media_mode')} if sent else None),
-                   'sources': sources, 'pending_count':len(state.get('pending_news',[]))}
+                   'sources': sources, 'pending_count':len(state.get('pending_news',[])),
+                   'vk':result.get('vk',{'status':'disabled'}), 'vk_pending':len(state.get('vk_outbox',{})), 'vk_dropped':state.get('vk_dropped',0)}
         path = self.url + '/contents/news-status.json'
         reply = self.session.get(path, headers=self.headers, params={'ref': self.branch}, timeout=20, allow_redirects=False)
         if reply.status_code not in (200, 404):
@@ -158,7 +159,7 @@ class ChannelSender:
         return 'https://t.me/'+self.channel[1:]+'/'+str(result['result']['message_id'])
 
 
-def publish(store, sender, items, *, editor=generate, now=None, send=False, enricher=None, target=None):
+def publish(store, sender, items, *, editor=generate, now=None, send=False, enricher=None, target=None, mirror_group=None):
     clock = now or datetime.now(timezone.utc)
     raw_slot=slot(clock)
     channel=getattr(sender,'channel',None) or target
@@ -233,6 +234,9 @@ def publish(store, sender, items, *, editor=generate, now=None, send=False, enri
                'category': item['category'], 'source_url': item['url'], 'title_key': fingerprint(item),
                'headline': value['headline'], 'status': 'attempted', 'channel':channel}
         state['deliveries'][current] = row
+        if mirror_group is not None:
+            from .cloud_news_vk import enqueue
+            enqueue(state,current,text,item['url'],mirror_group,actual.isoformat())
         store.save(state)  # A durable reservation MUST precede the Telegram request.
         try:
             if item.get('image_url'):
@@ -261,7 +265,15 @@ def main():
     sender = ChannelSender(os.environ['SIGNALS_BOT_TOKEN']) if args.send else None
     from .news_article import enrich
     article_session = requests.Session()
-    result = publish(store, sender, items, send=args.send, enricher=lambda item: enrich(item,article_session),target=target_channel())
+    from .cloud_news_vk import configured_target,drain
+    vk_token=os.getenv('NEWS_VK_ACCESS_TOKEN','').strip();vk_auth=os.getenv('NEWS_VK_AUTH','').strip()
+    try:vk_group=configured_target();vk_config_error=False
+    except ValueError:vk_group=None;vk_config_error=True
+    result = publish(store, sender, items, send=args.send, enricher=lambda item: enrich(item,article_session),target=target_channel(),mirror_group=vk_group if (vk_token or vk_auth) else None)
+    if args.send:
+        try:result['vk']=drain(store,vk_group,vk_token,auth_bundle=vk_auth) if not vk_config_error else {'status':'configuration_error'}
+        except Exception:result['vk']={'status':'unavailable'}
+
     if args.send:
         try:
             store.status(result, sources)

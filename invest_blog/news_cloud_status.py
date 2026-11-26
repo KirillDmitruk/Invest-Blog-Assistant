@@ -6,7 +6,7 @@ CACHE={'until':0,'value':None}
 
 def status():
     enabled=os.getenv('NEWS_CLOUD_ENABLED','false').lower()=='true'
-    common={'enabled':enabled,'paused':os.getenv('NEWS_CLOUD_PAUSED','false').lower()=='true','channel':os.getenv('NEWS_TELEGRAM_CHANNEL','').strip(),'hours':'09:00–23:00 МСК','interval_minutes':30,
+    common={'enabled':enabled,'paused':os.getenv('NEWS_CLOUD_PAUSED','false').lower()=='true','channel':os.getenv('NEWS_TELEGRAM_CHANNEL','').strip(),'hours':'09:00–23:00 МСК','interval_minutes':10,
             'workflow_url':'https://github.com/KirillDmitruk/Invest-Blog-Assistant/actions/workflows/telegram-news.yml'}
     if not enabled:return common
     if CACHE['until']>time.monotonic():return {**common,**CACHE['value']}
@@ -17,7 +17,7 @@ def status():
         if body.get('encoding')!='base64' or len(body.get('content',''))>100000:raise ValueError()
         value=json.loads(base64.b64decode(body['content']))
         if value.get('channel','').lower()!=common['channel'].lower():raise ValueError('Previous channel status')
-        value={k:value.get(k) for k in ('checked_at','result','today_sent','last_post','sources')}
+        value={k:value.get(k) for k in ('checked_at','result','today_sent','last_post','sources','pending_count','vk','vk_pending','vk_dropped')}
         value['available']=True
     except Exception:
         value={**(CACHE['value'] or {}),'available':False,'note':'Не удалось получить свежий статус облака. Это не подтверждение остановки публикаций.'}

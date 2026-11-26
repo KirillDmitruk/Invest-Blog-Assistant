@@ -65,17 +65,24 @@ class VKPublisher:
         # groups.getById may return {groups: [...]} for newer API responses.
         return items
 
-    def publish(self, text: str, *, guid: str) -> str:
+    def publish(self, text: str, *, guid: str, attachment_url: str | None = None) -> str:
         if not text.strip():
             raise ValueError("Нельзя опубликовать пустой текст")
         if not guid or len(guid) > 80:
             raise ValueError("Необходим стабильный идентификатор публикации")
+        extra={}
+        if attachment_url:
+            from urllib.parse import urlsplit
+            parts=urlsplit(attachment_url)
+            if parts.scheme!='https' or not parts.hostname or parts.username or parts.password:raise ValueError('Invalid source link')
+            extra['attachments']=attachment_url
         result = self._call(
             "wall.post",
             owner_id=-self.config.group_id,
             from_group=1,
             message=text,
             guid=guid,
+            **extra,
         )
         post_id = result.get("post_id")
         if not isinstance(post_id, int) or post_id <= 0:
