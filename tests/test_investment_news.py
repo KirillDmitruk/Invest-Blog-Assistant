@@ -16,7 +16,9 @@ def ru_news(path,category='russia',number=1):
 
 def test_feed_list_has_no_tech_sources_and_known_investment_categories():
     names={name for name,url in FEEDS}
-    assert names=={'Банк России','Смартлаб · новости','CNBC','ФРС США','CoinDesk','Cointelegraph'}
+    assert {'Банк России','Смартлаб · новости','CNBC','ФРС США','CoinDesk','Cointelegraph','Интерфакс','РБК','SEC','The Block','Decrypt','ForkLog','Bloomberg · рынки','Financial Times · рынки'} <= names
+    assert len(names)==len(FEEDS)==16
+    assert dict(FEEDS)['Банк России'].endswith('/RssPress')
     assert category_for('Rates','', 'Банк России')=='russia'
     assert category_for('Bitcoin','', 'CoinDesk')=='crypto'
     assert category_for('Stocks','', 'CNBC')=='world'
@@ -97,3 +99,13 @@ def test_manual_source_controls_and_csrf(configured,monkeypatch):
         assert client.post('/api/news',headers=headers,json=item).status_code==201
         assert client.post('/api/news',headers=headers,json=item).status_code==409
         assert TechNewsStore(configured).list_news()[0]['source']=='Telegram · @ne_investor'
+
+@pytest.mark.parametrize('source', ['Интерфакс','РБК','Коммерсантъ · экономика'])
+def test_added_russian_feeds_classify_the_actual_story(source):
+    assert category_for('Рост прибыли Сбербанка','',source)=='russia'
+    assert category_for('США: акции Nvidia подорожали','',source)=='world'
+    assert category_for('Биткоин вырос','',source)=='crypto'
+
+@pytest.mark.parametrize('source',['Bloomberg · рынки','Financial Times · рынки','SEC'])
+def test_crypto_story_from_global_publisher_is_crypto(source):
+    assert category_for('Bitcoin ETF securities approval','',source)=='crypto'

@@ -23,12 +23,22 @@ CATEGORY_LABELS = {'russia': '🇷🇺 Российский рынок', 'world'
 
 # Curated fixed endpoints; no HTTP fetching from user-submitted URLs.
 FEEDS = (
-    ('Банк России', 'https://www.cbr.ru/rss/eventrss'),
+    ('Банк России', 'https://www.cbr.ru/rss/RssPress'),
     ('Смартлаб · новости', 'https://smart-lab.ru/news/rss/'),
     ('CNBC', 'https://www.cnbc.com/id/10000664/device/rss/rss.html'),
     ('ФРС США', 'https://www.federalreserve.gov/feeds/press_all.xml'),
-    ('CoinDesk', 'https://www.coindesk.com/arc/outboundfeeds/rss/'),
+    ('CoinDesk', 'https://www.coindesk.com/arc/outboundfeeds/rss'),
     ('Cointelegraph', 'https://cointelegraph.com/rss'),
+    ('Интерфакс', 'https://www.interfax.ru/rss'),
+    ('РБК', 'https://rssexport.rbc.ru/rbcnews/news/30/full.rss'),
+    ('Коммерсантъ · экономика', 'https://www.kommersant.ru/rss/section-economics.xml'),
+    ('Bloomberg · рынки', 'https://www.bloomberg.com/feeds/markets/news.rss'),
+    ('Financial Times · рынки', 'https://www.ft.com/markets?format=rss'),
+    ('CNBC · рынки', 'https://www.cnbc.com/id/20910258/device/rss/rss.html'),
+    ('SEC', 'https://www.sec.gov/news/pressreleases.rss'),
+    ('The Block', 'https://www.theblock.co/rss.xml'),
+    ('Decrypt', 'https://decrypt.co/feed'),
+    ('ForkLog', 'https://forklog.com/feed'),
 )
 TELEGRAM_SOURCES = (
     ('ne_investor', 'https://t.me/ne_investor'),
@@ -37,7 +47,13 @@ TELEGRAM_SOURCES = (
     ('kokorevinvest', 'https://t.me/kokorevinvest'),
 )
 SOURCE_CATEGORIES = {'Банк России': 'russia', 'CNBC': 'world', 'ФРС США': 'world',
-                     'CoinDesk': 'crypto', 'Cointelegraph': 'crypto'}
+                     'CoinDesk': 'crypto', 'Cointelegraph': 'crypto',
+                     'Bloomberg · рынки':'world', 'Financial Times · рынки':'world',
+                     'CNBC · рынки':'world', 'SEC':'world',
+                     'The Block':'crypto', 'Decrypt':'crypto', 'ForkLog':'crypto'}
+RSS_HEADERS = {'User-Agent':'ContentHub-RSS-Reader/2.0 (+personal news dashboard)'}
+OFFICIAL_SOURCES = frozenset(('Банк России', 'ФРС США', 'SEC'))
+MIXED_RUSSIAN_SOURCES = frozenset(('Смартлаб · новости', 'Интерфакс', 'РБК', 'Коммерсантъ · экономика'))
 
 
 def clean_text(value: str, max_length: int = 900) -> str:
@@ -65,7 +81,8 @@ def parse_date(value: str) -> str | None:
 
 def category_for(title: str, summary: str, source: str) -> str:
     text = (title + ' ' + summary[:350]).lower()
-    if source == 'Смартлаб · новости':
+    if re.search(r'bitcoin|ethereum|crypto|битко|крипт|эфириум',text):return 'crypto'
+    if source in MIXED_RUSSIAN_SOURCES:
         if re.search(r'bitcoin|ethereum|crypto|битко|крипт|эфириум',text): return 'crypto'
         if re.search(r'сша|европ|кита[йя]|американ|зарубеж|nasdaq|s&p|wall street|revolut|tesla|nvidia|apple',text): return 'world'
         return 'russia'
@@ -186,7 +203,7 @@ class TechNewsCollector:
         report=[]
         for source,url in FEEDS:
             try:
-                response=self.session.get(url,timeout=(5,15),headers={'User-Agent':'ContentHub-RSS-Reader/2.0 (+personal news dashboard)'},allow_redirects=True)
+                response=self.session.get(url,timeout=(5,15),headers=RSS_HEADERS,allow_redirects=True)
                 response.raise_for_status()
                 if len(response.content)>2_000_000: raise ValueError('Слишком большой ответ')
                 items=parse_feed(response.content,source)

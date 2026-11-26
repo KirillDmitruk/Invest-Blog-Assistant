@@ -13,7 +13,7 @@ import requests
 from .cloud_pulse import PrivateState
 from .cloud_signals import json_call, ServiceCallError
 from .news_editor import generate, compose
-from .tech_news import FEEDS, parse_feed
+from .tech_news import FEEDS, OFFICIAL_SOURCES, RSS_HEADERS, parse_feed
 
 LEGACY_CHANNEL = '@kirintechnews'
 
@@ -65,9 +65,9 @@ def fresh(items, clock):
             if item['category'] not in ('russia', 'world', 'crypto') or len(item['summary']) < 60:
                 continue
             text = item['title'] + ' ' + item['summary']
-            if re.search(r'sponsored|press release|промокод|розыгрыш|партн[её]рский материал', text, re.I):
+            if re.search(r'sponsored|промокод|розыгрыш|партн[её]рский материал', text, re.I) or (item['source'] not in OFFICIAL_SOURCES and re.search(r'press release',text,re.I)):
                 continue
-            if not re.search(r'рын[окк]|бирж|акци[яийю]|облигац|дивиденд|купон|выруч|прибыл|убыт|отч[её]т|инфляц|ключев.{0,12}ставк|рубл|нефт|цен[аыу]|экономик|фрс|битко|крипт|эфириум|bitcoin|ethereum|crypto|stock|shares|earnings|revenue|inflation|interest rate|bond|yield|nasdaq|s&p|etf|oil price', text, re.I):
+            if not re.search(r'рын[окк]|бирж|акци[яийю]|облигац|дивиденд|купон|выруч|прибыл|убыт|отч[её]т|инфляц|ключев.{0,12}ставк|рубл|нефт|цен[аыу]|экономик|фрс|битко|крипт|эфириум|bitcoin|ethereum|crypto|stock|shares|earnings|revenue|inflation|interest rate|bond|yield|nasdaq|s&p|etf|oil price|финанс|ликвидност|ценн.{0,12}бумаг|monetary|securities|federal reserve|central bank|liquidity|financial|stablecoin|tokenized', text, re.I):
                 continue
             out.append(item)
         except (KeyError, TypeError, ValueError):
@@ -84,7 +84,7 @@ def collect(session, clock):
     items, sources = [], []
     for name, url in FEEDS:
         try:
-            with session.get(url, timeout=(5, 15), stream=True) as response:
+            with session.get(url, timeout=(5, 15), headers=RSS_HEADERS, stream=True) as response:
                 response.raise_for_status()
                 chunks, size = [], 0
                 for chunk in response.iter_content(65536):
@@ -93,8 +93,11 @@ def collect(session, clock):
                         raise ValueError('RSS too large')
                     chunks.append(chunk)
             found = parse_feed(b''.join(chunks), name)
+            if not found:raise ValueError('No readable feed entries')
+            eligible = fresh(found, clock)
             items.extend(found)
-            sources.append({'source': name, 'ok': True})
+            sources.append({'source': name, 'ok': True, 'found':len(found), 'eligible':len(eligible),
+                            'latest_at':max((x['published_at'] for x in found if x['published_at']), default=None)})
         except Exception:
             sources.append({'source': name, 'ok': False})
     return fresh(items, clock), sources

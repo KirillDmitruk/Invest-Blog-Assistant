@@ -83,3 +83,33 @@ def test_target_channels_have_distinct_slot_reservations():
 def test_preview_can_use_new_channel_with_old_slot_present():
     store=Store();store.state['deliveries'][str(int(NOW.timestamp())//1800)]={'period':'old','status':'sent','source_url':'https://old.example/news','title_key':'old','day':NOW.date().isoformat(),'category':'russia'}
     assert publish(store,None,[item()],editor=editor,now=NOW,target='@newinvest')['status']=='preview'
+
+def test_official_press_releases_are_not_mistaken_for_paid_advertising():
+    from invest_blog.cloud_news import fresh
+    release=item();release.update(source='SEC',title='SEC securities press release',summary='The regulator published a press release on securities and financial market regulation today.')
+    assert fresh([release],NOW)==[release]
+    release['source']='Unknown paid wire'
+    assert fresh([release],NOW)==[]
+    release.update(source='SEC',summary='Sponsored financial market press release with sufficiently long promotional text for this test.')
+    assert fresh([release],NOW)==[]
+
+
+def test_source_failure_does_not_discard_working_feeds_and_reports_real_eligibility(monkeypatch):
+    import invest_blog.cloud_news as module
+    monkeypatch.setattr(module,'FEEDS',[('Bad','https://bad.example/rss'),('Good','https://good.example/rss'),('Empty','https://empty.example/rss')])
+    class Response:
+        def __init__(self,url):self.url=url
+        def __enter__(self):return self
+        def __exit__(self,*args):pass
+        def raise_for_status(self):
+            if 'bad.' in self.url:raise ValueError('Unavailable')
+        def iter_content(self,size):return [b'empty' if 'empty.' in self.url else b'good']
+    class Session:
+        def get(self,url,**kwargs):
+            assert 'User-Agent' in kwargs['headers']
+            return Response(url)
+    monkeypatch.setattr(module,'parse_feed',lambda raw,name:[] if raw==b'empty' else [item()])
+    items,status=module.collect(Session(),NOW)
+    assert len(items)==1 and [x['ok'] for x in status]==[False,True,False]
+    assert status[1]['found']==status[1]['eligible']==1
+    assert status[1]['latest_at']==item()['published_at']
