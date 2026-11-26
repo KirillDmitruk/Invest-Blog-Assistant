@@ -38,7 +38,7 @@ class NewsState(PrivateState):
         payload = {'checked_at': now.isoformat(), 'result': result['status'], 'channel': channel,
                    'today_sent': sum(r['day'] == now.astimezone(TZ).date().isoformat() for r in sent),
                    'last_post': ({k: sent[-1].get(k) for k in ('headline', 'message_url', 'created_at','media_mode')} if sent else None),
-                   'sources': sources}
+                   'sources': sources, 'pending_count':len(state.get('pending_news',[]))}
         path = self.url + '/contents/news-status.json'
         reply = self.session.get(path, headers=self.headers, params={'ref': self.branch}, timeout=20, allow_redirects=False)
         if reply.status_code not in (200, 404):
@@ -52,7 +52,7 @@ class NewsState(PrivateState):
 
 def slot(clock):
     local = clock.astimezone(TZ)
-    return str(int(clock.timestamp()) // 1800) if 9 <= local.hour < 23 else None
+    return str(int(clock.timestamp()) // 600) if 9 <= local.hour < 23 else None
 
 
 def fresh(items, clock):
@@ -167,14 +167,35 @@ def publish(store, sender, items, *, editor=generate, now=None, send=False, enri
     if key is None:
         return {'status': 'outside_hours'}
     state = store.load()
-    if key in state['deliveries']:
-        return {'status': 'already_attempted'}
     old = list(state['deliveries'].values())
     urls = {x.get('source_url') for x in old}
     titles = {x.get('title_key') for x in old}
     counts = {category: sum((channel is None or x.get('channel',LEGACY_CHANNEL)==channel) and x.get('category') == category and x.get('day') == clock.astimezone(TZ).date().isoformat() for x in old)
               for category in ('russia', 'world', 'crypto')}
-    candidates = [x for x in fresh(items, clock) if x['url'] not in urls and fingerprint(x) not in titles]
+    # Save observed stories before publishing; RSS windows can roll over between slots.
+    pending={}
+    for item in fresh([*state.get('pending_news',[]),*items],clock):
+        if item['url'] not in urls and fingerprint(item) not in titles:
+            pending[item['url']]=item
+    queue=[];queue_bytes=0
+    for item in sorted(pending.values(),key=lambda x:x['published_at'],reverse=True)[:500]:
+        item={k:item[k] for k in ('source','title','url','summary','category','published_at')}
+        size=len(json.dumps(item,ensure_ascii=False).encode())
+        if queue_bytes+size>400_000:break
+        queue.append(item);queue_bytes+=size
+    if send and queue!=state.get('pending_news',[]):
+        state['pending_news']=queue
+        store.save(state)
+    # Enforce elapsed time too: slot boundaries and legacy half-hour keys must not
+    # allow two posts a minute apart. Uncertain attempts also consume the interval.
+    recent=False
+    for row in old:
+        try:
+            if (channel is None or row.get('channel',LEGACY_CHANNEL)==channel) and timedelta(0)<=clock-datetime.fromisoformat(row['created_at'])<timedelta(minutes=10):recent=True
+        except (KeyError,ValueError,TypeError):continue
+    if key in state['deliveries'] or recent:
+        return {'status':'already_attempted'}
+    candidates = queue
     candidates.sort(key=lambda x:-datetime.fromisoformat(x['published_at']).timestamp())
     pools={c:[x for x in candidates if x['category']==c] for c in sorted(counts,key=counts.get)}
     candidates=[pool[i] for i in range(3) for pool in pools.values() if len(pool)>i]

@@ -41,7 +41,7 @@ def test_stale_future_empty_and_bad_editor_do_not_send():
     assert publish(store,sender,[item(hours=25),item(hours=-1)],editor=editor,now=NOW,send=True)['status']=='no_suitable_news'
     def broken(*a,**kw):raise ValueError()
     assert publish(store,sender,[item()],editor=broken,now=NOW,send=True)['status']=='no_suitable_news'
-    assert store.saves==0 and not sender.sent
+    assert store.state['pending_news'] and not sender.sent
 def test_fair_rotation_prefers_another_available_category():
     store=Store();sender=Sender(store)
     publish(store,sender,[item()],editor=editor,now=NOW,send=True)
@@ -113,3 +113,26 @@ def test_source_failure_does_not_discard_working_feeds_and_reports_real_eligibil
     assert len(items)==1 and [x['ok'] for x in status]==[False,True,False]
     assert status[1]['found']==status[1]['eligible']==1
     assert status[1]['latest_at']==item()['published_at']
+
+def test_faster_post_after_ten_minutes_and_no_burst_across_slot_boundary():
+    store=Store();sender=Sender(store)
+    assert publish(store,sender,[item()],editor=editor,now=NOW,send=True)['status']=='sent'
+    assert publish(store,sender,[item(2)],editor=editor,now=NOW+timedelta(minutes=5),send=True)['status']=='already_attempted'
+    assert publish(store,sender,[],editor=editor,now=NOW+timedelta(minutes=10),send=True)['status']=='sent'
+    assert len(sender.sent)==2
+
+def test_observed_story_survives_disappearing_from_rss_and_preview_is_readonly():
+    store=Store();sender=Sender(store)
+    assert publish(store,sender,[item(1),item(2,'crypto')],editor=editor,now=NOW,send=True)['status']=='sent'
+    snapshot=deepcopy(store.state)
+    assert publish(store,None,[],editor=editor,now=NOW+timedelta(minutes=10))['status']=='preview'
+    assert store.state==snapshot
+    assert publish(store,sender,[],editor=editor,now=NOW+timedelta(minutes=10),send=True)['status']=='sent'
+    assert len(sender.sent)==2
+
+def test_pending_stories_expire_and_old_half_hour_delivery_blocks_early_send():
+    store=Store();sender=Sender(store)
+    store.state['deliveries']['legacy-halfhour']={'period':'legacy-halfhour','created_at':NOW.isoformat(),'day':NOW.date().isoformat(),'status':'sent','source_url':item()['url'],'title_key':fingerprint(item()),'category':'russia'}
+    assert publish(store,sender,[item(2)],editor=editor,now=NOW+timedelta(minutes=5),send=True)['status']=='already_attempted'
+    result=publish(store,sender,[],editor=editor,now=NOW+timedelta(hours=23,minutes=5),send=True)
+    assert result['status']=='no_suitable_news' and not store.state['pending_news']

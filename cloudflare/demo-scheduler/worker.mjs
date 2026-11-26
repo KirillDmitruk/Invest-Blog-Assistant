@@ -19,8 +19,7 @@ export async function runScheduled(env,fetcher=fetch,now=Date.now()){
   const check=await fetcher(url+'/runs?per_page=1',{headers});
   if(!check.ok)throw Error('Cannot verify virtual workflow status');
   const data=await check.json(),last=data.workflow_runs?.[0];
-  if(workflow==='telegram-news.yml'&&last&&Math.floor(Date.parse(last.created_at)/1800000)===Math.floor(now/1800000)){result.skipped++;continue;}
-  const interval=workflow==='telegram-news.yml'?0:workflow==='pulse-drafts.yml'?1800000:workflow==='cloud-signals.yml'?(last?.conclusion==='failure'?1800000:7200000):240000;
+  const interval=workflow==='telegram-news.yml'?240000:workflow==='pulse-drafts.yml'?1800000:workflow==='cloud-signals.yml'?(last?.conclusion==='failure'?1800000:7200000):240000;
   if(last&&(['queued','in_progress','waiting','requested','pending'].includes(last.status)||now-Date.parse(last.created_at)<interval)){result.skipped++;continue;}
   const body=['cloud-signals.yml','telegram-news.yml'].includes(workflow)?{ref:'main',inputs:{send:true}}:workflow==='pulse-drafts.yml'?{ref:'main',inputs:{kind:'auto',send:true}}:{ref:'main'};
   const response=await fetcher(url+'/dispatches',{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify(body)});

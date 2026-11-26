@@ -21,3 +21,8 @@ console.log('Scheduler: paper-only workflows, reports every two hours, monitor c
 calls=[];assert.deepEqual(await runScheduled({...env,CLOUD_NEWS_ENABLED:'true'},fetcher,now),{started:4,skipped:1});
 assert.deepEqual(JSON.parse(calls.find(c=>c.url.endsWith('telegram-news.yml/dispatches')).options.body),{ref:'main',inputs:{send:true}});
 calls=[];await runScheduled({...env,CLOUD_NEWS_ENABLED:'true'},fetcher,Date.parse('2026-11-29T20:00:00Z'));assert.ok(!calls.some(c=>c.url.includes('telegram-news')));
+
+// News collection runs every five minutes, independently of the ten-minute send limit.
+calls=[];const fiveMinuteNews=async(url,options={})=>url.includes('/runs?')?Response.json({workflow_runs:[{status:'completed',conclusion:'success',created_at:new Date(now-300000).toISOString()}]}):fetcher(url,options);
+await runScheduled({...env,CLOUD_NEWS_ENABLED:'true'},fiveMinuteNews,now);
+assert.ok(calls.some(c=>c.url.endsWith('telegram-news.yml/dispatches')));
