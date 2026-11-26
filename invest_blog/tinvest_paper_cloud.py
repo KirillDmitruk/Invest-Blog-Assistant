@@ -215,16 +215,20 @@ def main():
         market=CloudMarket(os.environ['TINVEST_MARKET_TOKEN'],s['positions'],now,due)
         result,before,after=cycle(lab,store,market)
         changes=[t for t in after['trades'] if t['id']>max([t['id'] for t in before['trades']]+[0])]
-        if changes:
+        notify = bool(changes) or not before['state']['cloud'].get('last_notification_at') or (now-iso_dt(before['state']['cloud']['last_notification_at'])).total_seconds()>=7200
+        if notify:
+            # Persist notification intent before sending, including quiet snapshots.
+            with lab.db() as db:
+                state=lab._load(db);state['cloud']['last_notification_at']=now.isoformat();lab._save(db,state)
+            store.save(pack(lab))
             # Ledger is committed before notification. A failed notification never repeats trades.
             token=os.environ['SIGNALS_BOT_TOKEN'];chat=os.environ['SIGNALS_CHAT_ID']
             info=json_call(requests.Session(),'POST','https://api.telegram.org/bot'+token+'/getChat',json={'chat_id':chat})
             if not info.get('ok') or info['result'].get('type')!='private':raise ValueError('Private recipient required')
-            text='🧪 Т-Инвестиции · виртуальные фьючерсы\nСтарт: 1 000 000 ₽\nКапитал: '+after['account']['equity']+' ₽\n\n'
-            for t in reversed(changes):
-                text+=t['ticker']+' · '+{'open_long':'виртуальный лонг','open_short':'виртуальный шорт','close':'виртуальное закрытие'}.get(t['action'],t['action'])+' · '+str(t['detail']['contracts'])+' контр.\n'
-            text+='\nРеальных заявок нет. Позиции и журнал: хаб → Торговый бот.'
-            json_call(requests.Session(),'POST','https://api.telegram.org/bot'+token+'/sendMessage',json={'chat_id':chat,'text':text})
+            from .demo_notifications import futures_summary
+            text=futures_summary(before,after,changes)
+            response=json_call(requests.Session(),'POST','https://api.telegram.org/bot'+token+'/sendMessage',json={'chat_id':chat,'text':text})
+            if not response.get('ok'):raise ValueError('Notification not confirmed; no send retry')
         print(json.dumps({'mode':'paper','currency':'RUB','positions':len(after['state']['positions']),'changes':len(changes),'status':result['status']}))
 
 

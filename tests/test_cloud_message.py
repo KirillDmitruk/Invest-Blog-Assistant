@@ -8,11 +8,9 @@ from invest_blog.cloud_scenarios import describe
 def test_paper_notification_has_no_real_trade_buttons_or_confirmation_instructions(monkeypatch):
     monkeypatch.setenv('TRADING_MODE','paper');monkeypatch.setenv('WALT_TELEGRAM_ENABLED','true')
     monkeypatch.setenv('WALT_BUTTON_KEY','fake');monkeypatch.setenv('GITHUB_RUN_ID','123')
-    session=Session();assert deliver(packet(),'SECRET','12345',Ledger(),session)=='sent'
-    payload=next(body['json'] for url,body in session.calls if url.endswith('sendMessage'))
-    assert 'PAPER' in payload['text'] and 'ручное подтверждение' not in payload['text']
-    buttons=payload['reply_markup']['inline_keyboard'];assert len(buttons)==1
-    assert buttons[0][0]['callback_data'].startswith('wb:n:')
+    session=Session();assert deliver(packet(),'SECRET','12345',Ledger(),session)=='paper_account_notifications'
+    assert session.calls == []
+
 
 def test_next_signal_tag_deduplicates_across_scheduled_slots():
     p=packet();ledger=Ledger();session=Session()

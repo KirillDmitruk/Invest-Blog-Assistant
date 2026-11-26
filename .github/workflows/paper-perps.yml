@@ -25,7 +25,7 @@ jobs:
           python-version: '3.12'
       - run: python -m pip install 'requests>=2.31,<3' 'cryptography>=43,<47' 'pytest>=8,<10'
       - name: Verify virtual accounting and execution boundaries
-        run: python -m pytest tests/test_paper_perps.py tests/test_paper_boundaries.py -q
+        run: python -m pytest tests/test_paper_perps.py tests/test_paper_boundaries.py tests/test_demo_notifications.py -q
       - name: Simulate with public data only
         env:
           TRADING_MODE: ${{ vars.TRADING_MODE }}

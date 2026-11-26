@@ -107,17 +107,9 @@ def latest_report(now):
     return None
 
 def notification(engine):
-    from .model import fmt_money
-    s=engine.state;usd=lambda x:fmt_money(num(x),'USD')
-    lines=['🧪 Виртуальная торговля · PAPER',f'Капитал: {usd(s["equity"])} · старт $10 000',
-        f'Открытых позиций: {len(s["positions"])} · результат: {usd(num(s["equity"])-10000)}']
-    reasons={'stop':'стоп-лосс','stop_quote':'стоп по котировке','take':'тейк-профит','take_quote':'тейк по котировке','liquidation_model':'ликвидация в модели'}
-    for e in engine.changes:
-        if e['kind']=='open':lines.append(f'🟦 Открыта виртуально: {e["symbol"]} · {"лонг" if e["side"]=="long" else "шорт"} · маржа {usd(e["margin"])}')
-        else:lines.append(f'▫️ Закрыта виртуально: {e["symbol"]} · {reasons.get(e["reason"],e["reason"])} · {usd(e["pnl"])}')
-    if s.get('warnings') or s.get('paused') or not engine.changes:lines+=['',s['reason'],*s.get('warnings',[])[:2]]
-    lines+=['','Реальных заявок нет. Исполнение, комиссии и фандинг моделируются. Позиции и журнал — в хабе → «Автотрейдинг · демо».']
-    return '\n'.join(lines)
+    from .demo_notifications import walt_summary
+    return walt_summary(engine.state, engine.changes)
+
 
 def main():
     if os.getenv('TRADING_MODE')!='paper' or os.getenv('PAPER_ENABLED')!='true':raise SystemExit('Paper mode is not enabled.')
@@ -129,8 +121,8 @@ def main():
         if activate_v2(previous,now):store.save(previous)
         engine=PaperEngine(previous);packet=latest_report(now)
         engine.cycle(packet,PublicPaperMarket(),now)
-        notify=bool(engine.changes) or engine.state.get('warnings',[])!=previous.get('warnings',[]) or engine.state.get('paused')!=previous.get('paused');tag=str(int(now))
-        if notify:engine.state['notifications'][tag]='attempted';engine.state['notifications']=dict(list(engine.state['notifications'].items())[-100:])
+        notify=now-float(previous.get('last_notification_at',0))>=7200 or bool(engine.changes) or engine.state.get('warnings',[])!=previous.get('warnings',[]) or engine.state.get('paused')!=previous.get('paused');tag=str(int(now))
+        if notify:engine.state['last_notification_at']=now;engine.state['notifications'][tag]='attempted';engine.state['notifications']=dict(list(engine.state['notifications'].items())[-100:])
         store.save(engine.state) # Persist all virtual actions and send intent before Telegram.
         print('Paper cycle saved. Virtual positions:',len(engine.state['positions']),'changes:',len(engine.changes))
         if notify:

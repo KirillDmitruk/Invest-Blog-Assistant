@@ -258,6 +258,9 @@ class GithubLedger:
 
 
 def deliver(packet,token,chat,ledger,session=None,request_tag=''):
+    # PAPER account workers deliver verified ledger snapshots and trade events.
+    # The market artifact remains available to the simulator without duplicate idea messages.
+    if os.getenv('TRADING_MODE')=='paper':return 'paper_account_notifications'
     if request_tag and not re.fullmatch(r'[a-f0-9]{16}',request_tag):raise ValueError('Неверный запрос следующего сигнала.')
     if not token or not re.fullmatch(r'[1-9][0-9]{4,19}',chat or ''):raise ValueError('Нужны токен бота и ID личного чата; канал не допускается.')
     session=session or requests.Session();base='https://api.telegram.org/bot'+token+'/'
@@ -275,13 +278,7 @@ def deliver(packet,token,chat,ledger,session=None,request_tag=''):
     state[key]={'status':'attempted','at':packet['created_at']};ledger.save(state)
     # From this point every ambiguous failure remains attempted. No retry.
     payload={'chat_id':chat,'text':report(packet,rich=True),'parse_mode':'HTML','disable_web_page_preview':True}
-    if os.getenv('TRADING_MODE')=='paper':
-        payload['text']='🧪 <b>Режим PAPER · реальные сделки отключены</b>\n\n'+payload['text']+'\n\nВиртуальный счёт: $10 000 на старте. Автосделки и позиции — в хабе → «Автотрейдинг · демо».'
-        if os.getenv('WALT_BUTTON_KEY') and os.getenv('GITHUB_RUN_ID'):
-            from .walt_telegram_protocol import button
-            expiry=int(time.time()+7200);run=os.environ['GITHUB_RUN_ID']
-            payload['reply_markup']={'inline_keyboard':[[{'text':'⚡ Следующий обзор','callback_data':button(f'n:{run}:{expiry}',chat,os.environ['WALT_BUTTON_KEY'])}]]}
-    elif os.getenv('WALT_TELEGRAM_ENABLED')=='true':
+    if os.getenv('WALT_TELEGRAM_ENABLED')=='true':
         from .walt_telegram_protocol import signal_keyboard
         payload['reply_markup']=signal_keyboard(packet,os.environ['GITHUB_RUN_ID'],chat,os.environ['WALT_BUTTON_KEY'])
     value=json_call(session,'POST',base+'sendMessage',json=payload)
