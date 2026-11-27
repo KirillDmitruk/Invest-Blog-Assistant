@@ -43,4 +43,6 @@ def render_report(*,start,end,monthly,payments,totals,capital,positions,month_in
     lines.extend(['','🤔 '+summary,'',
         'Капитал — текущий снимок, не доходность за период. Галочки по выплатам — фактические поступления в рублях за указанный месяц, не прогноз.',
         'Суммы по исполненным операциям брокера; налоги и комиссии отдельно не вычитались.'])
+    if not monthly:
+        lines.extend(['','📰 А за свежими новостями рынка заглядывайте в мой Telegram — Карты, деньги, два битка. Там встречаемся между отчётами 😉','https://t.me/justinvestrofl'])
     return '\n'.join(lines)
