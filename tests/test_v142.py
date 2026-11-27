@@ -102,7 +102,8 @@ def test_glossary_draft_includes_title_and_natural_ending():
     assert draft.kind == 'glossary'
     assert draft.period == '2026-10-26'
     assert draft.body.startswith('📚 Ликбез за 2 минуты: ')
-    assert draft.body.endswith('О каком понятии рассказать в следующий раз? 👇')
+    assert 'Где посмотреть на примере компаний' in draft.body
+    assert draft.body.endswith('#Инвестиции #ФинансоваяГрамотность')
     assert gen.selected_glossary_topic in draft.body
     assert len(draft.body) < 3900
 

@@ -15,6 +15,10 @@ on:
         description: Read-only connection check; never sends a draft
         type: boolean
         default: false
+      preview_lesson:
+        description: Generate a public educational preview without sending or portfolio reads
+        type: boolean
+        default: false
       example:
         description: Send one deduplicated updated paper example privately
         type: boolean
@@ -42,7 +46,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install 'requests>=2.31,<3' 'cryptography>=44,<47' 'pytest>=8,<10'
-      - run: python -m pytest tests/test_cloud_pulse.py tests/test_posts.py tests/test_report_voice.py tests/test_pulse_editor.py -q
+      - run: python -m pytest tests/test_cloud_pulse.py tests/test_posts.py tests/test_report_voice.py tests/test_pulse_editor.py tests/test_investment_lessons.py -q
       - name: Generate privately; send only when enabled
         env:
           PULSE_TINVEST_TOKEN: ${{ secrets.PULSE_TINVEST_TOKEN }}
@@ -57,8 +61,11 @@ jobs:
           SEND: ${{ github.event_name == 'schedule' || inputs.send }}
           DIAGNOSE: ${{ inputs.diagnose }}
           EXAMPLE: ${{ inputs.example }}
+          PREVIEW_LESSON: ${{ inputs.preview_lesson }}
         run: |
-          if [ "$EXAMPLE" = "true" ]; then
+          if [ "$PREVIEW_LESSON" = "true" ]; then
+            python -m invest_blog.investment_lessons
+          elif [ "$EXAMPLE" = "true" ]; then
             python -m invest_blog.cloud_pulse --kind paper --send --example
           elif [ "$DIAGNOSE" = "true" ]; then
             python -m invest_blog.cloud_pulse --kind "$KIND" --check

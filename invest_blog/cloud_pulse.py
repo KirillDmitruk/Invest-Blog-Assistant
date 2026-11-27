@@ -125,6 +125,7 @@ def send_due(kinds,day,state_store,sender,generator_factory,recipient,edition=No
         if draft.kind!=kind or draft.period!=period(kind,day) or not draft.body.strip():raise ValueError('Генератор вернул неподтверждённый черновик.')
         state['deliveries'][key]={'kind':kind,'period':draft.period,'status':'attempted','created_at':datetime.now(timezone.utc).isoformat()}
         if kind=='paper' and hasattr(generator,'editorial_status'):state['deliveries'][key]['editorial_status']=generator.editorial_status
+        if kind=='glossary' and hasattr(generator,'glossary_status'):state['deliveries'][key]['lesson_status']=generator.glossary_status
         topic=generator.selected_paper_uid if kind=='paper' else generator.selected_glossary_topic if kind=='glossary' else None
         if topic:
             field='papers' if kind=='paper' else 'glossary';state[field]=[topic]+[t for t in state[field] if t!=topic]

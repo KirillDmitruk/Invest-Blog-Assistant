@@ -107,10 +107,12 @@ class ContentPlanner:
                 WHERE kind='glossary' ORDER BY id DESC LIMIT 50''')]
         scores = Counter(topics)
         options=[]
-        for index, (title, _) in enumerate(TERMS):
+        from .investment_lessons import ranked
+        for index, theme in enumerate(ranked(tuple(topics))):
+            title=theme['title']
             recently = title in topics[:6]
             options.append({'title': title, 'seen': scores[title], 'recently_used': recently,
-                            'priority': scores[title] + (100 if recently else 0), 'index':index})
+                            'priority': scores[title] + (100 if recently else 0), 'index':index,'reason':theme['reason']})
         return sorted(options,key=lambda x:(x['priority'],x['index']))[:limit]
 
     def calendar(self, today: date | None = None, days: int = 35) -> list[dict]:

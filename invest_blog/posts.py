@@ -324,18 +324,12 @@ class PostGenerator:
         return Draft("paper", monday.isoformat(), "\n".join(parts))
 
     def glossary(self, today: date) -> Draft:
+        from .investment_lessons import build
         monday, _ = current_week(today)
-        # Prefer a term that has not appeared in the recent editorial history.
-        offset = (today.isocalendar().year * 53 + today.isocalendar().week - 1) % len(TERMS)
-        rotated = TERMS[offset:] + TERMS[:offset]
-        title, body = next(((t, b) for t, b in rotated if t not in self.recent_glossary[:6]), rotated[0])
-        self.selected_glossary_topic = title
-        return Draft(
-            "glossary", monday.isoformat(),
-            f"📚 Ликбез за 2 минуты: {title}\n\n{POST_OPENERS['glossary']}\n\n{body}\n\n"
-            "Вот и всё — ещё одним сложным инвестиционным термином меньше 😁\n"
-            "О каком понятии рассказать в следующий раз? 👇"
-        )
+        lesson=build(today,self.recent_glossary)
+        self.selected_glossary_topic=lesson['title']
+        self.glossary_status=lesson['status'];self.glossary_suggestions=lesson['suggestions']
+        return Draft('glossary',monday.isoformat(),lesson['body'])
 
     def purchase(self, today: date) -> Draft:
         start = today - timedelta(days=60)

@@ -483,11 +483,9 @@ def create_app(db_path: Path, bond_target: float = 0.60, max_position: float = 0
             generator = PostGenerator(TInvest(settings.invest_token, settings.timezone),
                                       settings.account_ids or ('glossary-only',), settings.cbr_path)
             if kind=='glossary' and workflow.selection(target):
-                from .lessons import TERMS
+                from .investment_lessons import build
                 topic=workflow.selection(target)
-                known=dict(TERMS)
-                body=known.get(topic, f"Тема: {topic}\n\n[Объяснить простыми словами.]\n\n[Привести пример.]\n\n[Объяснить, почему это важно.]\n\n[Указать распространённую ошибку и вывод.]")
-                generated=Draft('glossary',period,f"Ликбез за 2 минуты: {topic}\n\n{body}")
+                generated=Draft('glossary',period,build(target,topic=topic)['body'])
             else:
                 generated = generator.generate(kind,target)
             if not generated.body.strip():

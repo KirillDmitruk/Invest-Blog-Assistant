@@ -923,7 +923,7 @@ function renderContent(){
  for(const p of (cal.glossary_suggestions||[]).slice(0,3)){
    const wrap=editorNode('div','','editor-suggestion'),details=document.createElement('div');
    details.append(editorNode('strong','Ликбез: '+p.topic));
-   details.append(editorNode('small','Резервная тема · '+(p.source_url?'Найдена при еженедельном мониторинге':'Из редакционного каталога')));
+   details.append(editorNode('small','Резервная тема · '+(p.selection_reason||'')+' · '+(p.source_url?'Найдена при еженедельном мониторинге':'Из редакционного каталога')));
    const btn=editorNode('button',chosen?'В запасе':'Выбрать на неделю','editor-btn');btn.type='button';btn.disabled=!!chosen||p.status!=='reserve';
    btn.addEventListener('click',async()=>{try{await editorRequest('/api/editor/glossary-select','POST',{topic:p.topic});await refreshEditorial()}catch(e){el('editorFeedback').replaceChildren(alertNode(e.message,'warning'))}});
    const progress=editorNode('button',p.draft_id?'Открыть черновик':'✎ В процессе','editor-btn');progress.type='button';

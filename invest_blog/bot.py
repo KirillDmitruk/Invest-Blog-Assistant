@@ -60,12 +60,12 @@ class InvestBot:
                           recent_glossary=tuple(self.portfolio_store.recent_topics('glossary')))
         today=datetime.now(self.settings.timezone).date()
         if kind=='glossary' and self.editorial_workflow.selection(today):
-            from .lessons import TERMS
+            from .investment_lessons import build
             from .model import Draft
             from .posts import current_week
             topic=self.editorial_workflow.selection(today)
-            body=dict(TERMS).get(topic, f"Тема: {topic}\n\n[Объясни понятие простыми словами.]\n[Приведи пример и практический вывод.]")
-            draft=Draft('glossary',current_week(today)[0].isoformat(),f"Ликбез за 2 минуты: {topic}\n\n{body}")
+            lesson=build(today,gen.recent_glossary,topic=topic)
+            draft=Draft('glossary',current_week(today)[0].isoformat(),lesson['body'])
             return draft,topic
         draft=gen.generate(kind, today)
         return draft, (gen.selected_paper_uid if kind=='paper' else gen.selected_glossary_topic if kind=='glossary' else None)

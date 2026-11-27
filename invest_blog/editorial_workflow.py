@@ -46,6 +46,8 @@ class EditorialWorkflow:
             columns = {row[1] for row in db.execute('PRAGMA table_info(editorial_glossary_ideas)')}
             if 'draft_id' not in columns:
                 db.execute('ALTER TABLE editorial_glossary_ideas ADD COLUMN draft_id INTEGER')
+            if 'selection_reason' not in columns:
+                db.execute("ALTER TABLE editorial_glossary_ideas ADD COLUMN selection_reason TEXT NOT NULL DEFAULT ''")
 
     def connect(self):
         db = sqlite3.connect(self.path,timeout=20)
@@ -116,32 +118,37 @@ class EditorialWorkflow:
         today=today or date.today()
         week=self.week(today)
         with self.connect() as db:
-            seen=db.execute('SELECT 1 FROM editorial_idea_refresh WHERE week=?',(week,)).fetchone()
-            if seen:return self.ideas()
+            seen=db.execute('SELECT source_status FROM editorial_idea_refresh WHERE week=?',(week,)).fetchone()
+            if seen and seen[0].startswith('themes-v2:'):return self.ideas()
         source='', ''
         try:source=self._find_online_titles()
         except Exception:pass
         url,headlines=source
         with self.connect() as db:
             db.execute('BEGIN IMMEDIATE')
-            if not db.execute('SELECT 1 FROM editorial_idea_refresh WHERE week=?',(week,)).fetchone():
-                db.execute('INSERT INTO editorial_idea_refresh VALUES(?,?,?)',(week,datetime.now(timezone.utc).isoformat(),'online' if headlines else 'offline_fallback'))
+            seen=db.execute('SELECT source_status FROM editorial_idea_refresh WHERE week=?',(week,)).fetchone()
+            if not seen or not seen[0].startswith('themes-v2:'):
+                db.execute('INSERT OR REPLACE INTO editorial_idea_refresh VALUES(?,?,?)',(week,datetime.now(timezone.utc).isoformat(),'themes-v2:'+('online' if headlines else 'offline_fallback')))
+                from .investment_lessons import THEMES,ranked
+                titles={t['title'] for t in THEMES}
+                for row in db.execute("SELECT topic FROM editorial_glossary_ideas WHERE status='reserve' AND draft_id IS NULL").fetchall():
+                    if row[0] not in titles:db.execute("UPDATE editorial_glossary_ideas SET status='archived' WHERE topic=?",(row[0],))
                 reserved=db.execute("SELECT COUNT(*) FROM editorial_glossary_ideas WHERE status='reserve'").fetchone()[0]
                 needed=max(0,3-reserved)
                 used={r[0] for r in db.execute('SELECT topic FROM editorial_glossary_ideas')}
                 from .lessons import TERMS
                 # Existing glossary posts already created must not repeat.
                 used.update(r[0] for r in db.execute("SELECT topic_key FROM editorial_topics WHERE kind='glossary'")) if self._has_column(db,'editorial_topics','topic_key') else None
-                choices=[t for t in IDEAS if t not in used]
-                choices.sort(key=lambda t:(-sum(word in headlines for word in t.casefold().split() if len(word)>=5),IDEAS.index(t)))
+                ranked_themes=ranked((),headlines,today)
+                choices=[t['title'] for t in ranked_themes if t['title'] not in used]
                 for title in choices[:needed]:
-                    db.execute("INSERT INTO editorial_glossary_ideas(topic,status,week,source_url) VALUES(?,'reserve',?,?)",(title,week,url if headlines else ''))
+                    db.execute("INSERT INTO editorial_glossary_ideas(topic,status,week,source_url,selection_reason) VALUES(?,'reserve',?,?,?)",(title,week,url if headlines else '',next(t['reason'] for t in ranked_themes if t['title']==title)))
         return self.ideas()
 
     def ideas(self):
         with self.connect() as db:
             return [dict(r) for r in db.execute("""
-                SELECT topic,status,week,source_url,draft_id
+                SELECT topic,status,week,source_url,draft_id,selection_reason
                 FROM editorial_glossary_ideas
                 WHERE status IN ('reserve','in_progress')
                 ORDER BY CASE WHEN status='in_progress' THEN 0 ELSE 1 END, rowid
@@ -168,13 +175,8 @@ class EditorialWorkflow:
                 if existing and existing['state'] != 'deleted':
                     return existing['id']
 
-            description = dict(TERMS).get(topic)
-            if not description:
-                description = ('[Объяснить простыми словами.]\n\n'
-                               '[Привести понятный пример.]\n\n'
-                               '[Почему это важно инвестору?]\n\n'
-                               '[Ключевой вывод.]')
-            body = f'📚 Ликбез за 2 минуты: {topic}\n\n{description}'
+            from .investment_lessons import build
+            body=build(today,topic=topic,use_ai=False)['body']
             now = datetime.now(timezone.utc).isoformat()
             cursor = db.execute('''
                 INSERT INTO drafts(dedup_key,kind,period,body,state,created_at)
