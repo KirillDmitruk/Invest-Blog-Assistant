@@ -26,3 +26,6 @@ data/paper-state-key.dpapi
 
 # Local interface verification artifacts
 .paper-ui-check/
+
+# Local editorial preview server logs
+/data/lessons-editor-web.*.log
