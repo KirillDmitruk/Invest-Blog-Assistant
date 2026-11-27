@@ -76,7 +76,7 @@
         const percentage=txt('span',roi===null?'% —':(roi>0?'+':'')+roi.toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2})+'%');percentage.className='paper-closed-roi';percentage.title=roi===null?'ГО на момент входа не сохранено; процент не рассчитывается.':'Чистый результат после комиссий / ГО с запасом на входе ('+rub(margin)+') × 100%';row.append(percentage);
         if(net===null)row.append(txt('p','Нет полного набора комиссий в доступном журнале.'));
       }
-      const date=txt('small',time(t.at));date.style.display='block';date.className='lab-source';row.append(date);closed.append(row);
+      const date=txt('small',Number.isFinite(new Date(t.at).getTime())?'Закрыта '+time(t.at):'Время закрытия не сохранено');date.style.display='block';date.className='paper-muted';row.append(date);closed.append(row);
     }
     if(!rows.length)closed.append(txt('p','Закрытых виртуальных сделок пока нет.'));
     el('labHistoryMeta').textContent='Показано '+shown.length+' из '+rows.length+' закрытых сделок'+(rows.length?' · последняя: '+time(rows[0].at):'')+(overview.state.last_cycle?' · облачный снимок: '+time(overview.state.last_cycle):'')+'.';
