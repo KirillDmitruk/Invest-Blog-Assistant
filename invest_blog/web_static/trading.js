@@ -62,7 +62,7 @@
       const gross=amount(t.detail.pnl_before_exit_fee),exitFee=amount(t.detail.fee),entryFee=amount(t.detail.entry_fee)??(entry?amount(entry.detail.fee):null);
       const net=gross!==null&&exitFee!==null&&entryFee!==null?gross-exitFee-entryFee:null;
       const margin=amount(t.detail.entry_margin)??(entry?amount(entry.detail.entry_margin):null);
-      settled.set(t.id,{net,margin,roi:net!==null&&margin!==null&&margin>0?net/margin*100:null});
+      settled.set(t.id,{entry,entryFee,exitFee,net,margin,roi:net!==null&&margin!==null&&margin>0?net/margin*100:null});
     }
     const rows=[...chronological].reverse().filter(t=>t.action==='close');
     const shown=historyExpanded?rows:rows.slice(0,10),closed=el('labClosed');closed.replaceChildren();
@@ -76,7 +76,7 @@
         const percentage=txt('span',roi===null?'% —':(roi>0?'+':'')+roi.toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2})+'%');percentage.className='paper-closed-roi';percentage.title=roi===null?'ГО на момент входа не сохранено; процент не рассчитывается.':'Чистый результат после комиссий / ГО с запасом на входе ('+rub(margin)+') × 100%';row.append(percentage);
         if(net===null)row.append(txt('p','Нет полного набора комиссий в доступном журнале.'));
       }
-      const date=txt('small',Number.isFinite(new Date(t.at).getTime())?'Закрыта '+time(t.at):'Время закрытия не сохранено');date.style.display='block';date.className='paper-muted';row.append(date);closed.append(row);
+      const date=txt('small',Number.isFinite(new Date(t.at).getTime())?'Закрыта '+time(t.at):'Время закрытия не сохранено');date.style.display='block';date.className='paper-muted';row.append(date);const d=t.detail,stored=settled.get(t.id),op=stored?.entry;const value=(v,format)=>v!=null&&Number.isFinite(Number(v))?format(v):'Не сохранено';const stopped=(d.reason||'').startsWith('Стоп'),taken=(d.reason||'').startsWith('Цель');closed.append(window.DemoTradeHistory.wrap(row,[['Открыта',window.DemoTradeHistory.date(d.opened_at||op?.at)],['Закрыта',window.DemoTradeHistory.date(t.at)],['Цена входа',value(d.entry??op?.detail.price,price)],['Цена закрытия',value(d.price,price)],['Контрактов',d.contracts],['ГО на входе',value(stored?.margin,rub)],['Причина выхода',d.reason||'Не сохранено'],['Стоп'+(stopped?' · сработал':''),value(d.stop??op?.detail.stop,price),stopped?'stop':null],['Тейк'+(taken?' · сработал':''),value(d.target??op?.detail.target,price),taken?'take':null],['Комиссии входа и выхода',stored?.entryFee!=null&&stored?.exitFee!=null?rub(stored.entryFee+stored.exitFee):null],['Чистый результат',value(stored?.net,rub)]],'tinvest:'+t.id));
     }
     if(!rows.length)closed.append(txt('p','Закрытых виртуальных сделок пока нет.'));
     el('labHistoryMeta').textContent='Показано '+shown.length+' из '+rows.length+' закрытых сделок'+(rows.length?' · последняя: '+time(rows[0].at):'')+(overview.state.last_cycle?' · облачный снимок: '+time(overview.state.last_cycle):'')+'.';

@@ -288,6 +288,7 @@ def test_closed_trade_keeps_entry_margin_when_current_margin_changes(lab):
     detail=lab.overview()['trades'][0]['detail']
     assert Decimal(detail['entry_margin'])==Decimal('625')
     assert detail['entry_fee']=='2.00'
+    for key in ('entry','opened_at','stop','target'):assert detail[key]==entry[key]
 
 def test_legacy_trade_never_uses_current_margin_as_entry_margin(lab):
     market=Market();lab.cycle(market,CLOCK)

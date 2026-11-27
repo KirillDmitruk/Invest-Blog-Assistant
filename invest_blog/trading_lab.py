@@ -177,6 +177,7 @@ class TradingLab:
         self._trade(db, state, uid, 'close', {'ticker': c['ticker'], 'side': p['side'], 'contracts': p['contracts'],
                     'price': str(fill), 'pnl_before_exit_fee': cash(pnl), 'fee': cash(fee), 'reason': reason,
                     'entry_margin':p.get('entry_margin'),'entry_fee':p.get('entry_fee'),
+                    'entry':p['entry'],'opened_at':p['opened_at'],'stop':p['stop'],'target':p['target'],
                     'quoted_at': snapshot['quoted_at']}, clock)
         del state['positions'][uid]
         from .trading_rules_v2 import VERSION
@@ -292,7 +293,8 @@ class TradingLab:
             'opened_at': clock.isoformat(), 'quoted_at': s['quoted_at'], 'tick': c['tick'], 'tick_value': c['tick_value']}
         self._trade(db, state, uid, 'open_'+side, {'ticker': c['ticker'], 'side': side, 'contracts': size,
                     'price': str(fill), 'fee': cash(paid), 'stop_ticks': stop_ticks,
-                    'risk_rub': cash(loss_one*size), 'entry_margin':str(margin_one*size), 'quoted_at': s['quoted_at']}, clock)
+                    'risk_rub': cash(loss_one*size), 'entry_margin':str(margin_one*size),
+                    'stop':state['positions'][uid]['stop'],'target':state['positions'][uid]['target'], 'quoted_at': s['quoted_at']}, clock)
         return 'Открыта виртуальная позиция: '+side
 
     def _acquire(self, clock):

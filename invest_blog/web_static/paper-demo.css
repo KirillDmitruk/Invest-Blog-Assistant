@@ -72,3 +72,14 @@
 :is(#page-paper,#page-trading) .demo-account-split .paper-fields>div{padding:8px}
 :is(#page-paper,#page-trading) .demo-account-split .paper-fields strong{font-size:12px}
 @media(max-width:600px){:is(#page-paper,#page-trading) .demo-account-split :is(#labPositions,#paperPositions){grid-template-columns:minmax(0,1fr)}}
+
+/* Identical compact disclosures in the two trade journals. */
+:is(#page-paper,#page-trading) .paper-trade-details>summary{display:flex;align-items:center;gap:14px;cursor:pointer;list-style:none;font-weight:inherit;color:inherit}
+.paper-trade-details>summary::-webkit-details-marker{display:none}
+.paper-trade-heading{min-width:0;flex:1;overflow-wrap:anywhere}
+.paper-trade-arrow{font-size:29px;line-height:1;color:#c1b0dd;transition:transform .15s}
+.paper-trade-details[open]>.paper-trade-arrow,.paper-trade-details[open]>summary>.paper-trade-arrow{transform:rotate(90deg)}
+.paper-trade-details>summary:focus-visible{outline:2px solid #8cdbd4;outline-offset:5px;border-radius:5px}
+:is(#page-paper,#page-trading) .paper-trade-body{color:var(--paper-ink,#edf1ff);grid-template-columns:repeat(4,minmax(0,1fr));margin-top:16px;padding-top:16px;border-top:1px solid #70668155}
+@media(max-width:700px){:is(#page-paper,#page-trading) .paper-trade-body{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(prefers-reduced-motion:reduce){.paper-trade-arrow{transition:none}}
